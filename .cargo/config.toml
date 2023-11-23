@@ -1,0 +1,4 @@
+# https://doc.rust-lang.org/cargo/reference/config.html
+
+[target.wasm32-unknown-unknown]
+runner = "wasm-server-runner"
