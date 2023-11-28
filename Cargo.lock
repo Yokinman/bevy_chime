@@ -1283,7 +1283,6 @@ version = "0.1.0"
 dependencies = [
  "flux-proc-macro",
  "impl_op",
- "time",
 ]
 
 [[package]]
@@ -3112,13 +3111,6 @@ checksum = "3fdd6f064ccff2d6567adcb3873ca630700f00b5ad3f060c25b5dcfd9a4ce152"
 dependencies = [
  "cfg-if",
  "once_cell",
-]
-
-[[package]]
-name = "time"
-version = "0.1.0"
-dependencies = [
- "impl_op",
 ]
 
 [[package]]

@@ -13,11 +13,13 @@ use bevy::ecs::schedule::ScheduleLabel;
 use bevy::ecs::system::SystemId;
 use bevy::prelude::*;
 use bevy::utils::HashSet;
+use bevy::window::PresentMode;
 
-use chime::{flux, Flux, FluxVec, Moment, sum::Sum, Times, TimeUnit};
+use chime::{flux, Flux, FluxVec, Moment, sum::Sum, time};
+use time::Times;
 
 #[derive(PartialOrd, PartialEq)]
-#[flux(Sum<f64, 2> = {val} + spd.per(TimeUnit::Secs))]
+#[flux(Sum<f64, 2> = {val} + spd.per(time::SEC))]
 #[derive(Component, Debug)]
 struct PosX {
 	val: f64,
@@ -25,7 +27,7 @@ struct PosX {
 }
 
 #[derive(PartialOrd, PartialEq)]
-#[flux(Sum<f64, 1> = {val} + acc.per(TimeUnit::Secs))]
+#[flux(Sum<f64, 1> = {val} + acc.per(time::SEC))]
 #[derive(Component, Debug)]
 struct SpdX {
 	val: f64,
@@ -64,18 +66,17 @@ impl Default for UniqueId {
 
 fn when_func_a(In(mut pred): In<PredCollector<Entity>>, query: Query<(&Pos, Entity), Changed<Pos>>) -> PredCollector<Entity> {
 	for (pos, entity) in &query {
-		let times: Times = pos.0[0].when_eq(&chime::Constant::from(100.))
-			.chain(pos.0[0].when_eq(&chime::Constant::from(-100.)))
-			.collect();
-		
-		println!("X: {:?}", times.clone().collect::<Vec<_>>());
+		let times =
+			(pos.0[0].when_eq(&chime::Constant::from( 100.)) & pos.0[0].spd.when(Ordering::Greater, &chime::Constant::from(0.))) ^
+			(pos.0[0].when_eq(&chime::Constant::from(-100.)) & pos.0[0].spd.when(Ordering::Less, &chime::Constant::from(0.)));
+		// println!("X: {:?}", times.clone().collect::<Vec<_>>());
 		pred.add(times, entity);
 	}
 	pred
 }
 
 fn do_func_a(ent: Res<PredData>, time: Res<PredTime>, mut query: Query<(&mut Pos, Entity)>) {
-	println!("!!! do some X");
+	// println!("!!! do some X");
 	let ent = match ent.receiver {
 		PredId::Entity(e) => e,
 		_ => unreachable!(),
@@ -95,19 +96,18 @@ fn do_func_a(ent: Res<PredData>, time: Res<PredTime>, mut query: Query<(&mut Pos
 
 fn when_func_b(In(mut pred): In<PredCollector<Entity>>, query: Query<(&Pos, Entity), Changed<Pos>>) -> PredCollector<Entity> {
 	for (pos, entity) in &query {
-		let times: Times = pos.0[1].when_eq(&chime::Constant::from(100.))
-			.chain(pos.0[1].when_eq(&chime::Constant::from(-100.)))
-			.collect();
-		
-		println!("Y: {:?}", times.clone().collect::<Vec<_>>());
+		let times =
+			pos.0[1].when_eq(&chime::Constant::from(100.)) |
+			pos.0[1].when_eq(&chime::Constant::from(-100.));
+		// println!("Y: {:?}", times.clone().collect::<Vec<_>>());
 		pred.add(times, entity);
 	}
 	pred
 }
 
-fn do_func_b(ent: Res<PredData>, time: Res<PredTime>, mut query: Query<(&mut Pos, Entity)>) {
-	println!("!!! do some Y");
-	let ent = match ent.receiver {
+fn do_func_b(mut event: ResMut<PredData>, time: Res<PredTime>, mut query: Query<(&mut Pos, Entity)>) {
+	// println!("!!! do some Y");
+	let ent = match event.receiver {
 		PredId::Entity(e) => e,
 		_ => unreachable!(),
 	};
@@ -119,30 +119,27 @@ fn do_func_b(ent: Res<PredData>, time: Res<PredTime>, mut query: Query<(&mut Pos
 		.unwrap();
 	let mut pos_y = pos.0[1].at_mut(time);
 	
-	dbg!(pos_y.val.round(), pos_y.spd.val.abs());
-	if pos_y.spd.val > -(2. * pos_y.spd.acc.val.abs()).sqrt() {
+	if event.is_repeating {
+		pos_y.spd.val = 0.;
+		pos_y.spd.acc.val = 0.;
+		return
+	}
+	event.can_repeat = true;
+	
+	// dbg!(pos_y.val.round(), pos_y.spd.val.abs());
+	if pos_y.spd.val == 0. { // > -(2. * pos_y.spd.acc.val.abs()).sqrt()
 		pos_y.spd.val = 0.;
 		pos_y.spd.acc.val = 0.;
 	} else {
 		pos_y.spd.val *= -1.;
 	}
-	drop(pos_y);
-	
-	// PosXFlux {
-	// val: Constant { value: -100.00000024676038, time: 11.419693619s },
-	// spd: SpdXFlux { val: Constant { value: 454.4060450826906, time: 11.419693619s }, acc: AccXFlux { val: Constant { value: -1000.0, time: 11.419693619s } } } }
-	// :: Poly(Sum(-100.00000024676038, [454.4060450826906, -500.0]))  
-	
-	// let mut pos_x = pos.0[0].at_mut(time);
-	// pos_x.spd.val = pos_x.spd.val;
 }
 
 fn when_func_c(In(mut pred): In<PredCollector<(Entity, Entity)>>, query: Query<(&Pos, Entity), Changed<Pos>>, b_query: Query<(&Pos, Entity)>) -> PredCollector<(Entity, Entity)> {
 	for (pos, entity) in &query {
-		for (b_pos, b_entity) in &b_query { // Actually, just iterate over the remainder of query A, cause it's 2-way
-			let times: Times = pos.0.as_slice()
-				.when_dis_eq(b_pos.0.as_slice(), &chime::Constant::from(16. + 16.));
-			println!("DIS: {:?}", times.clone().collect::<Vec<_>>());
+		for (b_pos, b_entity) in &b_query {
+			let times = pos.0.when_dis_eq(&b_pos.0, &chime::Constant::from(16. + 16.));
+			// println!("DIS: {:?}", times.clone().collect::<Vec<_>>());
 			pred.add(times, (entity.min(b_entity), b_entity.max(entity)));
 		}
 	}
@@ -150,7 +147,7 @@ fn when_func_c(In(mut pred): In<PredCollector<(Entity, Entity)>>, query: Query<(
 }
 
 fn do_func_c(ent: Res<PredData>, time: Res<PredTime>, mut query: Query<(&mut Pos, Entity)>) {
-	println!("!!! do some DIS");
+	// println!("!!! do some DIS");
 	let (ent, b_ent) = match ent.receiver {
 		PredId::Entity2(e1, e2) => (e1, e2),
 		_ => unreachable!(),
@@ -177,6 +174,7 @@ fn do_func_c(ent: Res<PredData>, time: Res<PredTime>, mut query: Query<(&mut Pos
 	let x = pos[0].val - b_pos[0].val;
 	let y = pos[1].val - b_pos[1].val;
 	let dir = (y as f64).atan2(x as f64);
+	// println!("{}", ((pos[0].val as f64)*(pos[0].val as f64) + (pos[1].val as f64)*(pos[1].val as f64)).sqrt());
 	let spd = ((pos[0].spd.val as f64)*(pos[0].spd.val as f64) + (pos[1].spd.val as f64)*(pos[1].spd.val as f64)).sqrt();
 	pos[0].spd.val = (spd * dir.cos()) as f64;
 	pos[1].spd.val = (spd * dir.sin()) as f64;
@@ -220,6 +218,11 @@ fn setup(world: &mut World) {
 		is_repeating: false,
 	});
 	
+	for mut window in world.query::<&mut Window>().iter_mut(world) {
+		// My monitor has a refresh rate of 60hz, so Fifo limits FPS to 60.
+		window.present_mode = PresentMode::Immediate;
+	}
+	
 	let schedule = Schedule::new(PredSchedule);
 	world.add_schedule(schedule);
 	world_add_when(world, when_func_a, do_func_a);
@@ -230,8 +233,8 @@ fn setup(world: &mut World) {
 	world.spawn((
 		Dog {
 			pos: Pos([
-				PosX { val: 0., spd: SpdX { val: 100., acc: AccX { val: 0. } } },
-				PosX { val: 0., spd: SpdX { val: 0.,  acc: AccX { val: 0. } } }
+				PosX { val: 0., spd: SpdX { val: 000., acc: AccX { val: 0. } } },
+				PosX { val: 32.001, spd: SpdX { val: 00.,  acc: AccX { val: -1000. } } }
 			].to_flux(Duration::ZERO)),
 		},
 		SpriteBundle {
@@ -244,8 +247,8 @@ fn setup(world: &mut World) {
 	world.spawn((
 		Dog {
 			pos: Pos([
-				PosX { val: 0., spd: SpdX { val: 60., acc: AccX { val: 0. } } },
-				PosX { val: 0., spd: SpdX { val: 0., acc: AccX { val: 0. } } }
+				PosX { val: 0., spd: SpdX { val: -00., acc: AccX { val: 00. } } },
+				PosX { val: 0., spd: SpdX { val: -00., acc: AccX { val: 00. } } }
 			].to_flux(Duration::ZERO)),
 		},
 		SpriteBundle::default(),
@@ -261,7 +264,7 @@ fn update(world: &mut World) {
 		
 		Pass in a resource to events that can be used to define whether the
 		current event can repeat and knows whether it has already. Then, events
-		can use this to conveniently handle to sub-nanosecond loops.
+		can use this to conveniently handle sub-nanosecond loops.
 		
 		A ball pushed into a wall by another ball could either state:
 		
@@ -278,7 +281,19 @@ fn update(world: &mut World) {
 		
 		To avoid infinite loops, the "repeatable" flag of an event is false by
 		default, and should be reset just before the event is repeated.
-			
+		
+		There's kind of two contexts - one in which an event invalidates itself,
+		and one in which it doesn't. If an event invalidates itself, it can
+		still infinite loop because there's a chance that it might break out of
+		that kind of loop. It's equivalent to any other events that occur too
+		often. However, if an event doesn't invalidate itself, then it won't
+		reschedule itself and can be "squeezed".
+		
+		It might make sense to track how often each event runs on average, and
+		then compare that to a recent average. If the recent average is like
+		1000x more often, then something is probably wrong. Maybe ignore periods
+		of time in which the event is "inactive", when nothing is scheduled.
+		
 		[ ] Rounding:
 		
 		Using an integer type will cause "untouched" values to round when an
@@ -345,24 +360,47 @@ fn update(world: &mut World) {
 	*/
 	
 	let time = world.resource::<Time>().elapsed();
+	// let mut can_print = true;
 	
 	while let Some(&(duration, system, key)) = world.resource::<PredMap>().time_stack.last() {
 		if time >= duration {
-			println!();
-			// println!("first: {:?}", world.resource::<PredMap>().time_stack);
-			// println!("also: {:?}", world.resource::<PredMap>().time_table);
+			// if can_print {
+			// 	can_print = false;
+			// 	println!("Time: {:?}", time);
+			// }
+			// println!("> {:?} : {:?}", (key, system), duration);
+			
 			world.resource_mut::<PredTime>().0 = duration;
 			world.resource_mut::<PredMap>().pop();
 			
-			println!("B: {:?}, {:?}", time, duration);
+			// !!! Take component(s) from entities and pass them into the event
+			// through a resource, so entities don't have to be found by query.
 			
-			let receivers = world.resource::<PredMap>().time_table.get(&key)
-				.unwrap().receivers.clone();
+			let case = world.resource::<PredMap>().time_table.get(&key).unwrap();
+			let receivers = case.receivers.clone();
+			let repeat_count = case.repeat_count;
+			
+			 // Ignore Rapidly Repeating Events:
+			let mut data = world.resource_mut::<PredData>();
+			data.is_repeating = false;
+			if repeat_count >= 1000 {
+				if data.can_repeat {
+					data.is_repeating = true;
+				} else {
+					// ??? Crash, warning, etc.
+					eprintln!("event {:?} ({:?}) is repeating too much", key, system);
+					continue;
+				}
+			}
+			data.can_repeat = false;
+			
+			 // Call Event:
 			for receiver in receivers {
 				world.resource_mut::<PredData>().receiver = receiver;
 				world.run_system(system);
 			}
 			
+			 // Reschedule Events:
 			world.run_schedule(PredSchedule);
 		} else {
 			break
@@ -460,9 +498,8 @@ struct PredCaseData {
 	time_index: usize,
 	time_list: Vec<Duration>,
 	receivers: HashSet<PredId>,
-	// can_repeat: bool,
-	last_time: Duration,
-	// repeat_count: usize,
+	repeat_time: Duration,
+	repeat_count: u64,
 }
 
 /// ...
@@ -470,22 +507,12 @@ struct PredCaseData {
 pub struct PredMap {
 	time_stack: Vec<(Duration, SystemId, PredKey)>,
 	time_table: HashMap<PredKey, PredCaseData>,
-	// repeated_case: Option<PredKey>,
 }
 
 type PredKey = (UniqueId, PredId);
 
 impl PredMap {
 	pub fn sched(&mut self, key: PredKey, pred_time: Duration, mut times: Times, system: SystemId) {
-		//               v' v
-		// [ 1, 3, 8, 8, 9, 9, 9,  12 ]
-		// [ 0, 3, 5, 8, 8, 9, 12, 15 ]
-		// !!! Make sure `times` is ordered.
-		let mut v = times.into_iter().collect::<Vec<Duration>>();
-		v.sort_unstable();
-		println!("NEW: {:?} at {:?} with {:?}", v, pred_time, key);
-		times = v.into_iter().collect();
-		
 		let (unique_id, pred_id) = key;
 		let key = (unique_id, pred_id.simplify());
 		
@@ -499,7 +526,7 @@ impl PredMap {
 		
 		curr_cases.insert(pred_id);
 		
-		println!("OLD: {:?}, {:?}", curr_times, curr_index);
+		// println!("OLD: {:?}, {:?}", curr_times, curr_index);
 		let prev_index = std::mem::take(curr_index);
 		let mut old_times = std::mem::take(curr_times).into_iter();
 		let mut old_time = old_times.next();
@@ -508,11 +535,7 @@ impl PredMap {
 		let mut index = 0;
 		'a: loop {
 			let o = match (time.as_ref(), old_time.as_ref()) {
-				(Some(a), Some(b)) => {
-					a.cmp(b) // !!! Can we make the prediction more precise instead
-					// a.as_secs().cmp(&b.as_secs())
-					// 	.then((a.as_micros()).cmp(&(b.as_micros())))
-				},
+				(Some(a), Some(b)) => a.cmp(b),
 				(Some(_), _) => Ordering::Less,
 				(_, Some(_)) => Ordering::Greater,
 				_ => break 'a,
@@ -525,12 +548,10 @@ impl PredMap {
 							|(t, ..)| t > &time.unwrap()
 						);
 						self.time_stack.insert(insert_index, (time.unwrap(), system, key));
-					} else {
-						*curr_index += 1;
+						curr_times.push(time.unwrap());
 					}
 					
 					 // Next New Time:
-					curr_times.push(time.unwrap());
 					time = times.next();
 					index += 1;
 				},
@@ -560,7 +581,6 @@ impl PredMap {
 					old_index += 1;
 				},
 				Ordering::Equal => {
-					
 					 // Preserve Old Predictions:
 					if old_index < prev_index {
 						*curr_index += 1;
@@ -575,22 +595,25 @@ impl PredMap {
 				},
 			}
 		}
-		println!("FIN: {:?}, {:?}", curr_times, curr_index);
+		// println!("FIN: {:?}, {:?}", curr_times, curr_index);
 	}
 	
 	pub fn pop(&mut self) {
 		let (time, _, key) = self.time_stack.pop().unwrap();
 		let PredCaseData {
 			time_index,
-			last_time,
+			repeat_time,
+			repeat_count,
 			..
 		} = self.time_table.get_mut(&key).unwrap();
 		*time_index += 1;
-		*last_time = time;
-		// if *index == times.len() {
-		// 	println!("ding! gone! LOL {:?} {:?}", times, index);
-		// 	self.time_table.remove(&key); // !!! Do this after the main loop
-		// }
+		
+		 // Log Repetitiousness:
+		if time > *repeat_time + Duration::from_millis(*repeat_count) {
+			*repeat_time = time;
+			*repeat_count = 0;
+		}
+		*repeat_count += 1;
 	}
 }
 
@@ -615,7 +638,7 @@ fn main() {
 	use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
 	App::new()
 		.add_plugins(Game)
-        // .add_plugins(LogDiagnosticsPlugin::default())
-        // .add_plugins(FrameTimeDiagnosticsPlugin::default())
+        .add_plugins(LogDiagnosticsPlugin::default())
+        .add_plugins(FrameTimeDiagnosticsPlugin::default())
 		.run();
 }
