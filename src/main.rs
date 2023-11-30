@@ -3,8 +3,8 @@
 // 	DefaultPlugins
 // };
 
-use std::cmp::Ordering;
-use std::collections::HashMap;
+use std::cmp::{Ordering, Reverse};
+use std::collections::{BinaryHeap, HashMap};
 use std::hash::Hash;
 use std::sync::atomic::AtomicU64;
 use std::time::Duration;
@@ -67,9 +67,12 @@ impl Default for UniqueId {
 fn when_func_a(In(mut pred): In<PredCollector<Entity>>, query: Query<(&Pos, Entity), Changed<Pos>>) -> PredCollector<Entity> {
 	for (pos, entity) in &query {
 		let times =
-			(pos.0[0].when_eq(&chime::Constant::from( 100.)) & pos.0[0].spd.when(Ordering::Greater, &chime::Constant::from(0.))) ^
-			(pos.0[0].when_eq(&chime::Constant::from(-100.)) & pos.0[0].spd.when(Ordering::Less, &chime::Constant::from(0.)));
-		// println!("X: {:?}", times.clone().collect::<Vec<_>>());
+			(pos.0[0].when_eq(&chime::Constant::from( 100.)) & pos.0[0].spd.when(Ordering::Greater, &chime::Constant::from(0.))) |
+			(pos.0[0].when_eq(&chime::Constant::from(-100.)) & pos.0[0].spd.when(Ordering::Less, &chime::Constant::from(0.))) |
+			(pos.0[0].when_eq(&chime::Constant::from( 200.)) & pos.0[0].spd.when(Ordering::Greater, &chime::Constant::from(0.)));
+		// if format!("{:?}", entity) == "5v0" {
+		// 	println!("X: {:?}", times.clone().collect::<Vec<_>>());
+		// }
 		pred.add(times, entity);
 	}
 	pred
@@ -97,9 +100,11 @@ fn do_func_a(ent: Res<PredData>, time: Res<PredTime>, mut query: Query<(&mut Pos
 fn when_func_b(In(mut pred): In<PredCollector<Entity>>, query: Query<(&Pos, Entity), Changed<Pos>>) -> PredCollector<Entity> {
 	for (pos, entity) in &query {
 		let times =
-			pos.0[1].when_eq(&chime::Constant::from(100.)) |
-			pos.0[1].when_eq(&chime::Constant::from(-100.));
-		// println!("Y: {:?}", times.clone().collect::<Vec<_>>());
+			(pos.0[1].when_eq(&chime::Constant::from(100.)) & pos.0[1].spd.when(Ordering::Greater, &chime::Constant::from(0.))) |
+			(pos.0[1].when_eq(&chime::Constant::from(-100.)) & pos.0[1].spd.when(Ordering::Less, &chime::Constant::from(0.)));
+		// if format!("{:?}", entity) == "5v0" {
+		// 	println!("Y: {:?}", times.clone().collect::<Vec<_>>());
+		// }
 		pred.add(times, entity);
 	}
 	pred
@@ -222,6 +227,9 @@ fn setup(world: &mut World) {
 		// My monitor has a refresh rate of 60hz, so Fifo limits FPS to 60.
 		window.present_mode = PresentMode::Immediate;
 	}
+	// world.resource_mut::<bevy::winit::WinitSettings>().focused_mode = bevy::winit::UpdateMode::Reactive {
+	// 	wait: Duration::from_secs_f64(1./60.)
+	// };
 	
 	let schedule = Schedule::new(PredSchedule);
 	world.add_schedule(schedule);
@@ -233,8 +241,8 @@ fn setup(world: &mut World) {
 	world.spawn((
 		Dog {
 			pos: Pos([
-				PosX { val: 0., spd: SpdX { val: 000., acc: AccX { val: 0. } } },
-				PosX { val: 32.001, spd: SpdX { val: 00.,  acc: AccX { val: -1000. } } }
+				PosX { val: 0., spd: SpdX { val: 100., acc: AccX { val: 0. } } },
+				PosX { val: 0., spd: SpdX { val: 20.,  acc: AccX { val: -1000. } } }
 			].to_flux(Duration::ZERO)),
 		},
 		SpriteBundle {
@@ -247,20 +255,35 @@ fn setup(world: &mut World) {
 	world.spawn((
 		Dog {
 			pos: Pos([
-				PosX { val: 0., spd: SpdX { val: -00., acc: AccX { val: 00. } } },
-				PosX { val: 0., spd: SpdX { val: -00., acc: AccX { val: 00. } } }
+				PosX { val: 0., spd: SpdX { val: -30., acc: AccX { val: 10. } } },
+				PosX { val: 0., spd: SpdX { val: -60., acc: AccX { val: 10. } } }
 			].to_flux(Duration::ZERO)),
 		},
 		SpriteBundle::default(),
 	));
+	// for x in 0..5 {
+	// 	for y in 0..5 {
+	// 		world.spawn((
+	// 			Dog {
+	// 				pos: Pos([
+	// 					PosX { val: 0., spd: SpdX { val: x as f64, acc: AccX { val: 0. } } },
+	// 					PosX { val: 0., spd: SpdX { val: y as f64, acc: AccX { val: (y * -200) as f64 } } }
+	// 				].to_flux(Duration::ZERO)),
+	// 			}
+	// 		));
+	// 	}
+	// }
 }
+
+const RECENT_TIME: Duration = time::SEC;
+const OLDER_TIME: Duration = Duration::from_secs(10);
 
 fn update(world: &mut World) {
 	world.run_schedule(PredSchedule);
 	
 	/* !!! Issues:
 	   
-		[ ] Squeezing:
+		[~] Squeezing:
 		
 		Pass in a resource to events that can be used to define whether the
 		current event can repeat and knows whether it has already. Then, events
@@ -289,6 +312,35 @@ fn update(world: &mut World) {
 		often. However, if an event doesn't invalidate itself, then it won't
 		reschedule itself and can be "squeezed".
 		
+		I'm unsure how to deal with events that don't invalidate themselves:
+		
+		- Right now events that reschedule themselves at the current time are
+		  ignored, but this means that if a value is squeezed into the event
+		  it'll just get ignored with no way to respond to it.
+		- It shouldn't infinite loop, because the event is supposed to be a
+		  discrete response to the value becoming the way that it is.
+		- I could make it so if an event happens in between the squeezing that
+		  modifies the value, then the event can be rescheduled. However, what
+		  about a case like a ball bouncing off a wall with a bounce pad on it.
+		  The bounce pad might just increase the ball's speed after it bounces
+		  off the wall, but that change would make the bounce event run again.
+		- It could be something specific where if an event flips the rate of its
+		  predicate value, and then another event flips that rate, the original
+		  event can be rescheduled. It just seems so specific to a bounce case.
+		  • Case 1: When an object passes a boundary line, its friction toggles
+		    between two different states (faster vs slower zones). If the object
+		    is on the boundary line, and then gets bounced between two objects
+		    that instantly disappear (all staying on the line), I don't think it
+		    should repeat the boundary line toggle at all. Especially if the
+		    order of events is unreliable.
+		  • Case 2: When an object touches a boundary line, it flips its speed
+		    so that it bounces back. If it bounces back and instantly rebounds
+		    off of another object, it should rerun that initial bounce event.
+		  • Case 3: When an object touches a boundary line, it flips its speed
+		    so that it bounces back. On the line is also a "bounce pad" object
+		    that increases its acceleration. If it bounces and then accelerates
+		    then the initial event shouldn't run again.
+		  
 		It might make sense to track how often each event runs on average, and
 		then compare that to a recent average. If the recent average is like
 		1000x more often, then something is probably wrong. Maybe ignore periods
@@ -325,7 +377,7 @@ fn update(world: &mut World) {
 		Honestly, option B might work best with a special deref wrapper that
 		just preserves the fractional part of the original value. Stays simple.
 		
-		[ ] Repetition
+		[~] Repetition
 		
 		An event might execute more than once if its prediction is slightly
 		early or late due to imprecision, leading to the event producing another
@@ -338,7 +390,11 @@ fn update(world: &mut World) {
 		only go so far. I'm not sure how extreme the error can get or what it
 		scales by.
 		
-		[ ] Rapid Repetition
+		The precision can probably be improved a bit by optimizing the precision
+		breakdown `LIMIT` constant, or something related to it. I think it does
+		improve precision, but only when the normal calculation is sucky.
+		
+		[~] Rapid Repetition
 		
 		Values that are associated with events that occur very often can be
 		extremely slow. For example, an object bouncing off of the floor with
@@ -359,16 +415,19 @@ fn update(world: &mut World) {
 		(ignoring, crashing, warning, waiting - maybe based on build type).
 	*/
 	
-	let time = world.resource::<Time>().elapsed();
-	// let mut can_print = true;
+	let start = Duration::ZERO;
+	let end = Duration::MAX;
+	let time = (start + world.resource::<Time>().elapsed()).min(end);
+	let mut can_print = true;
 	
 	while let Some(&(duration, system, key)) = world.resource::<PredMap>().time_stack.last() {
 		if time >= duration {
-			// if can_print {
-			// 	can_print = false;
-			// 	println!("Time: {:?}", time);
-			// }
-			// println!("> {:?} : {:?}", (key, system), duration);
+			if can_print {
+				can_print = false;
+				if time > start {
+					println!("Time: {:?}", time);
+				}
+			}
 			
 			world.resource_mut::<PredTime>().0 = duration;
 			world.resource_mut::<PredMap>().pop();
@@ -376,19 +435,36 @@ fn update(world: &mut World) {
 			// !!! Take component(s) from entities and pass them into the event
 			// through a resource, so entities don't have to be found by query.
 			
-			let case = world.resource::<PredMap>().time_table.get(&key).unwrap();
+			let mut pred = world.resource_mut::<PredMap>();
+			let case = pred.time_table.get_mut(&key).unwrap();
 			let receivers = case.receivers.clone();
-			let repeat_count = case.repeat_count;
+			let new_avg = (case.recent_times.len() as f32) / RECENT_TIME.as_secs_f32();
+			let old_avg = (case.older_times.len() as f32) / OLDER_TIME.as_secs_f32();
+			if time > start {
+				println!(
+					"> {:?} at {:?} (avg: {:?}/sec, recent: {:?}/sec)",
+					(key, system),
+					duration,
+					(old_avg * 100.).round() / 100.0,
+					(new_avg * 100.).round() / 100.0,
+				);
+			}
 			
 			 // Ignore Rapidly Repeating Events:
 			let mut data = world.resource_mut::<PredData>();
 			data.is_repeating = false;
-			if repeat_count >= 1000 {
+			let is_outlier = new_avg > old_avg.max(1.) * 100.;
+			if is_outlier {
 				if data.can_repeat {
 					data.is_repeating = true;
 				} else {
-					// ??? Crash, warning, etc.
-					eprintln!("event {:?} ({:?}) is repeating too much", key, system);
+					// ??? Ignore, crash, warning, etc.
+					println!(
+						"event {:?} ({:?}) is repeating too much at time {:?}",
+						key,
+						system,
+						duration,
+					);
 					continue;
 				}
 			}
@@ -498,8 +574,8 @@ struct PredCaseData {
 	time_index: usize,
 	time_list: Vec<Duration>,
 	receivers: HashSet<PredId>,
-	repeat_time: Duration,
-	repeat_count: u64,
+	recent_times: BinaryHeap<Reverse<Duration>>,
+	older_times: BinaryHeap<Reverse<Duration>>,
 }
 
 /// ...
@@ -532,7 +608,6 @@ impl PredMap {
 		let mut old_time = old_times.next();
 		let mut old_index = 0;
 		let mut time = times.next();
-		let mut index = 0;
 		'a: loop {
 			let o = match (time.as_ref(), old_time.as_ref()) {
 				(Some(a), Some(b)) => a.cmp(b),
@@ -553,7 +628,6 @@ impl PredMap {
 					
 					 // Next New Time:
 					time = times.next();
-					index += 1;
 				},
 				Ordering::Greater => {
 					 // Remove First Instance From Main Queue:
@@ -589,7 +663,6 @@ impl PredMap {
 					 // Next Times:
 					curr_times.push(time.unwrap());
 					time = times.next();
-					index += 1;
 					old_time = old_times.next();
 					old_index += 1;
 				},
@@ -602,18 +675,27 @@ impl PredMap {
 		let (time, _, key) = self.time_stack.pop().unwrap();
 		let PredCaseData {
 			time_index,
-			repeat_time,
-			repeat_count,
+			recent_times,
+			older_times,
 			..
 		} = self.time_table.get_mut(&key).unwrap();
 		*time_index += 1;
 		
-		 // Log Repetitiousness:
-		if time > *repeat_time + Duration::from_millis(*repeat_count) {
-			*repeat_time = time;
-			*repeat_count = 0;
+		 // Overall vs Recent Average:
+		while let Some(Reverse(t)) = older_times.peek() {
+			if time < *t {
+				break
+			}
+			older_times.pop();
 		}
-		*repeat_count += 1;
+		while let Some(Reverse(t)) = recent_times.peek() {
+			if time < *t {
+				break
+			}
+			older_times.push(Reverse(*t + OLDER_TIME));
+			recent_times.pop();
+		}
+		recent_times.push(Reverse(time + RECENT_TIME));
 	}
 }
 
@@ -635,10 +717,9 @@ impl Plugin for Game {
 }
 
 fn main() {
-	use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
 	App::new()
 		.add_plugins(Game)
-        .add_plugins(LogDiagnosticsPlugin::default())
-        .add_plugins(FrameTimeDiagnosticsPlugin::default())
+        .add_plugins(bevy::diagnostic::LogDiagnosticsPlugin::default())
+        .add_plugins(bevy::diagnostic::FrameTimeDiagnosticsPlugin::default())
 		.run();
 }
