@@ -188,7 +188,7 @@ where
 	};
 	
 	world.resource_mut::<Schedules>()
-		.get_mut(PredSchedule).unwrap()
+		.get_mut(ChimeSchedule).unwrap()
 		.add_systems(input.pipe(when_system).pipe(compile));
 }
 
@@ -210,7 +210,7 @@ fn setup(world: &mut World) {
 	// 	wait: Duration::from_secs_f64(1./60.)
 	// };
 	
-	let schedule = Schedule::new(PredSchedule);
+	let schedule = Schedule::new(ChimeSchedule);
 	world.add_schedule(schedule);
 	world_add_when(world, when_func_a, do_func_a);
 	world_add_when(world, when_func_b, do_func_b);
@@ -257,7 +257,7 @@ const RECENT_TIME: Duration = time::SEC;
 const OLDER_TIME: Duration = Duration::from_secs(10);
 
 fn update(world: &mut World) {
-	world.run_schedule(PredSchedule);
+	world.run_schedule(ChimeSchedule);
 	
 	/* !!! Issues:
 	   
@@ -423,7 +423,7 @@ fn chime_update(world: &mut World, time: Duration) {
 	
     let mut pred_schedule = world
         .get_resource_mut::<Schedules>()
-        .and_then(|mut s| s.remove(PredSchedule.intern()))
+        .and_then(|mut s| s.remove(ChimeSchedule.intern()))
 	    .unwrap();
 	
 	while let Some(&(duration, system, key)) = world.resource::<PredMap>().time_stack.last() {
@@ -521,7 +521,7 @@ fn chime_update(world: &mut World, time: Duration) {
 	
     let old = world.resource_mut::<Schedules>().insert(pred_schedule);
     if old.is_some() {
-        warn!("Schedule `PredSchedule` was inserted during a call to `World::schedule_scope`: its value has been overwritten");
+        warn!("Schedule `ChimeSchedule` was inserted during a call to `World::schedule_scope`: its value has been overwritten");
     }
 }
 
@@ -616,7 +616,7 @@ impl<T> DerefMut for PredData<T> {
 
 /// What uniquely identifies a case of prediction.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
-pub enum PredId {
+enum PredId {
 	None,
 	Entity(Entity),
 	Entity2([Entity; 2]),
@@ -674,9 +674,9 @@ struct PredCaseData {
 	older_times: BinaryHeap<Reverse<Duration>>,
 }
 
-/// ...
+/// Event handler.
 #[derive(Resource, Default)]
-pub struct PredMap {
+struct PredMap {
 	time_stack: Vec<(Duration, SystemId, PredKey)>,
 	time_table: HashMap<PredKey, PredCaseData>,
 }
@@ -795,11 +795,11 @@ impl PredMap {
 	}
 }
 
-/// ...
+/// Bevy schedule for re-predicting & scheduling events.
 #[derive(ScheduleLabel, Clone, Debug, PartialEq, Eq, Hash)]
-struct PredSchedule;
+struct ChimeSchedule;
 
-/// ...
+/// Context for a `bevy::time::Time`.
 #[derive(Default)]
 pub struct Chime;
 
