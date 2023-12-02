@@ -4,7 +4,7 @@
 // };
 
 use std::cmp::{Ordering, Reverse};
-use std::collections::{BinaryHeap, HashMap};
+use std::collections::{BinaryHeap, btree_map, BTreeMap, HashMap};
 use std::hash::Hash;
 use std::ops::{Deref, DerefMut};
 use std::time::{Duration, Instant};
@@ -179,12 +179,13 @@ where
 	};
 	
 	let compile = move |In(input): In<PredCollector<Case>>, mut pred: ResMut<PredMap>, pred_time: Res<Time>| {
+		// let n = input.0.len();
 		// let a_time = Instant::now();
 		for (times, case) in input.0 {
 			let pred_key = (do_id, case.into_id());
 			pred.sched(pred_key, pred_time.elapsed(), times, do_id);
 		}
-		// println!("  compile: {:?}", Instant::now().duration_since(a_time));
+		// println!("  compile: {:?} // {:?}", Instant::now().duration_since(a_time), n);
 	};
 	
 	world.resource_mut::<Schedules>()
@@ -426,7 +427,7 @@ fn chime_update(world: &mut World, time: Duration) {
         .and_then(|mut s| s.remove(ChimeSchedule.intern()))
 	    .unwrap();
 	
-	while let Some(&(duration, system, key)) = world.resource::<PredMap>().time_stack.last() {
+	while let Some(duration) = world.resource::<PredMap>().first_time() {
 		if time >= duration {
 			if can_print {
 				can_print = false;
@@ -435,11 +436,8 @@ fn chime_update(world: &mut World, time: Duration) {
 			
 			// let a_time = Instant::now();
 			world.resource_mut::<Time>().advance_to(duration);
-			world.resource_mut::<PredMap>().pop();
+			let (system, key) = world.resource_mut::<PredMap>().pop();
 			// tot_a += Instant::now().duration_since(a_time);
-			
-			// !!! Take component(s) from entities and pass them into the event
-			// through a resource, so entities don't have to be found by query.
 			
 			// let a_time = Instant::now();
 			
@@ -677,30 +675,34 @@ struct PredCaseData {
 /// Event handler.
 #[derive(Resource, Default)]
 struct PredMap {
-	time_stack: Vec<(Duration, SystemId, PredKey)>,
+	time_stack: BTreeMap<Duration, Vec<(SystemId, PredKey)>>,
 	time_table: HashMap<PredKey, PredCaseData>,
 }
 
 type PredKey = (SystemId, PredId);
 
 impl PredMap {
+	fn first_time(&self) -> Option<Duration> {
+		if let Some((&duration, _)) = self.time_stack.first_key_value() {
+			Some(duration)
+		} else {
+			None
+		}
+	}
+	
 	fn sched(&mut self, key: PredKey, pred_time: Duration, mut times: Times, system: SystemId) {
 		let (unique_id, pred_id) = key;
 		let key = (unique_id, pred_id.simplify());
 		
 		 // Store in Table:
-		let PredCaseData {
-			time_index: curr_index,
-			time_list: curr_times,
-			receivers: curr_cases,
-			..
-		} = self.time_table.entry(key).or_default();
+		let PredCaseData { time_index, time_list, receivers, .. }
+			= self.time_table.entry(key).or_default();
 		
-		curr_cases.insert(pred_id);
+		receivers.insert(pred_id);
 		
-		// println!("OLD: {:?}, {:?}", curr_times, curr_index);
-		let prev_index = std::mem::take(curr_index);
-		let mut old_times = std::mem::take(curr_times).into_iter();
+		// println!("OLD: {:?}, {:?}", time_list, time_index);
+		let prev_index = std::mem::take(time_index);
+		let mut old_times = std::mem::take(time_list).into_iter();
 		let mut old_time = old_times.next();
 		let mut old_index = 0;
 		let mut time = times.next();
@@ -715,11 +717,9 @@ impl PredMap {
 				Ordering::Less => {
 					 // Sort Into Main Queue:
 					if time.unwrap() >= pred_time {
-						let insert_index = self.time_stack.partition_point(
-							|(t, ..)| t > &time.unwrap()
-						);
-						self.time_stack.insert(insert_index, (time.unwrap(), system, key));
-						curr_times.push(time.unwrap());
+						self.time_stack.entry(time.unwrap()).or_default()
+							.push((system, key));
+						time_list.push(time.unwrap());
 					}
 					
 					 // Next New Time:
@@ -727,23 +727,20 @@ impl PredMap {
 				},
 				Ordering::Greater => {
 					 // Remove First Instance From Main Queue:
-					if old_index >= prev_index {   
-						let mut stack_index = self.time_stack.partition_point(
-							|(t, ..)| t >= &old_time.unwrap()
-						);
-						if stack_index == 0 {
+					if old_index >= prev_index {
+						if let btree_map::Entry::Occupied(mut e)
+							= self.time_stack.entry(old_time.unwrap())
+						{
+							let list = e.get_mut();
+							let pos = list.iter().position(|(.., k)| *k == key)
+								.expect("this should always work");
+							list.swap_remove(pos);
+							if list.is_empty() {
+								e.remove();
+							}
+						} else {
 							unreachable!()
 						}
-						// println!("A {:?} :: {:?}", self.time_stack, old_time);
-						loop {
-							stack_index -= 1;
-							let (.., k) = self.time_stack[stack_index];
-							if k == key {
-								self.time_stack.remove(stack_index);
-								break
-							}
-						}
-						// println!("B {:?} :: {:?}", self.time_stack, old_time);
 					}
 					
 					 // Next Old Time:
@@ -753,22 +750,33 @@ impl PredMap {
 				Ordering::Equal => {
 					 // Preserve Old Predictions:
 					if old_index < prev_index {
-						*curr_index += 1;
+						*time_index += 1;
 					}
+					time_list.push(time.unwrap());
 					
 					 // Next Times:
-					curr_times.push(time.unwrap());
 					time = times.next();
 					old_time = old_times.next();
 					old_index += 1;
 				},
 			}
 		}
-		// println!("FIN: {:?}, {:?}", curr_times, curr_index);
+		// println!("FIN: {:?}, {:?}", time_list, time_index);
 	}
 	
-	pub fn pop(&mut self) {
-		let (time, _, key) = self.time_stack.pop().unwrap();
+	fn pop(&mut self) -> (SystemId, PredKey) {
+		let mut entry = self.time_stack.first_entry()
+			.expect("this should always work");
+		
+		let time = *entry.key();
+		let list = entry.get_mut();
+		let (system, key) = list.pop()
+			.expect("this should always work");
+		
+		if list.is_empty() {
+			entry.remove();
+		}
+		
 		let PredCaseData {
 			time_index,
 			recent_times,
@@ -792,6 +800,8 @@ impl PredMap {
 			recent_times.pop();
 		}
 		recent_times.push(Reverse(time + RECENT_TIME));
+		
+		(system, key)
 	}
 }
 
