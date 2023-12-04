@@ -16,6 +16,7 @@ use bevy::utils::HashSet;
 use bevy::window::PresentMode;
 
 use chime::{flux, Flux, FluxVec, Moment, sum::Sum, time};
+use chime::kind::WhenDisEq;
 use impl_op::impl_op;
 use time::Times;
 
@@ -72,11 +73,7 @@ fn when_func_a(In(mut pred): In<PredCollector<Entity>>, query: Query<(&Pos, Enti
 	for (pos, entity) in &query {
 		let times =
 			(pos[0].when_eq(&chime::Constant::from((RIGHT - RADIUS) as f64)) & pos[0].spd.when(Ordering::Greater, &chime::Constant::from(0.))) |
-			(pos[0].when_eq(&chime::Constant::from((LEFT  + RADIUS) as f64)) & pos[0].spd.when(Ordering::Less, &chime::Constant::from(0.))) |
-			(pos[0].when_eq(&chime::Constant::from((RIGHT as f64) + 100.)) & pos[0].spd.when(Ordering::Greater, &chime::Constant::from(0.)));
-		// if format!("{:?}", entity) == "5v0" {
-		// 	println!("X: {:?}", times.clone().collect::<Vec<_>>());
-		// }
+			(pos[0].when_eq(&chime::Constant::from((LEFT  + RADIUS) as f64)) & pos[0].spd.when(Ordering::Less, &chime::Constant::from(0.)));
 		pred.add(times, entity);
 	}
 	// println!("  when_func_a: {:?}", Instant::now().duration_since(a_time));
@@ -84,24 +81,17 @@ fn when_func_a(In(mut pred): In<PredCollector<Entity>>, query: Query<(&Pos, Enti
 }
 
 fn do_func_a(ent: Res<PredData<Entity>>, time: Res<Time>, mut query: Query<&mut Pos>) {
-	// println!("!!! do some X");
 	let mut pos = query.get_mut(**ent).unwrap();
 	let mut pos_x = pos[0].at_mut(time.elapsed());
-	
-	// let cool = ((30. + 5000. * (time.as_millis() as f64).cos().abs()).ceil() as i64).abs();
-	let cool = pos_x.spd.val.abs();
-	pos_x.spd.val = cool * -pos_x.spd.val.signum();
+	pos_x.spd.val *= -1.;
 }
 
 fn when_func_b(In(mut pred): In<PredCollector<Entity>>, query: Query<(&Pos, Entity), Changed<Pos>>) -> PredCollector<Entity> {
 	// let a_time = Instant::now();
 	for (pos, entity) in &query {
 		let times =
-			(pos[1].when_eq(&chime::Constant::from((TOP    - RADIUS) as f64)) & pos[1].spd.when(Ordering::Greater, &chime::Constant::from(0.))) |
-			(pos[1].when_eq(&chime::Constant::from((BOTTOM + RADIUS) as f64)) & pos[1].spd.when(Ordering::Less, &chime::Constant::from(0.)));
-		// if format!("{:?}", entity) == "5v0" {
-		// 	println!("Y: {:?}", times.clone().collect::<Vec<_>>());
-		// }
+			(pos[1].when_eq(&chime::Constant::from((TOP    - RADIUS) as f64))/* & pos[1].spd.when(Ordering::Greater, &chime::Constant::from(0.))*/) |
+			(pos[1].when_eq(&chime::Constant::from((BOTTOM + RADIUS) as f64))/* & pos[1].spd.when(Ordering::Less, &chime::Constant::from(0.))*/);
 		pred.add(times, entity);
 	}
 	// println!("  when_func_b: {:?}", Instant::now().duration_since(a_time));
@@ -109,7 +99,6 @@ fn when_func_b(In(mut pred): In<PredCollector<Entity>>, query: Query<(&Pos, Enti
 }
 
 fn do_func_b(ent: Res<PredData<Entity>>, time: Res<Time>, mut query: Query<&mut Pos>) {
-	// println!("!!! do some Y");
 	let mut pos = query.get_mut(**ent).unwrap();
 	let mut pos_y = pos[1].at_mut(time.elapsed());
 	
@@ -120,7 +109,6 @@ fn do_func_b(ent: Res<PredData<Entity>>, time: Res<Time>, mut query: Query<&mut 
 	// }
 	// event.can_repeat = true;
 	
-	// dbg!(pos_y.val.round(), pos_y.spd.val.abs());
 	if pos_y.spd.val == 0. { // > -(2. * pos_y.spd.acc.val.abs()).sqrt()
 		pos_y.spd.val = 0.;
 		pos_y.spd.acc.val = 0.;
@@ -134,23 +122,32 @@ fn when_func_c(
 	query: Query<(&Pos, Entity), Changed<Pos>>,
 	b_query: Query<(&Pos, Entity)>
 ) -> PredCollector<[Entity; 2]> {
+	// let mut n = 0;
 	// let a_time = Instant::now();
+	let dis = chime::Constant::from((2 * RADIUS) as f64).poly(Duration::ZERO);
 	for (pos, entity) in &query {
+		let pos_poly_vec = pos.polys(pos.base_time());
+		let time = pos.base_time();
 		for (b_pos, b_entity) in &b_query {
 			// !!! This kind of thing could be optimized by organizing entities
 			// into grid zones, and only making predictions with entities in
 			// adjacent zones. Use a prediction case for updating the zones.
-			let times = pos.when_dis_eq(&b_pos.0, &chime::Constant::from((2 * RADIUS) as f64));
-			// println!("DIS: {:?}", times.clone().collect::<Vec<_>>());
+			
+			// let a_time = Instant::now();
+			let b_pos_vec = b_pos.polys(time);
+			// println!("A: {:?}", Instant::now().duration_since(a_time));
+			// let a_time = Instant::now();
+			let times = pos_poly_vec.when_dis_eq(&b_pos_vec, &dis);
+			// println!("B: {:?}", Instant::now().duration_since(a_time));
 			pred.add(times, [entity/*.min(b_entity)*/, b_entity/*.max(entity)*/]);
 		}
+		// n += 1;
 	}
-	// println!("  when_func_c: {:?}", Instant::now().duration_since(a_time));
+	// println!("  when_func_c ({n}): {:?}", Instant::now().duration_since(a_time));
 	pred
 }
 
 fn do_func_c(ents: Res<PredData<[Entity; 2]>>, time: Res<Time>, mut query: Query<&mut Pos>) {
-	// println!("!!! do some DIS");
 	let [mut pos, b_pos] = query.get_many_mut(**ents).unwrap();
 	let mut pos = pos.at_mut(time.elapsed());
 	let b_pos = b_pos.at(time.elapsed());
@@ -247,19 +244,17 @@ fn setup(world: &mut World) {
 			Dog {
 				pos: Pos([
 					PosX { val: x as f64, spd: SpdX { val: ((16 + (x.abs() % 32)) * x.signum()) as f64, acc: AccX { val: 0. } } },
-					PosX { val: y as f64, spd: SpdX { val: ((16 + (y.abs() % 32)) * y.signum()) as f64, acc: AccX { val: 0. } } }
+					PosX { val: y as f64, spd: SpdX { val: ((16 + (y.abs() % 32)) * y.signum()) as f64, acc: AccX { val: -100. } } }
 				].to_flux(Duration::ZERO)),
 			}
 		);
 	}}
 }
 
-const RECENT_TIME: Duration = time::SEC;
+const RECENT_TIME: Duration = Duration::from_millis(500);
 const OLDER_TIME: Duration = Duration::from_secs(10);
 
 fn update(world: &mut World) {
-	world.run_schedule(ChimeSchedule);
-	
 	/* !!! Issues:
 	   
 		[~] Squeezing:
@@ -395,6 +390,7 @@ fn update(world: &mut World) {
 	*/
 	
 	world.resource_scope(|world, old_time: Mut<Time>| {
+	world.schedule_scope(ChimeSchedule, |world, pred_schedule| {
 		let chime_time = world
 			.resource::<Time<Chime>>()
 			.as_generic();
@@ -403,29 +399,29 @@ fn update(world: &mut World) {
 		
 		let start = Duration::ZERO;
 		let end = Duration::MAX;
-		let time = (start + old_time.elapsed()).min(end);
-		chime_update(world, time);
+		let fast = 1;
+		let slow = 1;
+		let time = (start + old_time.elapsed()*fast/slow).min(end);
+		chime_update(world, time, pred_schedule);
 		
 		world.remove_resource::<Time>();
-		world.resource_mut::<Time<Chime>>().advance_to(old_time.elapsed());
+		world.resource_mut::<Time<Chime>>().advance_to(time);
+	});
 	});
 }
 
-fn chime_update(world: &mut World, time: Duration) {
-	// let mut tot_a = Duration::ZERO;
-	// let mut tot_b = Duration::ZERO;
-	// let mut tot_c = Duration::ZERO;
-	// let mut tot_d = Duration::ZERO;
-	// let mut num = 0;
-	// let a_time = Instant::now();
+fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule) {
+	let mut tot_a = Duration::ZERO;
+	let mut tot_b = Duration::ZERO;
+	let mut tot_c = Duration::ZERO;
+	let mut tot_d = Duration::ZERO;
+	let mut num = 0;
+	let a_time = Instant::now();
 	
 	let can_can_print = world.resource::<Input<KeyCode>>().pressed(KeyCode::Space);
 	let mut can_print = can_can_print;
 	
-    let mut pred_schedule = world
-        .get_resource_mut::<Schedules>()
-        .and_then(|mut s| s.remove(ChimeSchedule.intern()))
-	    .unwrap();
+	pred_schedule.run(world);
 	
 	while let Some(duration) = world.resource::<PredMap>().first_time() {
 		if time >= duration {
@@ -434,12 +430,12 @@ fn chime_update(world: &mut World, time: Duration) {
 				println!("Time: {:?}", duration);
 			}
 			
-			// let a_time = Instant::now();
+			let a_time = Instant::now();
 			world.resource_mut::<Time>().advance_to(duration);
 			let (system, key) = world.resource_mut::<PredMap>().pop();
-			// tot_a += Instant::now().duration_since(a_time);
+			tot_a += Instant::now().duration_since(a_time);
 			
-			// let a_time = Instant::now();
+			let a_time = Instant::now();
 			
 			let mut pred = world.resource_mut::<PredMap>();
 			let case = pred.time_table.get_mut(&key).unwrap();
@@ -459,7 +455,8 @@ fn chime_update(world: &mut World, time: Duration) {
 			 // Ignore Rapidly Repeating Events:
 			// let mut data = world.resource_mut::<PredData>();
 			// data.is_repeating = false;
-			let is_outlier = new_avg > old_avg.max(1.) * 100.;
+			const LIMIT: f32 = 100.;
+			let is_outlier = new_avg > old_avg.max(1.) * LIMIT;
 			if is_outlier {
 				// if data.can_repeat {
 					// data.is_repeating = true;
@@ -467,20 +464,25 @@ fn chime_update(world: &mut World, time: Duration) {
 					// ??? Ignore, crash, warning, etc.
 					// ??? If ignored, clear binary heap?
 					println!(
-						"event {:?} ({:?}) is repeating too much at time {:?}",
+						"event {:?} ({:?}) is repeating {}x more than normal at time {:?}\n\
+						old avg: {:?}/s\n\
+						new avg: {:?}/s",
 						key,
 						system,
+						LIMIT,
 						duration,
+						old_avg,
+						new_avg,
 					);
 					continue;
 				// }
 			}
 			// data.can_repeat = false;
 			
-			// tot_b += Instant::now().duration_since(a_time);
+			tot_b += Instant::now().duration_since(a_time);
 			
 			 // Call Event:
-			// let a_time = Instant::now();
+			let a_time = Instant::now();
 			for receiver in receivers {
 				match receiver {
 					PredId::None => {
@@ -498,29 +500,24 @@ fn chime_update(world: &mut World, time: Duration) {
 					},
 				}
 			}
-			// tot_c += Instant::now().duration_since(a_time);
+			tot_c += Instant::now().duration_since(a_time);
 			
 			 // Reschedule Events:
-			// let a_time = Instant::now();
+			let a_time = Instant::now();
 			pred_schedule.run(world);
-			// tot_d += Instant::now().duration_since(a_time);
+			tot_d += Instant::now().duration_since(a_time);
 			
-			// num += 1;
+			num += 1;
 		} else {
 			break
 		}
 	}
 	
-	// println!("lag at {time:?} ({num:?}): {:?}", Instant::now().duration_since(a_time));
-	// println!("  pop: {:?}", tot_a);
-	// println!("  avg: {:?}", tot_b);
-	// println!("  run: {:?}", tot_c);
-	// println!("  pred: {:?}", tot_d);
-	
-    let old = world.resource_mut::<Schedules>().insert(pred_schedule);
-    if old.is_some() {
-        warn!("Schedule `ChimeSchedule` was inserted during a call to `World::schedule_scope`: its value has been overwritten");
-    }
+	println!("lag at {time:?} ({num:?}): {:?}", Instant::now().duration_since(a_time));
+	println!("  pop: {:?}", tot_a);
+	println!("  avg: {:?}", tot_b);
+	println!("  run: {:?}", tot_c);
+	println!("  pred: {:?}", tot_d);
 }
 
 #[allow(dead_code)]
@@ -528,8 +525,12 @@ fn discrete_update(mut query: Query<&mut Pos>, time: Res<Time>) {
 	let a_time = Instant::now();
 	let delta = time.delta().as_secs_f64();
 	for mut pos in &mut query {
+		*pos[0].spd.val += *pos[0].spd.acc.val * delta / 2.;
 		*pos[0].val += *pos[0].spd.val * delta;
+		*pos[0].spd.val += *pos[0].spd.acc.val * delta / 2.;
+		*pos[1].spd.val += *pos[1].spd.acc.val * delta / 2.;
 		*pos[1].val += *pos[1].spd.val * delta;
+		*pos[1].spd.val += *pos[1].spd.acc.val * delta / 2.;
 		if *pos[0].val >= (RIGHT - RADIUS) as f64 || *pos[0].val <= (LEFT + RADIUS) as f64 {
 			*pos[0].val -= 2. * *pos[0].spd.val * delta;
 			*pos[0].spd.val *= -1.;
@@ -539,6 +540,7 @@ fn discrete_update(mut query: Query<&mut Pos>, time: Res<Time>) {
 			*pos[1].spd.val *= -1.;
 		}
 	}
+	let mut n = 0;
 	let mut combinations = query.iter_combinations_mut();
 	while let Some([mut a, mut b]) = combinations.fetch_next() {
 		let x = *a[0].val - *b[0].val;
@@ -555,9 +557,10 @@ fn discrete_update(mut query: Query<&mut Pos>, time: Res<Time>) {
 			let spd = (h*h + v*v).sqrt();
 			*b[0].spd.val = -spd * dir.cos();
 			*b[1].spd.val = -spd * dir.sin();
+			n += 1;
 		}
 	}
-	println!("discrete at {:?}: {:?}", time.elapsed(), Instant::now().duration_since(a_time));
+	println!("discrete at {:?} ({:?}): {:?}", time.elapsed(), n, Instant::now().duration_since(a_time));
 }
 
 fn debug_draw(mut draw: Gizmos, time: Res<Time>, pred_time: Res<Time<Chime>>, query: Query<(&Pos, Has<Gun>)>) {
@@ -665,11 +668,25 @@ impl<Case: PredCase> PredCollector<Case> {
 
 #[derive(Default)]
 struct PredCaseData {
-	time_index: usize,
-	time_list: Vec<Duration>,
+	times: Times,
+	next_time: Option<Duration>,
+	last_time: Option<Duration>,
 	receivers: HashSet<PredId>,
 	recent_times: BinaryHeap<Reverse<Duration>>,
 	older_times: BinaryHeap<Reverse<Duration>>,
+}
+
+impl PredCaseData {
+	fn next_time(&mut self, time: Duration) -> Option<Duration> {
+		while let Some(t) = self.times.next() {
+			if t >= time && Some(t) != self.last_time {
+				self.next_time = Some(t); 
+				return self.next_time
+			}
+		}
+		self.next_time = None;
+		None
+	}
 }
 
 /// Event handler.
@@ -690,78 +707,44 @@ impl PredMap {
 		}
 	}
 	
-	fn sched(&mut self, key: PredKey, pred_time: Duration, mut times: Times, system: SystemId) {
+	fn sched(&mut self, key: PredKey, pred_time: Duration, new_times: Times, system: SystemId) {
 		let (unique_id, pred_id) = key;
 		let key = (unique_id, pred_id.simplify());
 		
-		 // Store in Table:
-		let PredCaseData { time_index, time_list, receivers, .. }
-			= self.time_table.entry(key).or_default();
+		let case = self.time_table.entry(key).or_default();
 		
-		receivers.insert(pred_id);
+		case.times = new_times;
+		case.receivers.insert(pred_id);
 		
-		// println!("OLD: {:?}, {:?}", time_list, time_index);
-		let prev_index = std::mem::take(time_index);
-		let mut old_times = std::mem::take(time_list).into_iter();
-		let mut old_time = old_times.next();
-		let mut old_index = 0;
-		let mut time = times.next();
-		'a: loop {
-			let o = match (time.as_ref(), old_time.as_ref()) {
-				(Some(a), Some(b)) => a.cmp(b),
-				(Some(_), _) => Ordering::Less,
-				(_, Some(_)) => Ordering::Greater,
-				_ => break 'a,
-			};
-			match o {
-				Ordering::Less => {
-					 // Sort Into Main Queue:
-					if time.unwrap() >= pred_time {
-						self.time_stack.entry(time.unwrap()).or_default()
-							.push((system, key));
-						time_list.push(time.unwrap());
+		let prev_time = std::mem::take(&mut case.next_time);
+		let next_time = case.next_time(pred_time);
+		if next_time != prev_time {
+			 // Can Reschedule at Current Time:
+			case.last_time = None;
+			
+			 // Remove Old Prediction:
+			if let Some(time) = prev_time {
+				if let btree_map::Entry::Occupied(mut e) = self.time_stack.entry(time) {
+					let list = e.get_mut();
+					let pos = list.iter()
+						.position(|(.., k)| *k == key)
+						.expect("this should always work");
+					list.swap_remove(pos);
+					if list.is_empty() {
+						e.remove();
 					}
-					
-					 // Next New Time:
-					time = times.next();
-				},
-				Ordering::Greater => {
-					 // Remove First Instance From Main Queue:
-					if old_index >= prev_index {
-						if let btree_map::Entry::Occupied(mut e)
-							= self.time_stack.entry(old_time.unwrap())
-						{
-							let list = e.get_mut();
-							let pos = list.iter().position(|(.., k)| *k == key)
-								.expect("this should always work");
-							list.swap_remove(pos);
-							if list.is_empty() {
-								e.remove();
-							}
-						} else {
-							unreachable!()
-						}
-					}
-					
-					 // Next Old Time:
-					old_time = old_times.next();
-					old_index += 1;
-				},
-				Ordering::Equal => {
-					 // Preserve Old Predictions:
-					if old_index < prev_index {
-						*time_index += 1;
-					}
-					time_list.push(time.unwrap());
-					
-					 // Next Times:
-					time = times.next();
-					old_time = old_times.next();
-					old_index += 1;
-				},
+				} else {
+					unreachable!()
+				}
+			}
+			
+			 // Insert New Prediction:
+			if let Some(time) = next_time {
+				self.time_stack.entry(time)
+					.or_default()
+					.push((system, key));
 			}
 		}
-		// println!("FIN: {:?}, {:?}", time_list, time_index);
 	}
 	
 	fn pop(&mut self) -> (SystemId, PredKey) {
@@ -777,29 +760,34 @@ impl PredMap {
 			entry.remove();
 		}
 		
-		let PredCaseData {
-			time_index,
-			recent_times,
-			older_times,
-			..
-		} = self.time_table.get_mut(&key).unwrap();
-		*time_index += 1;
+		let case = self.time_table.get_mut(&key)
+			.expect("this should always work");
+		
+		debug_assert_eq!(case.next_time, Some(time));
+		
+		 // Queue Up Next Prediction:
+		case.last_time = Some(time);
+		if let Some(t) = case.next_time(time) {
+			self.time_stack.entry(t)
+				.or_default()
+				.push((system, key));
+		}
 		
 		 // Overall vs Recent Average:
-		while let Some(Reverse(t)) = older_times.peek() {
+		while let Some(Reverse(t)) = case.older_times.peek() {
 			if time < *t {
 				break
 			}
-			older_times.pop();
+			case.older_times.pop();
 		}
-		while let Some(Reverse(t)) = recent_times.peek() {
+		while let Some(Reverse(t)) = case.recent_times.peek() {
 			if time < *t {
 				break
 			}
-			older_times.push(Reverse(*t + OLDER_TIME));
-			recent_times.pop();
+			case.older_times.push(Reverse(*t + OLDER_TIME));
+			case.recent_times.pop();
 		}
-		recent_times.push(Reverse(time + RECENT_TIME));
+		case.recent_times.push(Reverse(time + RECENT_TIME));
 		
 		(system, key)
 	}
