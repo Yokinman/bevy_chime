@@ -112,8 +112,20 @@ fn add_many_dogs(world: &mut World) {
 		world.spawn(
 			Dog {
 				pos: Pos([
-					PosX { val: x as f64, spd: SpdX { val: ((16 + (x.abs() % 32)) * x.signum()) as f64, acc: AccX { val: 0. } } },
-					PosX { val: y as f64, spd: SpdX { val: ((16 + (y.abs() % 32)) * y.signum()) as f64, acc: AccX { val: -100. } } }
+					PosX {
+						val: x as f64,
+						spd: SpdX {
+							val: ((16 + (x.abs() % 32)) * x.signum()) as f64,
+							acc: AccX { val: 0. }
+						}
+					},
+					PosX {
+						val: y as f64,
+						spd: SpdX {
+							val: ((16 + (y.abs() % 32)) * y.signum()) as f64,
+							acc: AccX { val: -100. }
+						}
+					}
 				].to_flux(Duration::ZERO)),
 			}
 		);

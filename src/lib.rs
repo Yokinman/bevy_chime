@@ -6,12 +6,11 @@
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, btree_map, BTreeMap, HashMap};
 use std::hash::Hash;
-use std::ops::{Deref, DerefMut};
 
 use bevy::app::{App, Plugin, Startup, Update};
 use bevy::ecs::entity::Entity;
 use bevy::ecs::schedule::{Schedule, Schedules, ScheduleLabel};
-use bevy::ecs::system::{In, IntoSystem, Res, ResMut, Resource, ReadOnlySystem, SystemId};
+use bevy::ecs::system::{In, IntoSystem, Res, ResMut, Resource, ReadOnlySystem};
 use bevy::ecs::world::{Mut, World};
 
 use std::time::{Duration, Instant};
@@ -28,20 +27,17 @@ pub fn world_add_chime_system<Case, WhenMarker, WhenSys, DoMarker, DoSys>(
 where
 	Case: PredCase + Send + Sync + 'static,
 	WhenSys: IntoSystem<PredCollector<Case>, PredCollector<Case>, WhenMarker> + 'static,
-	DoSys: IntoSystem<Case, (), DoMarker> + 'static,
 	WhenSys::System: ReadOnlySystem,
+	DoSys: IntoSystem<Case, (), DoMarker> + Copy + Send + Sync + 'static,
 {
-	let unpack = |data: Res<PredData<Case>>| -> Case {
-		**data
-	};
-	let do_id = world.register_system(unpack.pipe(do_system));
+	let id = world.resource_mut::<PredMap>().setup_id();
 	
 	let input = || -> PredCollector<Case> {
 		PredCollector(Vec::new())
 	};
 	
 	let compile = move |In(input): In<PredCollector<Case>>, mut pred: ResMut<PredMap>, pred_time: Res<Time>| {
-		pred.sched(input, pred_time.elapsed(), do_id);
+		pred.sched(input, pred_time.elapsed(), id, do_system);
 	};
 	
 	world.resource_mut::<Schedules>()
@@ -52,12 +48,6 @@ where
 fn setup(world: &mut World) {
 	world.insert_resource(Time::<Chime>::default());
 	world.insert_resource(PredMap::default());
-	world.insert_resource(PredData::<Entity> {
-		receiver: None,
-	});
-	world.insert_resource(PredData::<[Entity; 2]> {
-		receiver: None,
-	});
 	world.add_schedule(Schedule::new(ChimeSchedule));
 }
 
@@ -223,8 +213,6 @@ fn update(world: &mut World) {
 fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule) {
 	let mut tot_a = Duration::ZERO;
 	let mut tot_b = Duration::ZERO;
-	let mut tot_c = Duration::ZERO;
-	let mut tot_d = Duration::ZERO;
 	let mut num = 0;
 	let a_time = Instant::now();
 	
@@ -235,88 +223,69 @@ fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule)
 	
 	while let Some(duration) = world.resource::<PredMap>().first_time() {
 		if time >= duration {
+			world.resource_mut::<Time>().advance_to(duration);
+			
 			if can_print {
 				can_print = false;
 				println!("Time: {:?}", duration);
 			}
 			
-			// let a_time = Instant::now();
-			world.resource_mut::<Time>().advance_to(duration);
-			let (system, key) = world.resource_mut::<PredMap>().pop();
-			// tot_a += Instant::now().duration_since(a_time);
-			
-			// let a_time = Instant::now();
-			
-			let mut pred = world.resource_mut::<PredMap>();
-			let case = pred.time_table
-				.get_mut(&system).unwrap()
-				.get_mut(&key.1).unwrap();
-			let receivers = case.receivers.clone();
-			
-			 // Ignore Rapidly Repeating Events:
-			let new_avg = (case.recent_times.len() as f32) / RECENT_TIME.as_secs_f32();
-			let old_avg = (case.older_times.len() as f32) / OLDER_TIME.as_secs_f32();
-			if can_can_print {
-				println!(
-					"> {:?} at {:?} (avg: {:?}/sec, recent: {:?}/sec)",
-					(key, system),
-					duration,
-					(old_avg * 100.).round() / 100.,
-					(new_avg * 100.).round() / 100.,
-				);
-			}
-			const LIMIT: f32 = 100.;
-			let is_outlier = new_avg > old_avg.max(1.) * LIMIT;
-			if is_outlier {
-				if case.is_repeating {
-					// ??? Ignore, crash, warning, etc.
-					// ??? If ignored, clear the recent average?
+			let a_time = Instant::now();
+			if world.resource_scope(|world, mut pred: Mut<PredMap>| -> bool {
+				let key = pred.pop();
+				let case = pred.time_table
+					.get_mut(key.0).unwrap()
+					.get_mut(&key.1).unwrap();
+				
+				 // Ignore Rapidly Repeating Events:
+				let new_avg = (case.recent_times.len() as f32) / RECENT_TIME.as_secs_f32();
+				let old_avg = (case.older_times.len() as f32) / OLDER_TIME.as_secs_f32();
+				if can_can_print {
 					println!(
-						"event {:?} ({:?}) is repeating {}x more than normal at time {:?}\n\
-						old avg: {:?}/s\n\
-						new avg: {:?}/s",
+						"> {:?} at {:?} (avg: {:?}/sec, recent: {:?}/sec)",
 						key,
-						system,
-						LIMIT,
 						duration,
-						old_avg,
-						new_avg,
+						(old_avg * 100.).round() / 100.,
+						(new_avg * 100.).round() / 100.,
 					);
-					continue;
+				}
+				const LIMIT: f32 = 100.;
+				let is_outlier = new_avg > old_avg.max(1.) * LIMIT;
+				if is_outlier {
+					if case.is_repeating {
+						// ??? Ignore, crash, warning, etc.
+						// ??? If ignored, clear the recent average?
+						println!(
+							"event {:?} is repeating {}x more than normal at time {:?}\n\
+							old avg: {:?}/s\n\
+							new avg: {:?}/s",
+							key,
+							LIMIT,
+							duration,
+							old_avg,
+							new_avg,
+						);
+						return true
+					} else {
+						case.is_repeating = true;
+					}
 				} else {
-					case.is_repeating = true;
+					case.is_repeating = false;
 				}
-			} else {
-				case.is_repeating = false;
+				
+				 // Call Event:
+				case.schedule.run(world);
+				
+				false
+			}) {
+				continue
 			}
-			
-			// tot_b += Instant::now().duration_since(a_time);
-			
-			 // Call Event:
-			// let a_time = Instant::now();
-			for receiver in receivers {
-				match receiver {
-					PredId::None => {
-						world.run_system(system);
-					},
-					PredId::Entity(e) => {
-						world.resource_mut::<PredData<Entity>>().receiver = Some(e);
-						world.run_system(system);
-						world.resource_mut::<PredData<Entity>>().receiver = None;
-					},
-					PredId::Entity2(e) => {
-						world.resource_mut::<PredData<[Entity; 2]>>().receiver = Some(e);
-						world.run_system(system);
-						world.resource_mut::<PredData<[Entity; 2]>>().receiver = None;
-					},
-				}
-			}
-			// tot_c += Instant::now().duration_since(a_time);
+			tot_a += Instant::now().duration_since(a_time);
 			
 			 // Reschedule Events:
-			// let a_time = Instant::now();
+			let a_time = Instant::now();
 			pred_schedule.run(world);
-			// tot_d += Instant::now().duration_since(a_time);
+			tot_b += Instant::now().duration_since(a_time);
 			
 			num += 1;
 		} else {
@@ -327,33 +296,8 @@ fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule)
 	let b_time = Instant::now();
 	if b_time.duration_since(a_time) > chime::time::MILLISEC {
 		println!("lag at {time:?} ({num:?}): {:?}", b_time.duration_since(a_time));
-		// println!("  pop: {:?}", tot_a);
-		// println!("  avg: {:?}", tot_b);
-		// println!("  run: {:?}", tot_c);
-		// println!("  pred: {:?}", tot_d);
-	}
-}
-
-/// Specific data from the "when" prediction fed into the action.
-#[derive(Resource, Debug, Copy, Clone)]
-struct PredData<T> {
-	receiver: Option<T>,
-	// can_repeat: bool,
-	// is_repeating: bool,
-}
-
-impl<T> Deref for PredData<T> {
-	type Target = T;
-	fn deref(&self) -> &Self::Target {
-		self.receiver.as_ref()
-			.expect("wrong receiver type used")
-	}
-}
-
-impl<T> DerefMut for PredData<T> {
-	fn deref_mut(&mut self) -> &mut Self::Target {
-		self.receiver.as_mut()
-			.expect("wrong receiver type used")
+		println!("  run: {:?}", tot_a);
+		println!("  pred: {:?}", tot_b);
 	}
 }
 
@@ -414,6 +358,7 @@ struct PredCaseData {
 	next_time: Option<Duration>,
 	last_time: Option<Duration>,
 	receivers: Vec<PredId>,
+	schedule: Schedule,
 	recent_times: BinaryHeap<Reverse<Duration>>,
 	older_times: BinaryHeap<Reverse<Duration>>,
 	is_repeating: bool,
@@ -435,11 +380,11 @@ impl PredCaseData {
 /// Event handler.
 #[derive(Resource, Default)]
 struct PredMap {
-	time_stack: BTreeMap<Duration, Vec<(SystemId, PredKey)>>,
-	time_table: HashMap<SystemId, HashMap<PredId, PredCaseData>>,
+	time_stack: BTreeMap<Duration, Vec<PredKey>>,
+	time_table: Vec<HashMap<PredId, PredCaseData>>,
 }
 
-type PredKey = (SystemId, PredId);
+type PredKey = (usize, PredId);
 
 impl PredMap {
 	fn first_time(&self) -> Option<Duration> {
@@ -450,42 +395,58 @@ impl PredMap {
 		}
 	}
 	
-	fn sched<T: PredCase>(&mut self, input: PredCollector<T>, pred_time: Duration, system: SystemId) {
+	fn setup_id(&mut self) -> usize {
+		self.time_table.push(Default::default());
+		self.time_table.len() - 1
+	}
+	
+	fn sched<Case, DoMarker, DoSys>(
+		&mut self,
+		input: PredCollector<Case>,
+		pred_time: Duration,
+		system_id: usize,
+		system: DoSys,
+	)
+	where
+		Case: PredCase + Send + Sync + 'static,
+		DoSys: IntoSystem<Case, (), DoMarker> + Copy + Sync + 'static,
+	{
 		// let n = input.0.len();
 		// let a_time = Instant::now();
-		let table = self.time_table.entry(system).or_default();
-		for (new_times, case) in input.0 {
+		let table = self.time_table.get_mut(system_id)
+			.expect("id must be initialized with PredMap::setup_id");
+		
+		for (new_times, pred_case) in input.0 {
 			// let a_time = Instant::now();
-			let pred_id = case.into_id();
-			let key = (system, pred_id.simplify());
-			
+			let pred_id = pred_case.into_id();
+			let key = (system_id, pred_id.simplify());
 			let case = table.entry(key.1).or_default(); // !!! very slow
-			
-			// let b_time = Instant::now();
 			case.times = new_times;
+			// let b_time = Instant::now();
 			
 			 // Store Receiver:
-			if !case.receivers.contains(&pred_id) { // !!! A bit slow
+			if !case.receivers.contains(&pred_id) {
 				case.receivers.push(pred_id);
-				// !!! This only contains up to however many combinations of
-				// `pred_id` can exist, so it could probably be optimized.
+				let input = move || -> Case { pred_case };
+				case.schedule.add_systems(input.pipe(system));
 			}
 			// let c_time = Instant::now();
 			
 			let prev_time = std::mem::take(&mut case.next_time);
-			// let d_time = Instant::now();
 			let next_time = case.next_time(pred_time); // !!! a lil slow
-			// let e_time = Instant::now();
+			// let d_time = Instant::now();
 			if next_time != prev_time {
 				 // Can Reschedule at Current Time:
 				case.last_time = None;
 				
 				 // Remove Old Prediction:
 				if let Some(time) = prev_time {
-					if let btree_map::Entry::Occupied(mut e) = self.time_stack.entry(time) {
+					if let btree_map::Entry::Occupied(mut e)
+						= self.time_stack.entry(time)
+					{
 						let list = e.get_mut();
 						let pos = list.iter()
-							.position(|(.., k)| *k == key)
+							.position(|k| *k == key)
 							.expect("this should always work");
 						list.swap_remove(pos);
 						if list.is_empty() {
@@ -500,27 +461,26 @@ impl PredMap {
 				if let Some(time) = next_time {
 					self.time_stack.entry(time)
 						.or_default()
-						.push((system, key));
+						.push(key);
 				}
 			}
-			// let f_time = Instant::now();
+			// let e_time = Instant::now();
 			
 			// println!(">>A {:?}", b_time.duration_since(a_time));
 			// println!(">>B {:?}", c_time.duration_since(b_time));
 			// println!(">>C {:?}", d_time.duration_since(c_time));
 			// println!(">>D {:?}", e_time.duration_since(d_time));
-			// println!(">>E {:?}", f_time.duration_since(e_time));
 		}
 		// println!("  compile: {:?} // {:?}", Instant::now().duration_since(a_time), n);
 	}
 	
-	fn pop(&mut self) -> (SystemId, PredKey) {
+	fn pop(&mut self) -> PredKey {
 		let mut entry = self.time_stack.first_entry()
 			.expect("this should always work");
 		
 		let time = *entry.key();
 		let list = entry.get_mut();
-		let (system, key) = list.pop()
+		let key = list.pop()
 			.expect("this should always work");
 		
 		if list.is_empty() {
@@ -528,7 +488,7 @@ impl PredMap {
 		}
 		
 		let case = self.time_table
-			.get_mut(&system).expect("this should always work")
+			.get_mut(key.0).expect("this should always work")
 			.get_mut(&key.1).expect("this should always work");
 		
 		debug_assert_eq!(case.next_time, Some(time));
@@ -538,7 +498,7 @@ impl PredMap {
 		if let Some(t) = case.next_time(time) {
 			self.time_stack.entry(t)
 				.or_default()
-				.push((system, key));
+				.push(key);
 		}
 		
 		 // Overall vs Recent Average:
@@ -557,7 +517,7 @@ impl PredMap {
 		}
 		case.recent_times.push(Reverse(time + RECENT_TIME));
 		
-		(system, key)
+		key
 	}
 }
 
