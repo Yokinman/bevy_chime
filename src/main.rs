@@ -66,7 +66,7 @@ const LEFT: i64 = -200;
 const RIGHT: i64 = 200;
 const TOP: i64 = 200;
 const BOTTOM: i64 = -200;
-const RADIUS: i64 = 8;
+const RADIUS: i64 = 3;
 
 fn when_func_a(In(mut pred): In<PredCollector<Entity>>, query: Query<(&Pos, Entity), Changed<Pos>>) -> PredCollector<Entity> {
 	// let a_time = Instant::now();
@@ -80,10 +80,10 @@ fn when_func_a(In(mut pred): In<PredCollector<Entity>>, query: Query<(&Pos, Enti
 	pred
 }
 
-fn do_func_a(ent: Res<PredData<Entity>>, time: Res<Time>, mut query: Query<&mut Pos>) {
-	let mut pos = query.get_mut(**ent).unwrap();
+fn do_func_a(In(ent): In<Entity>, time: Res<Time>, mut query: Query<&mut Pos>) {
+	let mut pos = query.get_mut(ent).unwrap();
 	let mut pos_x = pos[0].at_mut(time.elapsed());
-	pos_x.spd.val *= -1.;
+	pos_x.spd.val *= -0.98;
 }
 
 fn when_func_b(In(mut pred): In<PredCollector<Entity>>, query: Query<(&Pos, Entity), Changed<Pos>>) -> PredCollector<Entity> {
@@ -98,8 +98,8 @@ fn when_func_b(In(mut pred): In<PredCollector<Entity>>, query: Query<(&Pos, Enti
 	pred
 }
 
-fn do_func_b(ent: Res<PredData<Entity>>, time: Res<Time>, mut query: Query<&mut Pos>) {
-	let mut pos = query.get_mut(**ent).unwrap();
+fn do_func_b(In(ent): In<Entity>, time: Res<Time>, mut query: Query<&mut Pos>) {
+	let mut pos = query.get_mut(ent).unwrap();
 	let mut pos_y = pos[1].at_mut(time.elapsed());
 	
 	// if event.is_repeating {
@@ -113,7 +113,7 @@ fn do_func_b(ent: Res<PredData<Entity>>, time: Res<Time>, mut query: Query<&mut 
 		pos_y.spd.val = 0.;
 		pos_y.spd.acc.val = 0.;
 	} else {
-		pos_y.spd.val *= -1.;
+		pos_y.spd.val *= -0.98;
 	}
 }
 
@@ -147,14 +147,14 @@ fn when_func_c(
 	pred
 }
 
-fn do_func_c(ents: Res<PredData<[Entity; 2]>>, time: Res<Time>, mut query: Query<&mut Pos>) {
-	let [mut pos, b_pos] = query.get_many_mut(**ents).unwrap();
+fn do_func_c(In(ents): In<[Entity; 2]>, time: Res<Time>, mut query: Query<&mut Pos>) {
+	let [mut pos, b_pos] = query.get_many_mut(ents).unwrap();
 	let mut pos = pos.at_mut(time.elapsed());
 	let b_pos = b_pos.at(time.elapsed());
 	let x = pos[0].val - b_pos[0].val;
 	let y = pos[1].val - b_pos[1].val;
 	let dir = y.atan2(x);
-	let spd = pos_speed(&*pos);
+	let spd = pos_speed(&*pos) * 0.96;
 	pos[0].spd.val = spd * dir.cos();
 	pos[1].spd.val = spd * dir.sin();
 }
@@ -165,11 +165,15 @@ fn world_add_when<Case, WhenMarker, WhenSys, DoMarker, DoSys>(
 	do_system: DoSys,
 )
 where
-	Case: PredCase + 'static,
+	Case: PredCase + Send + Sync + 'static,
 	WhenSys: IntoSystem<PredCollector<Case>, PredCollector<Case>, WhenMarker> + 'static,
-	DoSys: IntoSystem<(), (), DoMarker> + 'static,
+	DoSys: IntoSystem<Case, (), DoMarker> + 'static,
+	WhenSys::System: ReadOnlySystem,
 {
-	let do_id = world.register_system(do_system);
+	let unpack = |data: Res<PredData<Case>>| -> Case {
+		**data
+	};
+	let do_id = world.register_system(unpack.pipe(do_system));
 	
 	let input = || -> PredCollector<Case> {
 		PredCollector(Vec::new())
@@ -209,6 +213,7 @@ fn setup(world: &mut World) {
 	world_add_when(world, when_func_c, do_func_c);
 	
     world.spawn(Camera2dBundle::default());
+	
 	// world.spawn((
 	// 	Dog {
 	// 		pos: Pos([
@@ -216,11 +221,11 @@ fn setup(world: &mut World) {
 	// 			PosX { val: 0., spd: SpdX { val: 20.,  acc: AccX { val: -1000. } } }
 	// 		].to_flux(Duration::ZERO)),
 	// 	},
-	// 	SpriteBundle {
-	// 		transform: Transform::from_xyz(100., 5., 20.),
-	// 		texture: world.resource::<AssetServer>().load("textures/air_unit.png"),
-	// 		..default()
-	// 	},
+	// 	// SpriteBundle {
+	// 	// 	transform: Transform::from_xyz(100., 5., 20.),
+	// 	// 	texture: world.resource::<AssetServer>().load("textures/air_unit.png"),
+	// 	// 	..default()
+	// 	// },
 	// 	Gun,
 	// ));
 	// world.spawn((
@@ -232,6 +237,7 @@ fn setup(world: &mut World) {
 	// 	},
 	// 	SpriteBundle::default(),
 	// ));
+	
 	for x in ((LEFT + RADIUS)..RIGHT).step_by(32) {
 	for y in ((BOTTOM + RADIUS)..TOP).step_by(32) {
 		world.spawn(
@@ -436,6 +442,8 @@ fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule)
 				.get_mut(&system).unwrap()
 				.get_mut(&key.1).unwrap();
 			let receivers = case.receivers.clone();
+			
+			 // Ignore Rapidly Repeating Events:
 			let new_avg = (case.recent_times.len() as f32) / RECENT_TIME.as_secs_f32();
 			let old_avg = (case.older_times.len() as f32) / OLDER_TIME.as_secs_f32();
 			if can_can_print {
@@ -447,18 +455,12 @@ fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule)
 					(new_avg * 100.).round() / 100.,
 				);
 			}
-			
-			 // Ignore Rapidly Repeating Events:
-			// let mut data = world.resource_mut::<PredData>();
-			// data.is_repeating = false;
 			const LIMIT: f32 = 100.;
 			let is_outlier = new_avg > old_avg.max(1.) * LIMIT;
 			if is_outlier {
-				// if data.can_repeat {
-					// data.is_repeating = true;
-				// } else {
+				if case.is_repeating {
 					// ??? Ignore, crash, warning, etc.
-					// ??? If ignored, clear binary heap?
+					// ??? If ignored, clear the recent average?
 					println!(
 						"event {:?} ({:?}) is repeating {}x more than normal at time {:?}\n\
 						old avg: {:?}/s\n\
@@ -471,9 +473,12 @@ fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule)
 						new_avg,
 					);
 					continue;
-				// }
+				} else {
+					case.is_repeating = true;
+				}
+			} else {
+				case.is_repeating = false;
 			}
-			// data.can_repeat = false;
 			
 			// tot_b += Instant::now().duration_since(a_time);
 			
@@ -509,11 +514,14 @@ fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule)
 		}
 	}
 	
-	println!("lag at {time:?} ({num:?}): {:?}", Instant::now().duration_since(a_time));
-	// println!("  pop: {:?}", tot_a);
-	// println!("  avg: {:?}", tot_b);
-	// println!("  run: {:?}", tot_c);
-	// println!("  pred: {:?}", tot_d);
+	let b_time = Instant::now();
+	if b_time.duration_since(a_time) > time::MILLISEC {
+		println!("lag at {time:?} ({num:?}): {:?}", b_time.duration_since(a_time));
+		// println!("  pop: {:?}", tot_a);
+		// println!("  avg: {:?}", tot_b);
+		// println!("  run: {:?}", tot_c);
+		// println!("  pred: {:?}", tot_d);
+	}
 }
 
 #[allow(dead_code)]
@@ -565,7 +573,7 @@ fn debug_draw(mut draw: Gizmos, time: Res<Time>, pred_time: Res<Time<Chime>>, qu
 		let x = pos[0].at(pred_time.elapsed());
 		let y = pos[1].at(pred_time.elapsed());
 		let pos = Vec2::new(x.val as f32, y.val as f32);
-		draw.circle_2d(pos, RADIUS as f32, Color::BLUE);
+		draw.circle_2d(pos, RADIUS as f32, Color::YELLOW);
 		if has_gun {
 			draw.line_2d(
 				pos,
@@ -631,7 +639,7 @@ impl PredId {
 }
 
 /// A case of prediction, like what it's based on.
-trait PredCase {
+trait PredCase: Copy + Clone {
 	fn into_id(self) -> PredId;
 }
 
@@ -670,6 +678,7 @@ struct PredCaseData {
 	receivers: Vec<PredId>,
 	recent_times: BinaryHeap<Reverse<Duration>>,
 	older_times: BinaryHeap<Reverse<Duration>>,
+	is_repeating: bool,
 }
 
 impl PredCaseData {
