@@ -10,7 +10,7 @@ use std::hash::Hash;
 use bevy::app::{App, Plugin, Startup, Update};
 use bevy::ecs::entity::Entity;
 use bevy::ecs::schedule::{Schedule, Schedules, ScheduleLabel};
-use bevy::ecs::system::{In, IntoSystem, Res, ResMut, Resource, ReadOnlySystem};
+use bevy::ecs::system::{In, IntoSystem, Res, ResMut, Resource, ReadOnlySystem, System};
 use bevy::ecs::world::{Mut, World};
 
 use std::time::{Duration, Instant};
@@ -19,16 +19,18 @@ use chime::time::Times;
 
 use bevy::input::{Input, keyboard::KeyCode};
 
-pub fn world_add_chime_system<Case, WhenMarker, WhenSys, DoMarker, DoSys>(
+pub fn world_add_chime_system<Case, WhenMarker, WhenSys, DoMarker, DoSys, OutlierMarker, OutlierSys>(
 	world: &mut World,
 	when_system: WhenSys,
 	do_system: DoSys,
+	outlier_system: OutlierSys,
 )
 where
 	Case: PredCase + Send + Sync + 'static,
 	WhenSys: IntoSystem<PredCollector<Case>, PredCollector<Case>, WhenMarker> + 'static,
 	WhenSys::System: ReadOnlySystem,
 	DoSys: IntoSystem<Case, (), DoMarker> + Copy + Send + Sync + 'static,
+	OutlierSys: IntoSystem<Case, (), OutlierMarker> + Copy + Send + Sync + 'static,
 {
 	let id = world.resource_mut::<PredMap>().setup_id();
 	
@@ -37,7 +39,7 @@ where
 	};
 	
 	let compile = move |In(input): In<PredCollector<Case>>, mut pred: ResMut<PredMap>, pred_time: Res<Time>| {
-		pred.sched(input, pred_time.elapsed(), id, do_system);
+		pred.sched(input, pred_time.elapsed(), id, do_system, outlier_system);
 	};
 	
 	world.resource_mut::<Schedules>()
@@ -252,11 +254,13 @@ fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule)
 				const LIMIT: f32 = 100.;
 				let is_outlier = new_avg > old_avg.max(1.) * LIMIT;
 				if is_outlier {
-					if case.is_repeating {
+					if let Some(outlier_schedule) = &mut case.outlier_schedule {
+						outlier_schedule.run(world);
+					} else {
 						// ??? Ignore, crash, warning, etc.
 						// ??? If ignored, clear the recent average?
 						println!(
-							"event {:?} is repeating {}x more than normal at time {:?}\n\
+							"event {:?} is repeating >{}x more than normal at time {:?}\n\
 							old avg: {:?}/s\n\
 							new avg: {:?}/s",
 							key,
@@ -265,16 +269,14 @@ fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule)
 							old_avg,
 							new_avg,
 						);
-						return true
-					} else {
-						case.is_repeating = true;
+						return true // Don't reschedule
 					}
-				} else {
-					case.is_repeating = false;
 				}
 				
 				 // Call Event:
-				case.schedule.run(world);
+				else {
+					case.schedule.run(world);
+				}
 				
 				false
 			}) {
@@ -294,7 +296,7 @@ fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule)
 	}
 	
 	let b_time = Instant::now();
-	if b_time.duration_since(a_time) > chime::time::MILLISEC {
+	if can_can_print && b_time.duration_since(a_time) > chime::time::MILLISEC {
 		println!("lag at {time:?} ({num:?}): {:?}", b_time.duration_since(a_time));
 		println!("  run: {:?}", tot_a);
 		println!("  pred: {:?}", tot_b);
@@ -359,9 +361,9 @@ struct PredCaseData {
 	last_time: Option<Duration>,
 	receivers: Vec<PredId>,
 	schedule: Schedule,
+	outlier_schedule: Option<Schedule>,
 	recent_times: BinaryHeap<Reverse<Duration>>,
 	older_times: BinaryHeap<Reverse<Duration>>,
-	is_repeating: bool,
 }
 
 impl PredCaseData {
@@ -376,6 +378,8 @@ impl PredCaseData {
 		None
 	}
 }
+
+pub fn temp_default_outlier<T: PredCase>(_: In<T>) {}
 
 /// Event handler.
 #[derive(Resource, Default)]
@@ -400,16 +404,18 @@ impl PredMap {
 		self.time_table.len() - 1
 	}
 	
-	fn sched<Case, DoMarker, DoSys>(
+	fn sched<Case, DoMarker, DoSys, OutlierMarker, OutlierSys>(
 		&mut self,
 		input: PredCollector<Case>,
 		pred_time: Duration,
 		system_id: usize,
 		system: DoSys,
+		outlier_system: OutlierSys,
 	)
 	where
 		Case: PredCase + Send + Sync + 'static,
 		DoSys: IntoSystem<Case, (), DoMarker> + Copy + Sync + 'static,
+		OutlierSys: IntoSystem<Case, (), OutlierMarker> + Copy + Sync + 'static,
 	{
 		// let n = input.0.len();
 		// let a_time = Instant::now();
@@ -429,6 +435,14 @@ impl PredMap {
 				case.receivers.push(pred_id);
 				let input = move || -> Case { pred_case };
 				case.schedule.add_systems(input.pipe(system));
+				if IntoSystem::into_system(outlier_system).name()
+					!= IntoSystem::into_system(temp_default_outlier::<Case>).name()
+				{
+					if case.outlier_schedule.is_none() {
+						case.outlier_schedule = Some(Schedule::default());
+					}
+					case.outlier_schedule.as_mut().unwrap().add_systems(input.pipe(outlier_system));
+				}
 			}
 			// let c_time = Instant::now();
 			

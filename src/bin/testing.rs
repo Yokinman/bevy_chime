@@ -4,7 +4,7 @@ use bevy::prelude::*;
 use bevy::window::PresentMode;
 
 use chime::{flux, Flux, FluxVec, Moment, sum::Sum, time};
-use chime::kind::WhenDisEq;
+use chime::kind::{WhenDisEq, WhenEq};
 
 use std::cmp::Ordering;
 use std::time::{Duration, Instant};
@@ -70,9 +70,9 @@ fn setup(world: &mut World) {
 	// };
 	
 	 // Chime Systems:
-	world_add_chime_system(world, when_func_a, do_func_a);
-	world_add_chime_system(world, when_func_b, do_func_b);
-	world_add_chime_system(world, when_func_c, do_func_c);
+	world_add_chime_system(world, when_func_a, do_func_a, temp_default_outlier);
+	world_add_chime_system(world, when_func_b, do_func_b, outlier_func_b);
+	world_add_chime_system(world, when_func_c, do_func_c, outlier_func_c);
 	
 	// add_two_dogs(world);
 	add_many_dogs(world);
@@ -136,8 +136,8 @@ fn when_func_a(In(mut pred): In<PredCollector<Entity>>, query: Query<(&Pos, Enti
 	// let a_time = Instant::now();
 	for (pos, entity) in &query {
 		let times =
-			(pos[0].when_eq(&chime::Constant::from((RIGHT - RADIUS) as f64)) & pos[0].spd.when(Ordering::Greater, &chime::Constant::from(0.))) |
-			(pos[0].when_eq(&chime::Constant::from((LEFT  + RADIUS) as f64)) & pos[0].spd.when(Ordering::Less, &chime::Constant::from(0.)));
+			(pos[0].when_eq(&chime::Constant::from((RIGHT - RADIUS) as f64))/* & pos[0].spd.when(Ordering::Greater, &chime::Constant::from(0.))*/) |
+			(pos[0].when_eq(&chime::Constant::from((LEFT  + RADIUS) as f64))/* & pos[0].spd.when(Ordering::Less, &chime::Constant::from(0.))*/);
 		pred.add(times, entity);
 	}
 	// println!("  when_func_a: {:?}", Instant::now().duration_since(a_time));
@@ -150,13 +150,22 @@ fn do_func_a(In(ent): In<Entity>, time: Res<Time>, mut query: Query<&mut Pos>) {
 	pos_x.spd.val *= -0.98;
 }
 
-fn when_func_b(In(mut pred): In<PredCollector<Entity>>, query: Query<(&Pos, Entity), Changed<Pos>>) -> PredCollector<Entity> {
+fn when_func_b(In(mut pred): In<PredCollector<Entity>>, query: Query<(&Pos, Entity), Changed<Pos>>, time: Res<Time>) -> PredCollector<Entity> {
 	// let a_time = Instant::now();
+	// let time = time.elapsed();
 	for (pos, entity) in &query {
-		let times =
-			(pos[1].when_eq(&chime::Constant::from((TOP    - RADIUS) as f64))/* & pos[1].spd.when(Ordering::Greater, &chime::Constant::from(0.))*/) |
-			(pos[1].when_eq(&chime::Constant::from((BOTTOM + RADIUS) as f64))/* & pos[1].spd.when(Ordering::Less, &chime::Constant::from(0.))*/);
-		pred.add(times, entity);
+		let/* mut*/ times =
+			(pos[1].when_eq(&chime::Constant::from((TOP    - RADIUS) as f64)) & pos[1].spd.when(Ordering::Greater, &chime::Constant::from(0.))) |
+			(pos[1].when_eq(&chime::Constant::from((BOTTOM + RADIUS) as f64)) & pos[1].spd.when(Ordering::Less, &chime::Constant::from(0.)));
+		pred.add(times/*.clone()*/, entity);
+		// if times.find(|t| *t > time).is_none() && pos[1].at(time).spd.acc.val != 0. {
+		// 	println!("Wow! {time:?}, {:?}, {:?}\n  {:?}, spd: {:?}",
+		// 		(pos[1].poly(time) - chime::Constant::from((BOTTOM + RADIUS) as f64).into()),
+		// 		(pos[1].poly(time) - chime::Constant::from((BOTTOM + RADIUS) as f64).into()).real_roots().collect::<Vec<_>>(),
+		// 		pos[1].when_eq(&chime::Constant::from((BOTTOM + RADIUS) as f64)).collect::<Vec<_>>(),
+		// 		pos[1].spd.when(Ordering::Less, &chime::Constant::from(0.)).collect::<Vec<_>>()
+		// 	);
+		// }
 	}
 	// println!("  when_func_b: {:?}", Instant::now().duration_since(a_time));
 	pred
@@ -172,13 +181,18 @@ fn do_func_b(In(ent): In<Entity>, time: Res<Time>, mut query: Query<&mut Pos>) {
 	// 	return
 	// }
 	// event.can_repeat = true;
-	
+	pos_y.spd.val *= -0.98;
 	if pos_y.spd.val == 0. { // > -(2. * pos_y.spd.acc.val.abs()).sqrt()
 		pos_y.spd.val = 0.;
 		pos_y.spd.acc.val = 0.;
-	} else {
-		pos_y.spd.val *= -0.98;
 	}
+}
+
+fn outlier_func_b(In(ent): In<Entity>, time: Res<Time>, mut query: Query<&mut Pos>) {
+	let mut pos = query.get_mut(ent).unwrap();
+	let mut pos_y = pos[1].at_mut(time.elapsed());
+	pos_y.spd.val = 0.;
+	pos_y.spd.acc.val = 0.;
 }
 
 fn when_func_c(
@@ -221,6 +235,13 @@ fn do_func_c(In(ents): In<[Entity; 2]>, time: Res<Time>, mut query: Query<&mut P
 	let spd = pos_speed(&pos) * 0.96;
 	pos[0].spd.val = spd * dir.cos();
 	pos[1].spd.val = spd * dir.sin();
+}
+
+fn outlier_func_c(In(ents): In<[Entity; 2]>, time: Res<Time>, mut query: Query<&mut Pos>) {
+	let [mut pos, _b_pos] = query.get_many_mut(ents).unwrap();
+	let mut pos = pos.at_mut(time.elapsed());
+	pos[0].spd.val = 0.; pos[0].spd.acc.val = 0.;
+	pos[1].spd.val = 0.; pos[1].spd.acc.val = 0.;
 }
 
 #[allow(dead_code)]
@@ -306,3 +327,6 @@ fn main() {
         // .add_plugins(bevy::diagnostic::FrameTimeDiagnosticsPlugin::default())
 		.run();
 }
+
+// !!! Make time_try_from_secs always round down
+// !!! Make Times and TimeRanges combine the roots in their raw form
