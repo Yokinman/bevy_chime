@@ -14,3 +14,11 @@ features = ["dynamic_linking"]
 
 [profile.dev.package."*"]
 opt-level = 3 # Faster dependency compilation
+
+[lib]
+name = "bevy_chime"
+path = "src/lib.rs"
+
+[[bin]]
+name = "testing"
+path = "src/bin/testing.rs"
