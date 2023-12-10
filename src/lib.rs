@@ -20,7 +20,7 @@ use chime::time::Times;
 
 use bevy::input::{Input, keyboard::KeyCode};
 
-pub fn world_add_when<Case, WhenMarker, WhenSys, DoMarker, DoSys>(
+pub fn world_add_chime_system<Case, WhenMarker, WhenSys, DoMarker, DoSys>(
 	world: &mut World,
 	when_system: WhenSys,
 	do_system: DoSys,

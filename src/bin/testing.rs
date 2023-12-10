@@ -70,14 +70,15 @@ fn setup(world: &mut World) {
 	// };
 	
 	 // Chime Systems:
-	world_add_when(world, when_func_a, do_func_a);
-	world_add_when(world, when_func_b, do_func_b);
-	world_add_when(world, when_func_c, do_func_c);
+	world_add_chime_system(world, when_func_a, do_func_a);
+	world_add_chime_system(world, when_func_b, do_func_b);
+	world_add_chime_system(world, when_func_c, do_func_c);
 	
 	// add_two_dogs(world);
 	add_many_dogs(world);
 }
 
+#[allow(dead_code)]
 fn add_two_dogs(world: &mut World) {
 	world.spawn((
 		Dog {
@@ -104,6 +105,7 @@ fn add_two_dogs(world: &mut World) {
 	));
 }
 
+#[allow(dead_code)]
 fn add_many_dogs(world: &mut World) {
 	for x in ((LEFT + RADIUS)..RIGHT).step_by(32) {
 	for y in ((BOTTOM + RADIUS)..TOP).step_by(32) {
@@ -204,7 +206,7 @@ fn do_func_c(In(ents): In<[Entity; 2]>, time: Res<Time>, mut query: Query<&mut P
 	let x = pos[0].val - b_pos[0].val;
 	let y = pos[1].val - b_pos[1].val;
 	let dir = y.atan2(x);
-	let spd = pos_speed(&*pos) * 0.96;
+	let spd = pos_speed(&pos) * 0.96;
 	pos[0].spd.val = spd * dir.cos();
 	pos[1].spd.val = spd * dir.sin();
 }
