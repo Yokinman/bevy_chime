@@ -4,8 +4,10 @@ use bevy::prelude::*;
 use bevy::window::PresentMode;
 
 use chime::{flux, Flux, FluxVec, Moment, sum::Sum, time};
-use chime::kind::{WhenDisEq};
+use chime::kind::{WhenDisEq, WhenDis, WhenEq, When};
+use chime::time::Times;
 
+use std::cmp::Ordering;
 use std::time::{Duration, Instant};
 
 use impl_op::impl_op;
@@ -71,7 +73,32 @@ fn setup(world: &mut World) {
 	 // Chime Systems:
 	world_add_chime_system(world, when_func_a, do_func_a, temp_default_outlier);
 	world_add_chime_system(world, when_func_b, do_func_b, outlier_func_b);
-	world_add_chime_system(world, when_func_c, do_func_c, outlier_func_c);
+	world_add_chime_system(world, when_func_c, do_func_c, |In(_)| {});
+	
+	world_add_chime_system(world, |
+		In(mut pred): In<PredCollector<[Entity; 2]>>,
+		query: Query<(&Pos, Entity), Changed<Pos>>,
+		b_query: Query<(&Pos, Entity)>,
+		real_time: Res<Time>,
+	| -> PredCollector<[Entity; 2]> {
+		let dis = chime::Constant::from((2 * RADIUS) as f64).poly(Duration::ZERO);
+		let t = real_time.elapsed();
+		for (pos, entity) in &query {
+			let pos_poly_vec = pos.polys(pos.base_time());
+			let time = pos.base_time();
+			for (b_pos, b_entity) in &b_query {
+				if entity != b_entity {
+					let b_pos_vec = b_pos.polys(time);
+					let times = Times::new(pos_poly_vec.when_dis(&b_pos_vec, Ordering::Less, &dis)
+						.map(move |(a, b)| t.max(a).min(b)));
+					// !!! Should schedule t at the current time if the range envelopes the current time
+					// println!("times at {:?} ({:?}): {:?}", real_time.elapsed(), entity, times.clone().collect::<Vec<_>>());
+					pred.add(times, [entity, b_entity]);
+				}
+			}
+		}
+		pred
+	}, outlier_func_c, temp_default_outlier);
 	
 	// add_two_dogs(world);
 	add_many_dogs(world);
@@ -82,7 +109,7 @@ fn add_two_dogs(world: &mut World) {
 	world.spawn((
 		Dog {
 			pos: Pos([
-				PosX { val: 0., spd: SpdX { val: 000., acc: AccX { val: 0. } } },
+				PosX { val: 0., spd: SpdX { val: 100., acc: AccX { val: 0. } } },
 				PosX { val: 0., spd: SpdX { val: 20.,  acc: AccX { val: -1000. } } }
 			].to_flux(Duration::ZERO)),
 		},
@@ -96,39 +123,12 @@ fn add_two_dogs(world: &mut World) {
 	world.spawn((
 		Dog {
 			pos: Pos([
-				PosX { val: 0., spd: SpdX { val: -00., acc: AccX { val: 00. } } },
-				PosX { val: 0., spd: SpdX { val: -60., acc: AccX { val: -1000. } } }
+				PosX { val: 0., spd: SpdX { val: -30., acc: AccX { val: 10. } } },
+				PosX { val: 0., spd: SpdX { val: -60., acc: AccX { val: 10. } } }
 			].to_flux(Duration::ZERO)),
 		},
 		SpriteBundle::default(),
 	));
-	world.spawn((
-		Dog {
-			pos: Pos([
-				PosX { val: 0., spd: SpdX { val: -00., acc: AccX { val: 00. } } },
-				PosX { val: 0., spd: SpdX { val: -40., acc: AccX { val: -1000. } } }
-			].to_flux(Duration::ZERO)),
-		},
-		SpriteBundle::default(),
-	));
-	// world.spawn((
-	// 	Dog {
-	// 		pos: Pos([
-	// 			PosX { val: 0., spd: SpdX { val: -00., acc: AccX { val: 00. } } },
-	// 			PosX { val: 0., spd: SpdX { val: -00., acc: AccX { val: -1000. } } }
-	// 		].to_flux(Duration::ZERO)),
-	// 	},
-	// 	SpriteBundle::default(),
-	// ));
-	// world.spawn((
-	// 	Dog {
-	// 		pos: Pos([
-	// 			PosX { val: 0., spd: SpdX { val: -00., acc: AccX { val: 00. } } },
-	// 			PosX { val: 0., spd: SpdX { val: 20., acc: AccX { val: -1000. } } }
-	// 		].to_flux(Duration::ZERO)),
-	// 	},
-	// 	SpriteBundle::default(),
-	// ));
 }
 
 #[allow(dead_code)]
@@ -200,7 +200,7 @@ fn when_func_b(In(mut pred): In<PredCollector<Entity>>, query: Query<(&Pos, Enti
 fn do_func_b(In(ent): In<Entity>, time: Res<Time>, mut query: Query<&mut Pos>) {
 	let mut pos = query.get_mut(ent).unwrap();
 	let mut pos_y = pos[1].at_mut(time.elapsed());
-	pos_y.spd.val *= -0.98;
+	pos_y.spd.val *= -0.5;
 	if pos_y.spd.val.abs() < 0.000001 { // > -(2. * pos_y.spd.acc.val.abs()).sqrt()
 		pos_y.spd.val = 0.;
 		pos_y.spd.acc.val = 0.;
@@ -261,6 +261,9 @@ fn do_func_c(In(ents): In<[Entity; 2]>, time: Res<Time>, mut query: Query<&mut P
 }
 
 fn outlier_func_c(In(ents): In<[Entity; 2]>, time: Res<Time>, mut query: Query<&mut Pos>) {
+	if ents[0] == ents[1] {
+		return
+	}
 	let [mut pos, _b_pos] = query.get_many_mut(ents).unwrap();
 	let mut pos = pos.at_mut(time.elapsed());
 	pos[0].spd.val = 0.; pos[0].spd.acc.val = 0.;

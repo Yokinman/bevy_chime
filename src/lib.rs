@@ -252,7 +252,8 @@ fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule)
 					);
 				}
 				const LIMIT: f32 = 100.;
-				let is_outlier = new_avg > old_avg.max(1.) * LIMIT;
+				let min_avg = (500 >> case.older_times.len().min(16)) as f32;
+				let is_outlier = new_avg > (old_avg * LIMIT).max(min_avg);
 				if is_outlier {
 					if let Some(outlier_schedule) = &mut case.outlier_schedule {
 						outlier_schedule.run(world);
