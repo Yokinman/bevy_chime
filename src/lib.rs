@@ -367,15 +367,9 @@ struct PredCaseData {
 }
 
 impl PredCaseData {
-	fn next_time(&mut self, time: Duration) -> Option<Duration> {
-		while let Some(t) = self.times.next() {
-			if t >= time && Some(t) != self.last_time {
-				self.next_time = Some(t); 
-				return self.next_time
-			}
-		}
-		self.next_time = None;
-		None
+	fn next_time(&mut self) -> Option<Duration> {
+		self.next_time = self.times.next();
+		self.next_time
 	}
 }
 
@@ -446,13 +440,25 @@ impl PredMap {
 			}
 			// let c_time = Instant::now();
 			
+			 // Fetch Next Time:
+			let last_time = std::mem::take(&mut case.last_time);
 			let prev_time = std::mem::take(&mut case.next_time);
-			let next_time = case.next_time(pred_time); // !!! a lil slow
+			let next_time = {
+				while let Some(t) = case.next_time() {
+					if t >= pred_time {
+						if Some(t) == last_time {
+							case.last_time = last_time;
+						} else {
+							break
+						}
+					}
+				}
+				case.next_time
+			};
+			
+			 // Update Prediction:
 			// let d_time = Instant::now();
 			if next_time != prev_time {
-				 // Can Reschedule at Current Time:
-				case.last_time = None;
-				
 				 // Remove Old Prediction:
 				if let Some(time) = prev_time {
 					if let btree_map::Entry::Occupied(mut e)
@@ -509,7 +515,7 @@ impl PredMap {
 		
 		 // Queue Up Next Prediction:
 		case.last_time = Some(time);
-		if let Some(t) = case.next_time(time) {
+		if let Some(t) = case.next_time() {
 			self.time_stack.entry(t)
 				.or_default()
 				.push(key);

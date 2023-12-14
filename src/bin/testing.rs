@@ -4,9 +4,8 @@ use bevy::prelude::*;
 use bevy::window::PresentMode;
 
 use chime::{flux, Flux, FluxVec, Moment, sum::Sum, time};
-use chime::kind::{WhenDisEq, WhenEq};
+use chime::kind::{WhenDisEq};
 
-use std::cmp::Ordering;
 use std::time::{Duration, Instant};
 
 use impl_op::impl_op;
@@ -83,7 +82,7 @@ fn add_two_dogs(world: &mut World) {
 	world.spawn((
 		Dog {
 			pos: Pos([
-				PosX { val: 0., spd: SpdX { val: 100., acc: AccX { val: 0. } } },
+				PosX { val: 0., spd: SpdX { val: 000., acc: AccX { val: 0. } } },
 				PosX { val: 0., spd: SpdX { val: 20.,  acc: AccX { val: -1000. } } }
 			].to_flux(Duration::ZERO)),
 		},
@@ -97,12 +96,39 @@ fn add_two_dogs(world: &mut World) {
 	world.spawn((
 		Dog {
 			pos: Pos([
-				PosX { val: 0., spd: SpdX { val: -30., acc: AccX { val: 10. } } },
-				PosX { val: 0., spd: SpdX { val: -60., acc: AccX { val: 10. } } }
+				PosX { val: 0., spd: SpdX { val: -00., acc: AccX { val: 00. } } },
+				PosX { val: 0., spd: SpdX { val: -60., acc: AccX { val: -1000. } } }
 			].to_flux(Duration::ZERO)),
 		},
 		SpriteBundle::default(),
 	));
+	world.spawn((
+		Dog {
+			pos: Pos([
+				PosX { val: 0., spd: SpdX { val: -00., acc: AccX { val: 00. } } },
+				PosX { val: 0., spd: SpdX { val: -40., acc: AccX { val: -1000. } } }
+			].to_flux(Duration::ZERO)),
+		},
+		SpriteBundle::default(),
+	));
+	// world.spawn((
+	// 	Dog {
+	// 		pos: Pos([
+	// 			PosX { val: 0., spd: SpdX { val: -00., acc: AccX { val: 00. } } },
+	// 			PosX { val: 0., spd: SpdX { val: -00., acc: AccX { val: -1000. } } }
+	// 		].to_flux(Duration::ZERO)),
+	// 	},
+	// 	SpriteBundle::default(),
+	// ));
+	// world.spawn((
+	// 	Dog {
+	// 		pos: Pos([
+	// 			PosX { val: 0., spd: SpdX { val: -00., acc: AccX { val: 00. } } },
+	// 			PosX { val: 0., spd: SpdX { val: 20., acc: AccX { val: -1000. } } }
+	// 		].to_flux(Duration::ZERO)),
+	// 	},
+	// 	SpriteBundle::default(),
+	// ));
 }
 
 #[allow(dead_code)]
@@ -150,13 +176,13 @@ fn do_func_a(In(ent): In<Entity>, time: Res<Time>, mut query: Query<&mut Pos>) {
 	pos_x.spd.val *= -0.98;
 }
 
-fn when_func_b(In(mut pred): In<PredCollector<Entity>>, query: Query<(&Pos, Entity), Changed<Pos>>, time: Res<Time>) -> PredCollector<Entity> {
+fn when_func_b(In(mut pred): In<PredCollector<Entity>>, query: Query<(&Pos, Entity), Changed<Pos>>/*, time: Res<Time>*/) -> PredCollector<Entity> {
 	// let a_time = Instant::now();
 	// let time = time.elapsed();
 	for (pos, entity) in &query {
 		let/* mut*/ times =
-			(pos[1].when_eq(&chime::Constant::from((TOP    - RADIUS) as f64)) & pos[1].spd.when(Ordering::Greater, &chime::Constant::from(0.))) |
-			(pos[1].when_eq(&chime::Constant::from((BOTTOM + RADIUS) as f64)) & pos[1].spd.when(Ordering::Less, &chime::Constant::from(0.)));
+			(pos[1].when_eq(&chime::Constant::from((TOP    - RADIUS) as f64)) /*& pos[1].spd.when(Ordering::Greater, &chime::Constant::from(0.))*/) |
+			(pos[1].when_eq(&chime::Constant::from((BOTTOM + RADIUS) as f64)) /*& pos[1].spd.when(Ordering::Less, &chime::Constant::from(0.))*/);
 		pred.add(times/*.clone()*/, entity);
 		// if times.find(|t| *t > time).is_none() && pos[1].at(time).spd.acc.val != 0. {
 		// 	println!("Wow! {time:?}, {:?}, {:?}\n  {:?}, spd: {:?}",
@@ -174,17 +200,12 @@ fn when_func_b(In(mut pred): In<PredCollector<Entity>>, query: Query<(&Pos, Enti
 fn do_func_b(In(ent): In<Entity>, time: Res<Time>, mut query: Query<&mut Pos>) {
 	let mut pos = query.get_mut(ent).unwrap();
 	let mut pos_y = pos[1].at_mut(time.elapsed());
-	
-	// if event.is_repeating {
-	// 	pos_y.spd.val = 0.;
-	// 	pos_y.spd.acc.val = 0.;
-	// 	return
-	// }
-	// event.can_repeat = true;
 	pos_y.spd.val *= -0.98;
-	if pos_y.spd.val == 0. { // > -(2. * pos_y.spd.acc.val.abs()).sqrt()
+	if pos_y.spd.val.abs() < 0.000001 { // > -(2. * pos_y.spd.acc.val.abs()).sqrt()
 		pos_y.spd.val = 0.;
 		pos_y.spd.acc.val = 0.;
+		drop(pos_y);
+		pos[0].at_mut(time.elapsed()).spd.val = 0.;
 	}
 }
 
@@ -193,6 +214,8 @@ fn outlier_func_b(In(ent): In<Entity>, time: Res<Time>, mut query: Query<&mut Po
 	let mut pos_y = pos[1].at_mut(time.elapsed());
 	pos_y.spd.val = 0.;
 	pos_y.spd.acc.val = 0.;
+	drop(pos_y);
+	pos[0].at_mut(time.elapsed()).spd.val = 0.;
 }
 
 fn when_func_c(
@@ -232,7 +255,7 @@ fn do_func_c(In(ents): In<[Entity; 2]>, time: Res<Time>, mut query: Query<&mut P
 	let x = pos[0].val - b_pos[0].val;
 	let y = pos[1].val - b_pos[1].val;
 	let dir = y.atan2(x);
-	let spd = pos_speed(&pos) * 0.96;
+	let spd = pos_speed(&pos) * 0.5;
 	pos[0].spd.val = spd * dir.cos();
 	pos[1].spd.val = spd * dir.sin();
 }
