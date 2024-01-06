@@ -239,6 +239,8 @@ fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule)
 					.get_mut(key.0).unwrap()
 					.get_mut(&key.1).unwrap();
 				
+				let last_time = std::mem::replace(&mut case.last_time, Some(duration));
+				
 				 // Ignore Rapidly Repeating Events:
 				let new_avg = (case.recent_times.len() as f32) / RECENT_TIME.as_secs_f32();
 				let old_avg = (case.older_times.len() as f32) / OLDER_TIME.as_secs_f32();
@@ -275,7 +277,11 @@ fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule)
 				}
 				
 				 // Call Event:
-				else {
+				else if last_time == Some(duration) {
+					if let Some(outlier_schedule) = &mut case.outlier_schedule {
+						outlier_schedule.run(world);
+					}
+				} else {
 					case.schedule.run(world);
 				}
 				
@@ -449,9 +455,8 @@ impl PredMap {
 					if t >= pred_time {
 						if Some(t) == last_time {
 							case.last_time = last_time;
-						} else {
-							break
 						}
+						break
 					}
 				}
 				case.next_time
@@ -515,7 +520,6 @@ impl PredMap {
 		debug_assert_eq!(case.next_time, Some(time));
 		
 		 // Queue Up Next Prediction:
-		case.last_time = Some(time);
 		if let Some(t) = case.next_time() {
 			self.time_stack.entry(t)
 				.or_default()
