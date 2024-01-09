@@ -5,7 +5,6 @@ use bevy::window::PresentMode;
 
 use chime::{flux, Flux, FluxVec, Moment, sum::Sum, time};
 use chime::kind::{WhenDisEq, WhenDis, WhenEq, When};
-use chime::time::Times;
 
 use std::cmp::Ordering;
 use std::time::{Duration, Instant};
@@ -251,7 +250,7 @@ fn when_func_c(
 			
 			let poss = pos;
 			let b_poss = b_pos;
-			for t in times.clone() {
+			for (t, _) in times.clone() {
 				if t >= timm.elapsed() && t - timm.elapsed() <= 20*time::SEC {
 					// https://www.desmos.com/calculator/pzgzy75bch
 					// https://play.rust-lang.org/?version=nightly&mode=debug&edition=2021&gist=f8d1aa69f2cfca047d6411e0c23ab05d
@@ -452,6 +451,3 @@ fn main() {
         // .add_plugins(bevy::diagnostic::FrameTimeDiagnosticsPlugin::default())
 		.run();
 }
-
-// !!! Make time_try_from_secs always round down
-// !!! Make Times and TimeRanges combine the roots in their raw form

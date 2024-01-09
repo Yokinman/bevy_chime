@@ -15,7 +15,7 @@ use bevy::ecs::world::{Mut, World};
 
 use std::time::{Duration, Instant};
 use bevy::time::Time;
-use chime::time::Times;
+use chime::time::TimeRanges;
 
 use bevy::input::{Input, keyboard::KeyCode};
 
@@ -239,7 +239,11 @@ fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule)
 					.get_mut(key.0).unwrap()
 					.get_mut(&key.1).unwrap();
 				
-				let last_time = std::mem::replace(&mut case.last_time, Some(duration));
+				if !case.is_active {
+					// !!! Add event binding for range end.
+					return false
+				}
+				// let last_time = std::mem::replace(&mut case.last_time, Some(duration));
 				
 				 // Ignore Rapidly Repeating Events:
 				let new_avg = (case.recent_times.len() as f32) / RECENT_TIME.as_secs_f32();
@@ -277,11 +281,12 @@ fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule)
 				}
 				
 				 // Call Event:
-				else if last_time == Some(duration) {
+				// !!! Add a separate event binding for mid-range occurrence?  
+				/*else if last_time == Some(duration) {
 					if let Some(outlier_schedule) = &mut case.outlier_schedule {
 						outlier_schedule.run(world);
 					}
-				} else {
+				}*/ else {
 					case.schedule.run(world);
 				}
 				
@@ -353,30 +358,47 @@ impl PredCase for [Entity; 2] {
 }
 
 /// Collects predictions from "when" systems, for later compilation.
-pub struct PredCollector<Case: PredCase = ()>(Vec<(Times, Case)>);
+pub struct PredCollector<Case: PredCase = ()>(Vec<(TimeRanges, Case)>);
 
 impl<Case: PredCase> PredCollector<Case> {
-	pub fn add(&mut self, times: Times, case: Case) {
+	pub fn add(&mut self, times: TimeRanges, case: Case) {
 		self.0.push((times, case));
 	}
 }
 
 #[derive(Default)]
 struct PredCaseData {
-	times: Times,
+	times: TimeRanges,
 	next_time: Option<Duration>,
+	next_stop_time: Option<Duration>,
 	last_time: Option<Duration>,
 	receivers: Vec<PredId>,
 	schedule: Schedule,
 	outlier_schedule: Option<Schedule>,
 	recent_times: BinaryHeap<Reverse<Duration>>,
 	older_times: BinaryHeap<Reverse<Duration>>,
+	is_active: bool,
 }
 
 impl PredCaseData {
 	fn next_time(&mut self) -> Option<Duration> {
-		self.next_time = self.times.next();
-		self.next_time
+		let next_time = if self.is_active {
+			&mut self.next_stop_time
+		} else {
+			&mut self.next_time
+		};
+		if next_time.is_some() {
+			return std::mem::take(next_time)
+		}
+		
+		 // :
+		if let Some((a, b)) = self.times.next() {
+			self.next_time = Some(a);
+			self.next_stop_time = Some(b);
+			self.next_time()
+		} else {
+			None
+		}
 	}
 }
 
@@ -448,25 +470,36 @@ impl PredMap {
 			// let c_time = Instant::now();
 			
 			 // Fetch Next Time:
-			let last_time = std::mem::take(&mut case.last_time);
-			let prev_time = std::mem::take(&mut case.next_time);
-			let next_time = {
-				while let Some(t) = case.next_time() {
-					if t >= pred_time {
-						if Some(t) == last_time {
-							case.last_time = last_time;
-						}
+			case.next_time = None;
+			case.next_stop_time = None;
+			let mut is_active = std::mem::take(&mut case.is_active);
+			let mut next_time = None;
+			loop {
+				next_time = case.next_time();
+				if let Some(t) = next_time {
+					if t > pred_time || (t == pred_time && is_active == case.is_active) {
 						break
 					}
+					case.is_active = !case.is_active;
+				} else {
+					break
 				}
-				case.next_time
-			};
+			}
+			if case.is_active != is_active {
+				case.is_active = is_active;
+				if is_active {
+					case.next_time = next_time;
+				} else {
+					case.next_stop_time = next_time;
+				}
+				next_time = Some(pred_time);
+			}
 			
 			 // Update Prediction:
 			// let d_time = Instant::now();
-			if next_time != prev_time {
+			if next_time != case.last_time {
 				 // Remove Old Prediction:
-				if let Some(time) = prev_time {
+				if let Some(time) = case.last_time {
 					if let btree_map::Entry::Occupied(mut e)
 						= self.time_stack.entry(time)
 					{
@@ -484,6 +517,7 @@ impl PredMap {
 				}
 				
 				 // Insert New Prediction:
+				case.last_time = next_time;
 				if let Some(time) = next_time {
 					self.time_stack.entry(time)
 						.or_default()
@@ -517,10 +551,12 @@ impl PredMap {
 			.get_mut(key.0).expect("this should always work")
 			.get_mut(&key.1).expect("this should always work");
 		
-		debug_assert_eq!(case.next_time, Some(time));
+		debug_assert_eq!(case.last_time, Some(time));
 		
 		 // Queue Up Next Prediction:
-		if let Some(t) = case.next_time() {
+		case.last_time = case.next_time();
+		case.is_active = !case.is_active;
+		if let Some(t) = case.last_time {
 			self.time_stack.entry(t)
 				.or_default()
 				.push(key);
