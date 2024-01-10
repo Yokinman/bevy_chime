@@ -19,17 +19,19 @@ use chime::time::TimeRanges;
 
 use bevy::input::{Input, keyboard::KeyCode};
 
-pub fn world_add_chime_system<Case, WhenMarker, WhenSys, DoMarker, DoSys, OutlierMarker, OutlierSys>(
+pub fn world_add_chime_system<Case, WhenMarker, WhenSys, BeginMarker, BeginSys, EndMarker, EndSys, OutlierMarker, OutlierSys>(
 	world: &mut World,
 	when_system: WhenSys,
-	do_system: DoSys,
+	begin_system: BeginSys,
+	end_system: EndSys,
 	outlier_system: OutlierSys,
 )
 where
 	Case: PredCase + Send + Sync + 'static,
 	WhenSys: IntoSystem<PredCollector<Case>, PredCollector<Case>, WhenMarker> + 'static,
 	WhenSys::System: ReadOnlySystem,
-	DoSys: IntoSystem<Case, (), DoMarker> + Copy + Send + Sync + 'static,
+	BeginSys: IntoSystem<Case, (), BeginMarker> + Copy + Send + Sync + 'static,
+	EndSys: IntoSystem<Case, (), EndMarker> + Copy + Send + Sync + 'static,
 	OutlierSys: IntoSystem<Case, (), OutlierMarker> + Copy + Send + Sync + 'static,
 {
 	let id = world.resource_mut::<PredMap>().setup_id();
@@ -39,7 +41,7 @@ where
 	};
 	
 	let compile = move |In(input): In<PredCollector<Case>>, mut pred: ResMut<PredMap>, pred_time: Res<Time>| {
-		pred.sched(input, pred_time.elapsed(), id, do_system, outlier_system);
+		pred.sched(input, pred_time.elapsed(), id, begin_system, end_system, outlier_system);
 	};
 	
 	world.resource_mut::<Schedules>()
@@ -240,7 +242,7 @@ fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule)
 					.get_mut(&key.1).unwrap();
 				
 				if !case.is_active {
-					// !!! Add event binding for range end.
+					case.end_schedule.run(world);
 					return false
 				}
 				// let last_time = std::mem::replace(&mut case.last_time, Some(duration));
@@ -370,10 +372,11 @@ impl<Case: PredCase> PredCollector<Case> {
 struct PredCaseData {
 	times: TimeRanges,
 	next_time: Option<Duration>,
-	next_stop_time: Option<Duration>,
+	next_end_time: Option<Duration>,
 	last_time: Option<Duration>,
 	receivers: Vec<PredId>,
 	schedule: Schedule,
+	end_schedule: Schedule,
 	outlier_schedule: Option<Schedule>,
 	recent_times: BinaryHeap<Reverse<Duration>>,
 	older_times: BinaryHeap<Reverse<Duration>>,
@@ -383,7 +386,7 @@ struct PredCaseData {
 impl PredCaseData {
 	fn next_time(&mut self) -> Option<Duration> {
 		let next_time = if self.is_active {
-			&mut self.next_stop_time
+			&mut self.next_end_time
 		} else {
 			&mut self.next_time
 		};
@@ -394,7 +397,7 @@ impl PredCaseData {
 		 // :
 		if let Some((a, b)) = self.times.next() {
 			self.next_time = Some(a);
-			self.next_stop_time = Some(b);
+			self.next_end_time = Some(b);
 			self.next_time()
 		} else {
 			None
@@ -427,17 +430,19 @@ impl PredMap {
 		self.time_table.len() - 1
 	}
 	
-	fn sched<Case, DoMarker, DoSys, OutlierMarker, OutlierSys>(
+	fn sched<Case, BeginMarker, BeginSys, EndMarker, EndSys, OutlierMarker, OutlierSys>(
 		&mut self,
 		input: PredCollector<Case>,
 		pred_time: Duration,
 		system_id: usize,
-		system: DoSys,
+		system: BeginSys,
+		end_system: EndSys,
 		outlier_system: OutlierSys,
 	)
 	where
 		Case: PredCase + Send + Sync + 'static,
-		DoSys: IntoSystem<Case, (), DoMarker> + Copy + Sync + 'static,
+		BeginSys: IntoSystem<Case, (), BeginMarker> + Copy + Sync + 'static,
+		EndSys: IntoSystem<Case, (), EndMarker> + Copy + Sync + 'static,
 		OutlierSys: IntoSystem<Case, (), OutlierMarker> + Copy + Sync + 'static,
 	{
 		// let n = input.0.len();
@@ -458,6 +463,7 @@ impl PredMap {
 				case.receivers.push(pred_id);
 				let input = move || -> Case { pred_case };
 				case.schedule.add_systems(input.pipe(system));
+				case.end_schedule.add_systems(input.pipe(end_system));
 				if IntoSystem::into_system(outlier_system).name()
 					!= IntoSystem::into_system(temp_default_outlier::<Case>).name()
 				{
@@ -471,7 +477,7 @@ impl PredMap {
 			
 			 // Fetch Next Time:
 			case.next_time = None;
-			case.next_stop_time = None;
+			case.next_end_time = None;
 			let mut is_active = std::mem::take(&mut case.is_active);
 			let mut next_time = None;
 			loop {
@@ -490,7 +496,7 @@ impl PredMap {
 				if is_active {
 					case.next_time = next_time;
 				} else {
-					case.next_stop_time = next_time;
+					case.next_end_time = next_time;
 				}
 				next_time = Some(pred_time);
 			}

@@ -70,9 +70,9 @@ fn setup(world: &mut World) {
 	// };
 	
 	 // Chime Systems:
-	world_add_chime_system(world, when_func_a, do_func_a, temp_default_outlier);
-	world_add_chime_system(world, when_func_b, do_func_b, outlier_func_b);
-	world_add_chime_system(world, when_func_c, do_func_c, outlier_func_c);
+	world_add_chime_system(world, when_func_a, do_func_a, temp_default_outlier, temp_default_outlier);
+	world_add_chime_system(world, when_func_b, do_func_b, temp_default_outlier, outlier_func_b);
+	world_add_chime_system(world, when_func_c, do_func_c, temp_default_outlier, outlier_func_c);
 	
 	add_two_dogs(world);
 	// add_many_dogs(world);
