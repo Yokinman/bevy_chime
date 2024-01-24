@@ -72,7 +72,7 @@ fn setup(world: &mut World) {
 	 // Chime Systems:
 	world_add_chime_system(world, when_func_a, do_func_a, temp_default_outlier, temp_default_outlier);
 	world_add_chime_system(world, when_func_b, do_func_b, temp_default_outlier, outlier_func_b);
-	world_add_chime_system(world, when_func_c, do_func_c, temp_default_outlier, outlier_func_c);
+	world_add_chime_system(world, when_func_c, do_func_c, |In(ent): In<[Entity; 2]>, time: Res<Time>| { println!("stop {:?}", (ent, time.elapsed())); }, outlier_func_c);
 	
 	add_two_dogs(world);
 	// add_many_dogs(world);
@@ -198,12 +198,21 @@ fn do_func_b(In(ent): In<Entity>, time: Res<Time>, mut query: Query<&mut Pos>) {
 	let mut pos = query.get_mut(ent).unwrap();
 	let mut poss = pos.at_mut(time.elapsed());
 	let mut pos_y = &mut poss[1];
-	pos_y.spd.val *= -0.8;
+	pos_y.spd.val *= -0.98;
 	if pos_y.spd.val.abs() < 0.000001 { // > -(2. * pos_y.spd.acc.val.abs()).sqrt()
 		pos_y.spd.val = 0.;
 		pos_y.spd.acc.val = 0.;
 		poss[0].spd.val = 0.;
 	}
+	drop(poss);
+	println!("ground {:?}", (ent, time.elapsed(), 
+		pos[0].poly(pos[0].base_time()),
+		pos[1].poly(pos[1].base_time()),
+		(
+			pos[1].when_eq(&chime::Constant::from((TOP    - RADIUS) as f64)) |
+			pos[1].when_eq(&chime::Constant::from((BOTTOM + RADIUS) as f64))
+		).collect::<Vec<_>>(),
+	));
 }
 
 fn outlier_func_b(In(ent): In<Entity>, time: Res<Time>, mut query: Query<&mut Pos>) {
@@ -213,6 +222,9 @@ fn outlier_func_b(In(ent): In<Entity>, time: Res<Time>, mut query: Query<&mut Po
 	pos_y.spd.acc.val = 0.;
 	drop(pos_y);
 	pos[0].at_mut(time.elapsed()).spd.val = 0.;
+	println!("ground freeze {:?}", (ent, time.elapsed(), 
+		pos[0].poly(pos[0].base_time()),
+		pos[1].poly(pos[1].base_time())));
 }
 
 fn when_func_c(
@@ -248,12 +260,17 @@ fn when_func_c(
 			// even when the prediction skims the buffer area, so it doesn't
 			// count them even though they can round into or past the value.
 			
-			let poss = pos;
+			// println!("    k0 HERE {:?}", (entity, b_entity, timm.elapsed()));
+			// let me = times.clone().collect::<Vec<_>>();
+			// println!("    k {:?}", (entity, b_entity, me));
+			
+			let poss = pos; // !!! It might be that we need to slightly modify this predictor checker block whatever
 			let b_poss = b_pos;
-			for (t, _) in times.clone() {
-				if t >= timm.elapsed() && t - timm.elapsed() <= 20*time::SEC {
+			for (mut t, z) in times.clone() {
+				if z >= timm.elapsed() && t.max(timm.elapsed()) - timm.elapsed() <= 20*time::SEC {
 					// https://www.desmos.com/calculator/pzgzy75bch
 					// https://play.rust-lang.org/?version=nightly&mode=debug&edition=2021&gist=f8d1aa69f2cfca047d6411e0c23ab05d
+					t = t.max(timm.elapsed());
 					let pos = poss.at(t - time::NANOSEC);
 					let b_pos = b_poss.at(t - time::NANOSEC);
 					let xx = pos[0].val - b_pos[0].val;
@@ -283,12 +300,12 @@ fn when_func_c(
 					drop(pos);
 					drop(b_pos);
 					if curr <= (2 * RADIUS) as f64 /*&& next <= curr*/ /* && prev < 12. && prev_prev >= 12.*/ /*&& next < 12. && next < prev*/ {
-						println!("e {:?}", [entity, b_entity]);
-						println!("x1: {:?}, y1: {:?}", poss[0].poly(poss.base_time()), poss[1].poly(poss.base_time()));
-						println!("x2: {:?}, y2: {:?}", poss[0].poly(t), poss[1].poly(t));
-						println!("bx1: {:?}, by1: {:?}", b_poss[0].poly(b_poss.base_time()), b_poss[1].poly(b_poss.base_time()));
-						println!("bx2: {:?}, by2: {:?}", b_poss[0].poly(t), b_poss[1].poly(t));
 						let tt = poss[0].base_time();
+						println!("e {:?}", [entity, b_entity]);
+						println!("x1: {:?}, y1: {:?}", poss[0].poly(poss[0].base_time()).to_time(tt), poss[1].poly(poss[1].base_time()).to_time(tt));
+						println!("x2: {:?}, y2: {:?}", poss[0].poly(t), poss[1].poly(t));
+						println!("bx1: {:?}, by1: {:?}", b_poss[0].poly(b_poss[0].base_time()).to_time(tt), b_poss[1].poly(b_poss[1].base_time()).to_time(tt));
+						println!("bx2: {:?}, by2: {:?}", b_poss[0].poly(t), b_poss[1].poly(t));
 						let dis = *((poss[0].poly(poss[0].base_time()).to_time(tt)-b_poss[0].poly(b_poss[0].base_time()).to_time(tt)).sqr() + (poss[1].poly(poss[1].base_time()).to_time(tt)-b_poss[1].poly(b_poss[1].base_time()).to_time(tt)).sqr());
 						println!("dis: {:?}", dis + chime::sum::Sum::<f64, 0>::from(-(2 * RADIUS * 2 * RADIUS) as f64));
 						use chime::kind::FluxKind;
@@ -347,6 +364,18 @@ fn do_func_c(In(ents): In<[Entity; 2]>, time: Res<Time>, mut query: Query<&mut P
 	let y2 = b_pos[1].val;
 	drop(pos);
 	drop(b_pos);
+	println!("  cool {:?}", (
+		ents,
+		(x1-x2)*(x1-x2) + (y1-y2)*(y1-y2),
+		poss[0].poly(poss[0].base_time()),
+		poss[1].poly(poss[1].base_time()),
+		b_poss[0].poly(b_poss[0].base_time()),
+		b_poss[1].poly(b_poss[1].base_time()),
+		(poss[0].poly(poss[0].base_time()) - b_poss[0].poly(b_poss[0].base_time())).sqr() + (poss[1].poly(poss[1].base_time()) - b_poss[1].poly(b_poss[1].base_time())).sqr(),
+		poss.when_dis_eq(&b_poss.0, &chime::Constant::from(12.)).collect::<Vec<_>>(),
+		time.elapsed(),
+	));
+	// !!! I do think it should be something where only inward ranges are preserved for the buffer zone
 }
 
 fn outlier_func_c(In(ents): In<[Entity; 2]>, time: Res<Time>, mut query: Query<&mut Pos>) {
@@ -367,6 +396,17 @@ fn outlier_func_c(In(ents): In<[Entity; 2]>, time: Res<Time>, mut query: Query<&
 	let y2 = b_pos[1].val;
 	drop(pos);
 	drop(b_pos);
+	println!(" ents {:?}", (
+		ents,
+		(x1-x2)*(x1-x2) + (y1-y2)*(y1-y2),
+		poss[0].poly(poss[0].base_time()),
+		poss[1].poly(poss[1].base_time()),
+		b_poss[0].poly(b_poss[0].base_time()),
+		b_poss[1].poly(b_poss[1].base_time()),
+		(poss[0].poly(poss[0].base_time()) - b_poss[0].poly(b_poss[0].base_time())).sqr() + (poss[1].poly(poss[1].base_time()) - b_poss[1].poly(b_poss[1].base_time())).sqr(),
+		poss.when_dis_eq(&b_poss.0, &chime::Constant::from(12.)).collect::<Vec<_>>(),
+		time.elapsed(),
+	));
 }
 
 #[allow(dead_code)]

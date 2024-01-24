@@ -477,13 +477,13 @@ impl PredMap {
 			
 			 // Fetch Next Time:
 			case.next_time = None;
-			case.next_end_time = None;
+			let prev_end_time = std::mem::take(&mut case.next_end_time);
 			let mut is_active = std::mem::take(&mut case.is_active);
 			let mut next_time = None;
 			loop {
 				next_time = case.next_time();
 				if let Some(t) = next_time {
-					if t > pred_time || (t == pred_time && is_active == case.is_active) {
+					if t > pred_time || (t == pred_time && !is_active) {
 						break
 					}
 					case.is_active = !case.is_active;
@@ -499,6 +499,13 @@ impl PredMap {
 					case.next_end_time = next_time;
 				}
 				next_time = Some(pred_time);
+			} else if let Some(prev_end_time) = prev_end_time {
+				if is_active && pred_time == prev_end_time {
+					case.is_active = false;
+					case.next_time = Some(pred_time);
+					case.next_end_time = next_time;
+					next_time = Some(pred_time);
+				}
 			}
 			
 			 // Update Prediction:
@@ -525,9 +532,14 @@ impl PredMap {
 				 // Insert New Prediction:
 				case.last_time = next_time;
 				if let Some(time) = next_time {
-					self.time_stack.entry(time)
-						.or_default()
-						.push(key);
+					let mut list = self.time_stack.entry(time)
+						.or_default();
+					
+					if is_active {
+						list.push(key); // End events (run first)
+					} else {
+						list.insert(0, key); // Begin events (run last)
+					}
 				}
 			}
 			// let e_time = Instant::now();
@@ -560,8 +572,8 @@ impl PredMap {
 		debug_assert_eq!(case.last_time, Some(time));
 		
 		 // Queue Up Next Prediction:
-		case.last_time = case.next_time();
 		case.is_active = !case.is_active;
+		case.last_time = case.next_time();
 		if let Some(t) = case.last_time {
 			self.time_stack.entry(t)
 				.or_default()
