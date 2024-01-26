@@ -199,11 +199,11 @@ fn do_func_b(In(ent): In<Entity>, time: Res<Time>, mut query: Query<&mut Pos>) {
 	let mut poss = pos.at_mut(time.elapsed());
 	let mut pos_y = &mut poss[1];
 	pos_y.spd.val *= -0.98;
-	if pos_y.spd.val.abs() < 0.000001 { // > -(2. * pos_y.spd.acc.val.abs()).sqrt()
-		pos_y.spd.val = 0.;
-		pos_y.spd.acc.val = 0.;
-		poss[0].spd.val = 0.;
-	}
+	// if pos_y.spd.val.abs() < 0.000001 { // > -(2. * pos_y.spd.acc.val.abs()).sqrt()
+	// 	pos_y.spd.val = 0.;
+	// 	pos_y.spd.acc.val = 0.;
+	// 	poss[0].spd.val = 0.;
+	// }
 	drop(poss);
 	println!("ground {:?}", (ent, time.elapsed(), 
 		pos[0].poly(pos[0].base_time()),
@@ -256,15 +256,11 @@ fn when_func_c(
 			pred.add(times.clone(), [entity.min(b_entity), b_entity.max(entity)]);
 			// print!(" -- {:?}", ((entity, b_entity), times.clone().collect::<Vec<_>>()));
 			
-			// !!! I think really the problem is that no predictions are made
-			// even when the prediction skims the buffer area, so it doesn't
-			// count them even though they can round into or past the value.
-			
 			// println!("    k0 HERE {:?}", (entity, b_entity, timm.elapsed()));
 			// let me = times.clone().collect::<Vec<_>>();
 			// println!("    k {:?}", (entity, b_entity, me));
 			
-			let poss = pos; // !!! It might be that we need to slightly modify this predictor checker block whatever
+			let poss = pos;
 			let b_poss = b_pos;
 			for (mut t, z) in times.clone() {
 				if z >= timm.elapsed() && t.max(timm.elapsed()) - timm.elapsed() <= 20*time::SEC {
@@ -337,9 +333,6 @@ fn do_func_c(In(ents): In<[Entity; 2]>, time: Res<Time>, mut query: Query<&mut P
 	// pos[1].spd.val = spd * dir.sin();
 	// b_pos[0].spd.val = b_spd * -dir.cos();
 	// b_pos[1].spd.val = b_spd * -dir.sin();
-	
-	let pos_spd = pos_speed(&pos)/* * 0.5*/;
-	let b_pos_spd = pos_speed(&b_pos)/* * 0.5*/;
 	
 	let mut pos_h_spd = pos[0].spd.val*dir.cos() + pos[1].spd.val*dir.sin();
 	let pos_v_spd = pos[1].spd.val*dir.cos() - pos[0].spd.val*dir.sin();
