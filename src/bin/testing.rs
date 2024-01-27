@@ -199,11 +199,12 @@ fn do_func_b(In(ent): In<Entity>, time: Res<Time>, mut query: Query<&mut Pos>) {
 	let mut poss = pos.at_mut(time.elapsed());
 	let mut pos_y = &mut poss[1];
 	pos_y.spd.val *= -0.98;
-	// if pos_y.spd.val.abs() < 0.000001 { // > -(2. * pos_y.spd.acc.val.abs()).sqrt()
-	// 	pos_y.spd.val = 0.;
-	// 	pos_y.spd.acc.val = 0.;
-	// 	poss[0].spd.val = 0.;
-	// }
+	if pos_y.spd.val >= 0. && pos_y.spd.val < 1. { // > -(2. * pos_y.spd.acc.val.abs()).sqrt()
+		pos_y.spd.val = 0.;
+		pos_y.spd.acc.val = 0.;
+		poss[0].spd.val = 0.;
+		// pos_y.spd.val = 1. * pos_y.spd.val.signum();
+	}
 	drop(poss);
 	println!("ground {:?}", (ent, time.elapsed(), 
 		pos[0].poly(pos[0].base_time()),
@@ -322,31 +323,57 @@ fn when_func_c(
 
 fn do_func_c(In(ents): In<[Entity; 2]>, time: Res<Time>, mut query: Query<&mut Pos>) {
 	let [mut poss, mut b_poss] = query.get_many_mut(ents).unwrap();
+	
+	let poly = (poss[0].poly(poss[0].base_time()) - b_poss[0].poly(b_poss[0].base_time())).sqr()
+		+ (poss[1].poly(poss[1].base_time()) - b_poss[1].poly(b_poss[1].base_time())).sqr();
+	assert!(poly.rate_at(time.elapsed()) <= 0., "{:?}", poly);
+	
 	let mut pos = poss.at_mut(time.elapsed());
 	let mut b_pos = b_poss.at_mut(time.elapsed());
 	let x = pos[0].val - b_pos[0].val;
 	let y = pos[1].val - b_pos[1].val;
-	let dir = y.atan2(x);
+	let dir_x = x / x.hypot(y);
+	let dir_y = y / x.hypot(y);
 	// let spd = pos_speed(&pos) * 0.5;
 	// let b_spd = pos_speed(&b_pos) * 0.5;
-	// pos[0].spd.val = spd * dir.cos();
-	// pos[1].spd.val = spd * dir.sin();
-	// b_pos[0].spd.val = b_spd * -dir.cos();
-	// b_pos[1].spd.val = b_spd * -dir.sin();
+	// pos[0].spd.val = spd * dir_x;
+	// pos[1].spd.val = spd * dir_y;
+	// b_pos[0].spd.val = b_spd * -dir_x;
+	// b_pos[1].spd.val = b_spd * -dir_y;
 	
-	let mut pos_h_spd = pos[0].spd.val*dir.cos() + pos[1].spd.val*dir.sin();
-	let pos_v_spd = pos[1].spd.val*dir.cos() - pos[0].spd.val*dir.sin();
-	let mut b_pos_h_spd = b_pos[0].spd.val*dir.cos() + b_pos[1].spd.val*dir.sin();
-	let b_pos_v_spd = b_pos[1].spd.val*dir.cos() - b_pos[0].spd.val*dir.sin();
+	fn dot(x1: f64, y1: f64, x2: f64, y2: f64) -> f64 {
+		if (x1 == 0. || x2 == 0.) && (y1 == 0. || y2 == 0.) {
+			return 0.
+		}
+		use accurate::dot::OnlineExactDot;
+		use accurate::traits::DotAccumulator;
+		let mut a = OnlineExactDot::zero();
+		if x1 != 0. && x2 != 0. {
+			a = a + (x1, x2);
+		}
+		if y1 != 0. && y2 != 0. {
+			a = a + (y1, y2)
+		}
+		a.dot()
+	}
+	
+	let mut pos_h_spd = dot(pos[0].spd.val, pos[1].spd.val, dir_x, dir_y);
+	let pos_v_spd = dot(pos[1].spd.val, -pos[0].spd.val, dir_x, dir_y);
+	let mut b_pos_h_spd = dot(b_pos[0].spd.val, b_pos[1].spd.val, dir_x, dir_y);
+	let b_pos_v_spd = dot(b_pos[1].spd.val, -b_pos[0].spd.val, dir_x, dir_y);
 	
 	let temp = pos_h_spd * 0.5;
 	pos_h_spd = b_pos_h_spd * 0.5;
 	b_pos_h_spd = temp;
+	if pos_h_spd - b_pos_h_spd < 1e-2 {
+		pos_h_spd += 1.;
+		b_pos_h_spd -= 1.;
+	}
 	
-	pos[0].spd.val = pos_h_spd*dir.cos() - pos_v_spd*dir.sin();
-	pos[1].spd.val = pos_v_spd*dir.cos() + pos_h_spd*dir.sin();
-	b_pos[0].spd.val = b_pos_h_spd*dir.cos() - b_pos_v_spd*dir.sin();
-	b_pos[1].spd.val = b_pos_v_spd*dir.cos() + b_pos_h_spd*dir.sin();
+	pos[0].spd.val = dot(pos_h_spd, -pos_v_spd, dir_x, dir_y);
+	pos[1].spd.val = dot(pos_v_spd, pos_h_spd, dir_x, dir_y);
+	b_pos[0].spd.val = dot(b_pos_h_spd, -b_pos_v_spd, dir_x, dir_y);
+	b_pos[1].spd.val = dot(b_pos_v_spd, b_pos_h_spd, dir_x, dir_y);
 	
 	pos[1].spd.acc.val = -1000.;
 	b_pos[1].spd.acc.val = -1000.;
@@ -357,18 +384,22 @@ fn do_func_c(In(ents): In<[Entity; 2]>, time: Res<Time>, mut query: Query<&mut P
 	let y2 = b_pos[1].val;
 	drop(pos);
 	drop(b_pos);
+	let poly = (poss[0].poly(poss[0].base_time()) - b_poss[0].poly(b_poss[0].base_time())).sqr()
+		+ (poss[1].poly(poss[1].base_time()) - b_poss[1].poly(b_poss[1].base_time())).sqr();
 	println!("  cool {:?}", (
 		ents,
+		(pos_h_spd, pos_v_spd),
+		(b_pos_h_spd, b_pos_v_spd),
 		(x1-x2)*(x1-x2) + (y1-y2)*(y1-y2),
 		poss[0].poly(poss[0].base_time()),
 		poss[1].poly(poss[1].base_time()),
 		b_poss[0].poly(b_poss[0].base_time()),
 		b_poss[1].poly(b_poss[1].base_time()),
-		(poss[0].poly(poss[0].base_time()) - b_poss[0].poly(b_poss[0].base_time())).sqr() + (poss[1].poly(poss[1].base_time()) - b_poss[1].poly(b_poss[1].base_time())).sqr(),
+		poly,
 		poss.when_dis_eq(&b_poss.0, &chime::Constant::from(12.)).collect::<Vec<_>>(),
 		time.elapsed(),
 	));
-	// !!! I do think it should be something where only inward ranges are preserved for the buffer zone
+	assert!(poly.rate_at(time.elapsed()) >= 0., "{:?}", poly);
 }
 
 fn outlier_func_c(In(ents): In<[Entity; 2]>, time: Res<Time>, mut query: Query<&mut Pos>) {
@@ -428,17 +459,18 @@ fn discrete_update(mut query: Query<&mut Pos>, time: Res<Time>) {
 		let x = *a[0].val - *b[0].val;
 		let y = *a[1].val - *b[1].val;
 		if x*x + y*y <= (4*RADIUS*RADIUS) as f64 {
-			let dir = y.atan2(x);
+			let dir_x = x / x.hypot(y);
+			let dir_y = y / x.hypot(y);
 			let h = *a[0].spd.val;
 			let v = *a[1].spd.val;
 			let spd = (h*h + v*v).sqrt();
-			*a[0].spd.val = spd * dir.cos();
-			*a[1].spd.val = spd * dir.sin();
+			*a[0].spd.val = spd * dir_x;
+			*a[1].spd.val = spd * dir_y;
 			let h = *b[0].spd.val;
 			let v = *b[1].spd.val;
 			let spd = (h*h + v*v).sqrt();
-			*b[0].spd.val = -spd * dir.cos();
-			*b[1].spd.val = -spd * dir.sin();
+			*b[0].spd.val = -spd * dir_x;
+			*b[1].spd.val = -spd * dir_y;
 			n += 1;
 		}
 	}
