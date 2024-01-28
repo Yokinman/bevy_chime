@@ -35,9 +35,12 @@ struct AccX {
 }
 
 #[derive(Component, Debug)]
-struct Pos([<PosX as Moment>::Flux; 2]);
+struct Pos {
+	pos: [<PosX as Moment>::Flux; 2],
+	radius: i64,
+}
 
-impl_op!{ *a -> [<PosX as Moment>::Flux; 2] { Pos => a.0 } }
+impl_op!{ *a -> [<PosX as Moment>::Flux; 2] { Pos => a.pos } }
 
 fn pos_speed(pos: &[PosX; 2]) -> f64 {
 	let x = pos[0].spd.val;
@@ -57,7 +60,6 @@ const LEFT: i64 = -200;
 const RIGHT: i64 = 200;
 const TOP: i64 = 200;
 const BOTTOM: i64 = -200;
-const RADIUS: i64 = 6;
 
 fn setup(world: &mut World) {
     world.spawn(Camera2dBundle::default());
@@ -72,7 +74,7 @@ fn setup(world: &mut World) {
 	 // Chime Systems:
 	world_add_chime_system(world, when_func_a, do_func_a, temp_default_outlier, temp_default_outlier);
 	world_add_chime_system(world, when_func_b, do_func_b, temp_default_outlier, outlier_func_b);
-	world_add_chime_system(world, when_func_c, do_func_c, |In(ent): In<[Entity; 2]>, time: Res<Time>| { println!("stop {:?}", (ent, time.elapsed())); }, outlier_func_c);
+	world_add_chime_system(world, when_func_c, do_func_c, temp_default_outlier, outlier_func_c);
 	
 	add_two_dogs(world);
 	// add_many_dogs(world);
@@ -80,12 +82,15 @@ fn setup(world: &mut World) {
 
 #[allow(dead_code)]
 fn add_two_dogs(world: &mut World) {
-	world.spawn((
+	world.spawn(( // 0v2
 		Dog {
-			pos: Pos([
-				PosX { val: 0., spd: SpdX { val: 00., acc: AccX { val: 0. } } },
-				PosX { val: 0., spd: SpdX { val: 20.,  acc: AccX { val: -1000. } } }
-			].to_flux(Duration::ZERO)),
+			pos: Pos {
+				pos: [
+					PosX { val: 0., spd: SpdX { val: 00., acc: AccX { val: 0. } } },
+					PosX { val: 0., spd: SpdX { val: 20.,  acc: AccX { val: -1000. } } }
+				].to_flux(Duration::ZERO),
+				radius: 6,
+			},
 		},
 		// SpriteBundle {
 		// 	transform: Transform::from_xyz(100., 5., 20.),
@@ -94,35 +99,39 @@ fn add_two_dogs(world: &mut World) {
 		// },
 		Gun,
 	));
-	world.spawn((
+	world.spawn(( // 0v3
 		Dog {
-			pos: Pos([
-				PosX { val: 40., spd: SpdX { val: 100., acc: AccX { val: 0. } } },
-				PosX { val: 0., spd: SpdX { val: 20.,  acc: AccX { val: -1000. } } }
-			].to_flux(Duration::ZERO)),
+			pos: Pos {
+				pos: [
+					PosX { val: 40., spd: SpdX { val: 100., acc: AccX { val: 0. } } },
+					PosX { val: 0., spd: SpdX { val: 20.,  acc: AccX { val: -1000. } } }
+				].to_flux(Duration::ZERO),
+				radius: 12,
+			},
 		},
-		// SpriteBundle {
-		// 	transform: Transform::from_xyz(100., 5., 20.),
-		// 	texture: world.resource::<AssetServer>().load("textures/air_unit.png"),
-		// 	..default()
-		// },
 		Gun,
 	));
-	world.spawn((
+	world.spawn(( // 0v4
 		Dog {
-			pos: Pos([
-				PosX { val: 0.0, spd: SpdX { val: -00., acc: AccX { val: 00. } } },
-				PosX { val: -40., spd: SpdX { val: -60., acc: AccX { val: -1000. } } }
-			].to_flux(Duration::ZERO)),
+			pos: Pos {
+				pos: [
+					PosX { val: 0.0, spd: SpdX { val: -00., acc: AccX { val: 00. } } },
+					PosX { val: -40., spd: SpdX { val: -60., acc: AccX { val: -1000. } } }
+				].to_flux(Duration::ZERO),
+				radius: 6,
+			},
 		},
 		SpriteBundle::default(),
 	));
-	world.spawn((
+	world.spawn(( // 0v5
 		Dog {
-			pos: Pos([
-				PosX { val: 0.0, spd: SpdX { val: -00., acc: AccX { val: 00. } } },
-				PosX { val: 40., spd: SpdX { val: -40., acc: AccX { val: -1000. } } }
-			].to_flux(Duration::ZERO)),
+			pos: Pos {
+				pos: [
+					PosX { val: 0.0, spd: SpdX { val: -00., acc: AccX { val: 00. } } },
+					PosX { val: 40., spd: SpdX { val: -40., acc: AccX { val: -1000. } } }
+				].to_flux(Duration::ZERO),
+				radius: 6,
+			},
 		},
 		SpriteBundle::default(),
 	));
@@ -130,26 +139,30 @@ fn add_two_dogs(world: &mut World) {
 
 #[allow(dead_code)]
 fn add_many_dogs(world: &mut World) {
-	for x in ((LEFT + RADIUS + 1)..RIGHT).step_by(32) {
-	for y in ((BOTTOM + RADIUS + 1)..TOP).step_by(32) {
+	let radius = 3;
+	for x in ((LEFT + radius + 1)..RIGHT).step_by(32) {
+	for y in ((BOTTOM + radius + 1)..TOP).step_by(32) {
 		world.spawn(
 			Dog {
-				pos: Pos([
-					PosX {
-						val: x as f64,
-						spd: SpdX {
-							val: ((16 + (x.abs() % 32)) * x.signum()) as f64,
-							acc: AccX { val: 0. }
+				pos: Pos {
+					pos: [
+						PosX {
+							val: x as f64,
+							spd: SpdX {
+								val: ((16 + (x.abs() % 32)) * x.signum()) as f64,
+								acc: AccX { val: 0. }
+							}
+						},
+						PosX {
+							val: y as f64,
+							spd: SpdX {
+								val: ((16 + (y.abs() % 32)) * y.signum()) as f64,
+								acc: AccX { val: 0. }
+							}
 						}
-					},
-					PosX {
-						val: y as f64,
-						spd: SpdX {
-							val: ((16 + (y.abs() % 32)) * y.signum()) as f64,
-							acc: AccX { val: -100. }
-						}
-					}
-				].to_flux(Duration::ZERO)),
+					].to_flux(Duration::ZERO),
+					radius,
+				},
 			}
 		);
 	}}
@@ -159,8 +172,8 @@ fn when_func_a(In(mut pred): In<PredCollector<Entity>>, query: Query<(&Pos, Enti
 	// let a_time = Instant::now();
 	for (pos, entity) in &query {
 		let times =
-			(pos[0].when_eq(&chime::Constant::from((RIGHT - RADIUS) as f64))/* & pos[0].spd.when(Ordering::Greater, &chime::Constant::from(0.))*/) |
-			(pos[0].when_eq(&chime::Constant::from((LEFT  + RADIUS) as f64))/* & pos[0].spd.when(Ordering::Less, &chime::Constant::from(0.))*/);
+			(pos[0].when_eq(&chime::Constant::from((RIGHT - pos.radius) as f64))/* & pos[0].spd.when(Ordering::Greater, &chime::Constant::from(0.))*/) |
+			(pos[0].when_eq(&chime::Constant::from((LEFT  + pos.radius) as f64))/* & pos[0].spd.when(Ordering::Less, &chime::Constant::from(0.))*/);
 		pred.add(times, entity);
 	}
 	// println!("  when_func_a: {:?}", Instant::now().duration_since(a_time));
@@ -170,7 +183,7 @@ fn when_func_a(In(mut pred): In<PredCollector<Entity>>, query: Query<(&Pos, Enti
 fn do_func_a(In(ent): In<Entity>, time: Res<Time>, mut query: Query<&mut Pos>) {
 	let mut pos = query.get_mut(ent).unwrap();
 	let mut pos_x = pos[0].at_mut(time.elapsed());
-	pos_x.spd.val *= -0.98;
+	pos_x.spd.val *= -1.;
 }
 
 fn when_func_b(In(mut pred): In<PredCollector<Entity>>, query: Query<(&Pos, Entity), Changed<Pos>>/*, time: Res<Time>*/) -> PredCollector<Entity> {
@@ -178,14 +191,14 @@ fn when_func_b(In(mut pred): In<PredCollector<Entity>>, query: Query<(&Pos, Enti
 	// let time = time.elapsed();
 	for (pos, entity) in &query {
 		let/* mut*/ times =
-			(pos[1].when_eq(&chime::Constant::from((TOP    - RADIUS) as f64)) /*& pos[1].spd.when(Ordering::Greater, &chime::Constant::from(0.))*/) |
-			(pos[1].when_eq(&chime::Constant::from((BOTTOM + RADIUS) as f64)) /*& pos[1].spd.when(Ordering::Less, &chime::Constant::from(0.))*/);
+			(pos[1].when_eq(&chime::Constant::from((TOP    - pos.radius) as f64)) /*& pos[1].spd.when(Ordering::Greater, &chime::Constant::from(0.))*/) |
+			(pos[1].when_eq(&chime::Constant::from((BOTTOM + pos.radius) as f64)) /*& pos[1].spd.when(Ordering::Less, &chime::Constant::from(0.))*/);
 		pred.add(times/*.clone()*/, entity);
 		// if times.find(|t| *t > time).is_none() && pos[1].at(time).spd.acc.val != 0. {
 		// 	println!("Wow! {time:?}, {:?}, {:?}\n  {:?}, spd: {:?}",
-		// 		(pos[1].poly(time) - chime::Constant::from((BOTTOM + RADIUS) as f64).into()),
-		// 		(pos[1].poly(time) - chime::Constant::from((BOTTOM + RADIUS) as f64).into()).real_roots().collect::<Vec<_>>(),
-		// 		pos[1].when_eq(&chime::Constant::from((BOTTOM + RADIUS) as f64)).collect::<Vec<_>>(),
+		// 		(pos[1].poly(time) - chime::Constant::from((BOTTOM + pos.radius) as f64).into()),
+		// 		(pos[1].poly(time) - chime::Constant::from((BOTTOM + pos.radius) as f64).into()).real_roots().collect::<Vec<_>>(),
+		// 		pos[1].when_eq(&chime::Constant::from((BOTTOM + pos.radius) as f64)).collect::<Vec<_>>(),
 		// 		pos[1].spd.when(Ordering::Less, &chime::Constant::from(0.)).collect::<Vec<_>>()
 		// 	);
 		// }
@@ -198,22 +211,22 @@ fn do_func_b(In(ent): In<Entity>, time: Res<Time>, mut query: Query<&mut Pos>) {
 	let mut pos = query.get_mut(ent).unwrap();
 	let mut poss = pos.at_mut(time.elapsed());
 	let mut pos_y = &mut poss[1];
-	pos_y.spd.val *= -0.98;
+	pos_y.spd.val *= -1.;
 	if pos_y.spd.val >= 0. && pos_y.spd.val < 1. { // > -(2. * pos_y.spd.acc.val.abs()).sqrt()
 		pos_y.spd.val = 0.;
 		pos_y.spd.acc.val = 0.;
 		poss[0].spd.val = 0.;
 		// pos_y.spd.val = 1. * pos_y.spd.val.signum();
 	}
-	drop(poss);
-	println!("ground {:?}", (ent, time.elapsed(), 
-		pos[0].poly(pos[0].base_time()),
-		pos[1].poly(pos[1].base_time()),
-		(
-			pos[1].when_eq(&chime::Constant::from((TOP    - RADIUS) as f64)) |
-			pos[1].when_eq(&chime::Constant::from((BOTTOM + RADIUS) as f64))
-		).collect::<Vec<_>>(),
-	));
+	// drop(poss);
+	// println!("ground {:?}", (ent, time.elapsed(), 
+	// 	pos[0].poly(pos[0].base_time()),
+	// 	pos[1].poly(pos[1].base_time()),
+	// 	(
+	// 		pos[1].when_eq(&chime::Constant::from((TOP    - pos.radius) as f64)) |
+	// 		pos[1].when_eq(&chime::Constant::from((BOTTOM + pos.radius) as f64))
+	// 	).collect::<Vec<_>>(),
+	// ));
 }
 
 fn outlier_func_b(In(ent): In<Entity>, time: Res<Time>, mut query: Query<&mut Pos>) {
@@ -223,9 +236,9 @@ fn outlier_func_b(In(ent): In<Entity>, time: Res<Time>, mut query: Query<&mut Po
 	pos_y.spd.acc.val = 0.;
 	drop(pos_y);
 	pos[0].at_mut(time.elapsed()).spd.val = 0.;
-	println!("ground freeze {:?}", (ent, time.elapsed(), 
-		pos[0].poly(pos[0].base_time()),
-		pos[1].poly(pos[1].base_time())));
+	// println!("ground freeze {:?}", (ent, time.elapsed(), 
+	// 	pos[0].poly(pos[0].base_time()),
+	// 	pos[1].poly(pos[1].base_time())));
 }
 
 fn when_func_c(
@@ -236,7 +249,6 @@ fn when_func_c(
 ) -> PredCollector<[Entity; 2]> {
 	// let mut n = 0;
 	// let a_time = Instant::now();
-	let dis = chime::Constant::from((2 * RADIUS) as f64).poly(Duration::ZERO);
 	for (pos, entity) in &query {
 		let time = pos.base_time();
 		let pos_poly_vec = pos.polys(time);
@@ -248,72 +260,76 @@ fn when_func_c(
 			// into grid zones, and only making predictions with entities in
 			// adjacent zones. Use a prediction case for updating the zones.
 			
+			let radius = (pos.radius + b_pos.radius) as f64;
+			let dis = chime::Constant::from(radius)
+				.poly(Duration::ZERO);
+			
 			// let a_time = Instant::now();
 			let b_pos_vec = b_pos.polys(b_pos.base_time());
 			// println!("A: {:?}", Instant::now().duration_since(a_time));
 			// let a_time = Instant::now();
 			let mut times = pos_poly_vec.when_dis_eq(&b_pos_vec, &dis);
 			// println!("B: {:?}", Instant::now().duration_since(a_time));
-			pred.add(times.clone(), [entity.min(b_entity), b_entity.max(entity)]);
+			pred.add(times/*.clone()*/, [entity.min(b_entity), b_entity.max(entity)]);
 			// print!(" -- {:?}", ((entity, b_entity), times.clone().collect::<Vec<_>>()));
 			
 			// println!("    k0 HERE {:?}", (entity, b_entity, timm.elapsed()));
 			// let me = times.clone().collect::<Vec<_>>();
 			// println!("    k {:?}", (entity, b_entity, me));
 			
-			let poss = pos;
-			let b_poss = b_pos;
-			for (mut t, z) in times.clone() {
-				if z >= timm.elapsed() && t.max(timm.elapsed()) - timm.elapsed() <= 20*time::SEC {
-					// https://www.desmos.com/calculator/pzgzy75bch
-					// https://play.rust-lang.org/?version=nightly&mode=debug&edition=2021&gist=f8d1aa69f2cfca047d6411e0c23ab05d
-					t = t.max(timm.elapsed());
-					let pos = poss.at(t - time::NANOSEC);
-					let b_pos = b_poss.at(t - time::NANOSEC);
-					let xx = pos[0].val - b_pos[0].val;
-					let yy = pos[1].val - b_pos[1].val;
-					let prev = (xx*xx + yy*yy).sqrt();
-					drop(pos);
-					drop(b_pos);
-					let pos = poss.at(t + time::NANOSEC);
-					let b_pos = b_poss.at(t + time::NANOSEC);
-					let xxx = pos[0].val - b_pos[0].val;
-					let yyy = pos[1].val - b_pos[1].val;
-					let next = (xxx*xxx + yyy*yyy).sqrt();
-					drop(pos);
-					drop(b_pos);
-					let pos = poss.at(t);
-					let b_pos = b_poss.at(t);
-					let x = pos[0].val - b_pos[0].val;
-					let y = pos[1].val - b_pos[1].val;
-					let curr = (x*x + y*y).sqrt();
-					drop(pos);
-					drop(b_pos);
-					let pos = poss.at(t - 2*time::NANOSEC);
-					let b_pos = b_poss.at(t - 2*time::NANOSEC);
-					let xxx = pos[0].val - b_pos[0].val;
-					let yyy = pos[1].val - b_pos[1].val;
-					let prev_prev = (xxx*xxx + yyy*yyy).sqrt();
-					drop(pos);
-					drop(b_pos);
-					if curr <= (2 * RADIUS) as f64 /*&& next <= curr*/ /* && prev < 12. && prev_prev >= 12.*/ /*&& next < 12. && next < prev*/ {
-						let tt = poss[0].base_time();
-						println!("e {:?}", [entity, b_entity]);
-						println!("x1: {:?}, y1: {:?}", poss[0].poly(poss[0].base_time()).to_time(tt), poss[1].poly(poss[1].base_time()).to_time(tt));
-						println!("x2: {:?}, y2: {:?}", poss[0].poly(t), poss[1].poly(t));
-						println!("bx1: {:?}, by1: {:?}", b_poss[0].poly(b_poss[0].base_time()).to_time(tt), b_poss[1].poly(b_poss[1].base_time()).to_time(tt));
-						println!("bx2: {:?}, by2: {:?}", b_poss[0].poly(t), b_poss[1].poly(t));
-						let dis = *((poss[0].poly(poss[0].base_time()).to_time(tt)-b_poss[0].poly(b_poss[0].base_time()).to_time(tt)).sqr() + (poss[1].poly(poss[1].base_time()).to_time(tt)-b_poss[1].poly(b_poss[1].base_time()).to_time(tt)).sqr());
-						println!("dis: {:?}", dis + chime::sum::Sum::<f64, 0>::from(-(2 * RADIUS * 2 * RADIUS) as f64));
-						use chime::kind::FluxKind;
-						println!("A {:?}: {:?} vs {:?}", t - 2*time::NANOSEC, prev_prev, dis.at(chime::linear::Scalar((t-timm.elapsed()).as_secs_f64()-2e-9)).sqrt());
-						println!("B {:?}: {:?} vs {:?}", t - time::NANOSEC, prev, dis.at(chime::linear::Scalar((t-timm.elapsed()).as_secs_f64()-1e-9)).sqrt());
-						println!("C {:?}: {:?} vs {:?}", t, curr, dis.at(chime::linear::Scalar((t-timm.elapsed()).as_secs_f64())).sqrt());
-						println!("D {:?}: {:?} vs {:?}", t + time::NANOSEC, next, dis.at(chime::linear::Scalar((t-timm.elapsed()).as_secs_f64()+1e-9)).sqrt());
-					}
-					break
-				}
-			}
+			// let poss = pos;
+			// let b_poss = b_pos;
+			// for (mut t, z) in times.clone() {
+			// 	if z >= timm.elapsed() && t.max(timm.elapsed()) - timm.elapsed() <= 20*time::SEC {
+			// 		// https://www.desmos.com/calculator/pzgzy75bch
+			// 		// https://play.rust-lang.org/?version=nightly&mode=debug&edition=2021&gist=f8d1aa69f2cfca047d6411e0c23ab05d
+			// 		t = t.max(timm.elapsed());
+			// 		let pos = poss.at(t - time::NANOSEC);
+			// 		let b_pos = b_poss.at(t - time::NANOSEC);
+			// 		let xx = pos[0].val - b_pos[0].val;
+			// 		let yy = pos[1].val - b_pos[1].val;
+			// 		let prev = (xx*xx + yy*yy).sqrt();
+			// 		drop(pos);
+			// 		drop(b_pos);
+			// 		let pos = poss.at(t + time::NANOSEC);
+			// 		let b_pos = b_poss.at(t + time::NANOSEC);
+			// 		let xxx = pos[0].val - b_pos[0].val;
+			// 		let yyy = pos[1].val - b_pos[1].val;
+			// 		let next = (xxx*xxx + yyy*yyy).sqrt();
+			// 		drop(pos);
+			// 		drop(b_pos);
+			// 		let pos = poss.at(t);
+			// 		let b_pos = b_poss.at(t);
+			// 		let x = pos[0].val - b_pos[0].val;
+			// 		let y = pos[1].val - b_pos[1].val;
+			// 		let curr = (x*x + y*y).sqrt();
+			// 		drop(pos);
+			// 		drop(b_pos);
+			// 		let pos = poss.at(t - 2*time::NANOSEC);
+			// 		let b_pos = b_poss.at(t - 2*time::NANOSEC);
+			// 		let xxx = pos[0].val - b_pos[0].val;
+			// 		let yyy = pos[1].val - b_pos[1].val;
+			// 		let prev_prev = (xxx*xxx + yyy*yyy).sqrt();
+			// 		drop(pos);
+			// 		drop(b_pos);
+			// 		if curr <= radius /*&& next <= curr*/ /* && prev < 12. && prev_prev >= 12.*/ /*&& next < 12. && next < prev*/ {
+			// 			let tt = poss[0].base_time();
+			// 			println!("e {:?}", [entity, b_entity]);
+			// 			println!("x1: {:?}, y1: {:?}", poss[0].poly(poss[0].base_time()).to_time(tt), poss[1].poly(poss[1].base_time()).to_time(tt));
+			// 			println!("x2: {:?}, y2: {:?}", poss[0].poly(t), poss[1].poly(t));
+			// 			println!("bx1: {:?}, by1: {:?}", b_poss[0].poly(b_poss[0].base_time()).to_time(tt), b_poss[1].poly(b_poss[1].base_time()).to_time(tt));
+			// 			println!("bx2: {:?}, by2: {:?}", b_poss[0].poly(t), b_poss[1].poly(t));
+			// 			let dis = *((poss[0].poly(poss[0].base_time()).to_time(tt)-b_poss[0].poly(b_poss[0].base_time()).to_time(tt)).sqr() + (poss[1].poly(poss[1].base_time()).to_time(tt)-b_poss[1].poly(b_poss[1].base_time()).to_time(tt)).sqr());
+			// 			println!("dis: {:?}", dis + chime::sum::Sum::<f64, 0>::from(-radius*radius);
+			// 			use chime::kind::FluxKind;
+			// 			println!("A {:?}: {:?} vs {:?}", t - 2*time::NANOSEC, prev_prev, dis.at(chime::linear::Scalar((t-timm.elapsed()).as_secs_f64()-2e-9)).sqrt());
+			// 			println!("B {:?}: {:?} vs {:?}", t - time::NANOSEC, prev, dis.at(chime::linear::Scalar((t-timm.elapsed()).as_secs_f64()-1e-9)).sqrt());
+			// 			println!("C {:?}: {:?} vs {:?}", t, curr, dis.at(chime::linear::Scalar((t-timm.elapsed()).as_secs_f64())).sqrt());
+			// 			println!("D {:?}: {:?} vs {:?}", t + time::NANOSEC, next, dis.at(chime::linear::Scalar((t-timm.elapsed()).as_secs_f64()+1e-9)).sqrt());
+			// 		}
+			// 		break
+			// 	}
+			// }
 		}
 		// n += 1;
 	}
@@ -362,8 +378,8 @@ fn do_func_c(In(ents): In<[Entity; 2]>, time: Res<Time>, mut query: Query<&mut P
 	let mut b_pos_h_spd = dot(b_pos[0].spd.val, b_pos[1].spd.val, dir_x, dir_y);
 	let b_pos_v_spd = dot(b_pos[1].spd.val, -b_pos[0].spd.val, dir_x, dir_y);
 	
-	let temp = pos_h_spd * 0.5;
-	pos_h_spd = b_pos_h_spd * 0.5;
+	let temp = pos_h_spd * 1.;
+	pos_h_spd = b_pos_h_spd * 1.;
 	b_pos_h_spd = temp;
 	if pos_h_spd - b_pos_h_spd < 1e-2 {
 		pos_h_spd += 1.;
@@ -375,31 +391,31 @@ fn do_func_c(In(ents): In<[Entity; 2]>, time: Res<Time>, mut query: Query<&mut P
 	b_pos[0].spd.val = dot(b_pos_h_spd, -b_pos_v_spd, dir_x, dir_y);
 	b_pos[1].spd.val = dot(b_pos_v_spd, b_pos_h_spd, dir_x, dir_y);
 	
-	pos[1].spd.acc.val = -1000.;
-	b_pos[1].spd.acc.val = -1000.;
+	// pos[1].spd.acc.val = -1000.;
+	// b_pos[1].spd.acc.val = -1000.;
 	
-	let x1 = pos[0].val;
-	let y1 = pos[1].val;
-	let x2 = b_pos[0].val;
-	let y2 = b_pos[1].val;
-	drop(pos);
-	drop(b_pos);
-	let poly = (poss[0].poly(poss[0].base_time()) - b_poss[0].poly(b_poss[0].base_time())).sqr()
-		+ (poss[1].poly(poss[1].base_time()) - b_poss[1].poly(b_poss[1].base_time())).sqr();
-	println!("  cool {:?}", (
-		ents,
-		(pos_h_spd, pos_v_spd),
-		(b_pos_h_spd, b_pos_v_spd),
-		(x1-x2)*(x1-x2) + (y1-y2)*(y1-y2),
-		poss[0].poly(poss[0].base_time()),
-		poss[1].poly(poss[1].base_time()),
-		b_poss[0].poly(b_poss[0].base_time()),
-		b_poss[1].poly(b_poss[1].base_time()),
-		poly,
-		poss.when_dis_eq(&b_poss.0, &chime::Constant::from(12.)).collect::<Vec<_>>(),
-		time.elapsed(),
-	));
-	assert!(poly.rate_at(time.elapsed()) >= 0., "{:?}", poly);
+	// let x1 = pos[0].val;
+	// let y1 = pos[1].val;
+	// let x2 = b_pos[0].val;
+	// let y2 = b_pos[1].val;
+	// drop(pos);
+	// drop(b_pos);
+	// let poly = (poss[0].poly(poss[0].base_time()) - b_poss[0].poly(b_poss[0].base_time())).sqr()
+	// 	+ (poss[1].poly(poss[1].base_time()) - b_poss[1].poly(b_poss[1].base_time())).sqr();
+	// println!("  cool {:?}", (
+	// 	ents,
+	// 	(pos_h_spd, pos_v_spd),
+	// 	(b_pos_h_spd, b_pos_v_spd),
+	// 	(x1-x2)*(x1-x2) + (y1-y2)*(y1-y2),
+	// 	poss[0].poly(poss[0].base_time()),
+	// 	poss[1].poly(poss[1].base_time()),
+	// 	b_poss[0].poly(b_poss[0].base_time()),
+	// 	b_poss[1].poly(b_poss[1].base_time()),
+	// 	poly,
+	// 	poss.when_dis_eq(&b_poss.0, &chime::Constant::from(12.)).collect::<Vec<_>>(),
+	// 	time.elapsed(),
+	// ));
+	// assert!(poly.rate_at(time.elapsed()) >= 0., "{:?}", poly);
 }
 
 fn outlier_func_c(In(ents): In<[Entity; 2]>, time: Res<Time>, mut query: Query<&mut Pos>) {
@@ -414,23 +430,23 @@ fn outlier_func_c(In(ents): In<[Entity; 2]>, time: Res<Time>, mut query: Query<&
 	b_pos[0].spd.val = 0.; b_pos[0].spd.acc.val = 0.;
 	b_pos[1].spd.val = 0.; b_pos[1].spd.acc.val = 0.;
 	
-	let x1 = pos[0].val;
-	let y1 = pos[1].val;
-	let x2 = b_pos[0].val;
-	let y2 = b_pos[1].val;
-	drop(pos);
-	drop(b_pos);
-	println!(" ents {:?}", (
-		ents,
-		(x1-x2)*(x1-x2) + (y1-y2)*(y1-y2),
-		poss[0].poly(poss[0].base_time()),
-		poss[1].poly(poss[1].base_time()),
-		b_poss[0].poly(b_poss[0].base_time()),
-		b_poss[1].poly(b_poss[1].base_time()),
-		(poss[0].poly(poss[0].base_time()) - b_poss[0].poly(b_poss[0].base_time())).sqr() + (poss[1].poly(poss[1].base_time()) - b_poss[1].poly(b_poss[1].base_time())).sqr(),
-		poss.when_dis_eq(&b_poss.0, &chime::Constant::from(12.)).collect::<Vec<_>>(),
-		time.elapsed(),
-	));
+	// let x1 = pos[0].val;
+	// let y1 = pos[1].val;
+	// let x2 = b_pos[0].val;
+	// let y2 = b_pos[1].val;
+	// drop(pos);
+	// drop(b_pos);
+	// println!(" ents {:?}", (
+	// 	ents,
+	// 	(x1-x2)*(x1-x2) + (y1-y2)*(y1-y2),
+	// 	poss[0].poly(poss[0].base_time()),
+	// 	poss[1].poly(poss[1].base_time()),
+	// 	b_poss[0].poly(b_poss[0].base_time()),
+	// 	b_poss[1].poly(b_poss[1].base_time()),
+	// 	(poss[0].poly(poss[0].base_time()) - b_poss[0].poly(b_poss[0].base_time())).sqr() + (poss[1].poly(poss[1].base_time()) - b_poss[1].poly(b_poss[1].base_time())).sqr(),
+	// 	poss.when_dis_eq(&b_poss.0, &chime::Constant::from(12.)).collect::<Vec<_>>(),
+	// 	time.elapsed(),
+	// ));
 }
 
 #[allow(dead_code)]
@@ -444,11 +460,11 @@ fn discrete_update(mut query: Query<&mut Pos>, time: Res<Time>) {
 		*pos[1].spd.val += *pos[1].spd.acc.val * delta / 2.;
 		*pos[1].val += *pos[1].spd.val * delta;
 		*pos[1].spd.val += *pos[1].spd.acc.val * delta / 2.;
-		if *pos[0].val >= (RIGHT - RADIUS) as f64 || *pos[0].val <= (LEFT + RADIUS) as f64 {
+		if *pos[0].val >= (RIGHT - pos.radius) as f64 || *pos[0].val <= (LEFT + pos.radius) as f64 {
 			*pos[0].val -= 2. * *pos[0].spd.val * delta;
 			*pos[0].spd.val *= -1.;
 		}
-		if *pos[1].val >= (TOP - RADIUS) as f64 || *pos[1].val <= (BOTTOM + RADIUS) as f64 {
+		if *pos[1].val >= (TOP - pos.radius) as f64 || *pos[1].val <= (BOTTOM + pos.radius) as f64 {
 			*pos[1].val -= 2. * *pos[1].spd.val * delta;
 			*pos[1].spd.val *= -1.;
 		}
@@ -458,7 +474,8 @@ fn discrete_update(mut query: Query<&mut Pos>, time: Res<Time>) {
 	while let Some([mut a, mut b]) = combinations.fetch_next() {
 		let x = *a[0].val - *b[0].val;
 		let y = *a[1].val - *b[1].val;
-		if x*x + y*y <= (4*RADIUS*RADIUS) as f64 {
+		let radius = (a.radius + b.radius) as f64;
+		if x*x + y*y <= radius*radius {
 			let dir_x = x / x.hypot(y);
 			let dir_y = y / x.hypot(y);
 			let h = *a[0].spd.val;
@@ -481,12 +498,12 @@ fn debug_draw(mut draw: Gizmos, time: Res<Time>, pred_time: Res<Time<Chime>>, qu
 	for (pos, has_gun) in &query {
 		let x = pos[0].at(pred_time.elapsed());
 		let y = pos[1].at(pred_time.elapsed());
-		let pos = Vec2::new(x.val as f32, y.val as f32);
-		draw.circle_2d(pos, RADIUS as f32, Color::YELLOW);
+		let vec = Vec2::new(x.val as f32, y.val as f32);
+		draw.circle_2d(vec, pos.radius as f32, Color::YELLOW);
 		if has_gun {
 			draw.line_2d(
-				pos,
-				pos + Vec2::new((RADIUS as f32) * s.cos(), (RADIUS as f32) * s.sin()),
+				vec,
+				vec + Vec2::new((pos.radius as f32) * s.cos(), (pos.radius as f32) * s.sin()),
 				Color::GREEN
 			);
 		}
