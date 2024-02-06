@@ -365,13 +365,6 @@ impl PredMap {
 					case.next_end_time = next_time;
 				}
 				next_time = Some(pred_time);
-			} else if let Some(prev_end_time) = prev_end_time {
-				if is_active && pred_time == prev_end_time {
-					case.is_active = false;
-					case.next_time = Some(pred_time);
-					case.next_end_time = next_time;
-					next_time = Some(pred_time);
-				}
 			}
 			
 			 // Update Prediction:
