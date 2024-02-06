@@ -3,7 +3,7 @@ use bevy_chime::*;
 use bevy::prelude::*;
 use bevy::window::PresentMode;
 
-use chime::{flux, Flux, FluxVec, Moment, sum::Sum, time};
+use chime::*;
 use chime::kind::{WhenDisEq, WhenDis, WhenEq, When};
 
 use std::cmp::Ordering;
@@ -12,7 +12,11 @@ use std::time::{Duration, Instant};
 use impl_op::impl_op;
 
 #[derive(PartialOrd, PartialEq)]
-#[flux(Sum<f64, 2> = {val} + spd.per(time::SEC))]
+#[flux(
+	kind = "sum::Sum<f64, 2>",
+	value = val,
+	change = |c| c + spd.per(time::SEC)
+)]
 #[derive(Component, Debug)]
 struct PosX {
 	val: f64,
@@ -20,7 +24,11 @@ struct PosX {
 }
 
 #[derive(PartialOrd, PartialEq)]
-#[flux(Sum<f64, 1> = {val} + acc.per(time::SEC))]
+#[flux(
+	kind = "sum::Sum<f64, 1>",
+	value = val,
+	change = |c| c + acc.per(time::SEC)
+)]
 #[derive(Component, Debug)]
 struct SpdX {
 	val: f64,
@@ -28,7 +36,10 @@ struct SpdX {
 }
 
 #[derive(PartialOrd, PartialEq)]
-#[flux(Sum<f64, 0> = {val})]
+#[flux(
+	kind = "sum::Sum<f64, 0>",
+	value = val,
+)]
 #[derive(Component, Debug)]
 struct AccX {
 	val: f64,
@@ -172,8 +183,8 @@ fn when_func_a(In(mut pred): In<PredCollector<Entity>>, query: Query<(&Pos, Enti
 	// let a_time = Instant::now();
 	for (pos, entity) in &query {
 		let times =
-			(pos[0].when_eq(&chime::Constant::from((RIGHT - pos.radius) as f64))/* & pos[0].spd.when(Ordering::Greater, &chime::Constant::from(0.))*/) |
-			(pos[0].when_eq(&chime::Constant::from((LEFT  + pos.radius) as f64))/* & pos[0].spd.when(Ordering::Less, &chime::Constant::from(0.))*/);
+			(pos[0].when_eq(&((RIGHT - pos.radius) as f64))/* & pos[0].spd.when(Ordering::Greater, &0.)*/) |
+			(pos[0].when_eq(&((LEFT  + pos.radius) as f64))/* & pos[0].spd.when(Ordering::Less, &0.)*/);
 		pred.add(times, entity);
 	}
 	// println!("  when_func_a: {:?}", Instant::now().duration_since(a_time));
@@ -191,8 +202,8 @@ fn when_func_b(In(mut pred): In<PredCollector<Entity>>, query: Query<(&Pos, Enti
 	// let time = time.elapsed();
 	for (pos, entity) in &query {
 		let/* mut*/ times =
-			(pos[1].when_eq(&chime::Constant::from((TOP    - pos.radius) as f64)) /*& pos[1].spd.when(Ordering::Greater, &chime::Constant::from(0.))*/) |
-			(pos[1].when_eq(&chime::Constant::from((BOTTOM + pos.radius) as f64)) /*& pos[1].spd.when(Ordering::Less, &chime::Constant::from(0.))*/);
+			(pos[1].when_eq(&((TOP    - pos.radius) as f64)) /*& pos[1].spd.when(Ordering::Greater, &0.)*/) |
+			(pos[1].when_eq(&((BOTTOM + pos.radius) as f64)) /*& pos[1].spd.when(Ordering::Less, &0.)*/);
 		pred.add(times/*.clone()*/, entity);
 		// if times.find(|t| *t > time).is_none() && pos[1].at(time).spd.acc.val != 0. {
 		// 	println!("Wow! {time:?}, {:?}, {:?}\n  {:?}, spd: {:?}",
@@ -250,7 +261,7 @@ fn when_func_c(
 	// let mut n = 0;
 	// let a_time = Instant::now();
 	for (pos, entity) in &query {
-		let time = pos.base_time();
+		let time = pos.max_base_time();
 		let pos_poly_vec = pos.polys(time);
 		for (b_pos, b_entity) in &b_query {
 			if entity == b_entity {
@@ -265,10 +276,10 @@ fn when_func_c(
 				.poly(Duration::ZERO);
 			
 			// let a_time = Instant::now();
-			let b_pos_vec = b_pos.polys(b_pos.base_time());
+			let b_pos_vec = b_pos.polys(b_pos.max_base_time());
 			// println!("A: {:?}", Instant::now().duration_since(a_time));
 			// let a_time = Instant::now();
-			let mut times = pos_poly_vec.when_dis_eq(&b_pos_vec, &dis);
+			let mut times = pos_poly_vec.when_dis_eq(b_pos_vec, dis);
 			// println!("B: {:?}", Instant::now().duration_since(a_time));
 			pred.add(times/*.clone()*/, [entity.min(b_entity), b_entity.max(entity)]);
 			// print!(" -- {:?}", ((entity, b_entity), times.clone().collect::<Vec<_>>()));
@@ -454,40 +465,40 @@ fn discrete_update(mut query: Query<&mut Pos>, time: Res<Time>) {
 	let a_time = Instant::now();
 	let delta = time.delta().as_secs_f64();
 	for mut pos in &mut query {
-		*pos[0].spd.val += *pos[0].spd.acc.val * delta / 2.;
-		*pos[0].val += *pos[0].spd.val * delta;
-		*pos[0].spd.val += *pos[0].spd.acc.val * delta / 2.;
-		*pos[1].spd.val += *pos[1].spd.acc.val * delta / 2.;
-		*pos[1].val += *pos[1].spd.val * delta;
-		*pos[1].spd.val += *pos[1].spd.acc.val * delta / 2.;
-		if *pos[0].val >= (RIGHT - pos.radius) as f64 || *pos[0].val <= (LEFT + pos.radius) as f64 {
-			*pos[0].val -= 2. * *pos[0].spd.val * delta;
-			*pos[0].spd.val *= -1.;
+		pos[0].spd.val += pos[0].spd.acc.val * delta / 2.;
+		pos[0].val += pos[0].spd.val * delta;
+		pos[0].spd.val += pos[0].spd.acc.val * delta / 2.;
+		pos[1].spd.val += pos[1].spd.acc.val * delta / 2.;
+		pos[1].val += pos[1].spd.val * delta;
+		pos[1].spd.val += pos[1].spd.acc.val * delta / 2.;
+		if pos[0].val >= (RIGHT - pos.radius) as f64 || pos[0].val <= (LEFT + pos.radius) as f64 {
+			pos[0].val -= 2. * pos[0].spd.val * delta;
+			pos[0].spd.val *= -1.;
 		}
-		if *pos[1].val >= (TOP - pos.radius) as f64 || *pos[1].val <= (BOTTOM + pos.radius) as f64 {
-			*pos[1].val -= 2. * *pos[1].spd.val * delta;
-			*pos[1].spd.val *= -1.;
+		if pos[1].val >= (TOP - pos.radius) as f64 || pos[1].val <= (BOTTOM + pos.radius) as f64 {
+			pos[1].val -= 2. * pos[1].spd.val * delta;
+			pos[1].spd.val *= -1.;
 		}
 	}
 	let mut n = 0;
 	let mut combinations = query.iter_combinations_mut();
 	while let Some([mut a, mut b]) = combinations.fetch_next() {
-		let x = *a[0].val - *b[0].val;
-		let y = *a[1].val - *b[1].val;
+		let x = a[0].val - b[0].val;
+		let y = a[1].val - b[1].val;
 		let radius = (a.radius + b.radius) as f64;
 		if x*x + y*y <= radius*radius {
 			let dir_x = x / x.hypot(y);
 			let dir_y = y / x.hypot(y);
-			let h = *a[0].spd.val;
-			let v = *a[1].spd.val;
+			let h = a[0].spd.val;
+			let v = a[1].spd.val;
 			let spd = (h*h + v*v).sqrt();
-			*a[0].spd.val = spd * dir_x;
-			*a[1].spd.val = spd * dir_y;
-			let h = *b[0].spd.val;
-			let v = *b[1].spd.val;
+			a[0].spd.val = spd * dir_x;
+			a[1].spd.val = spd * dir_y;
+			let h = b[0].spd.val;
+			let v = b[1].spd.val;
 			let spd = (h*h + v*v).sqrt();
-			*b[0].spd.val = -spd * dir_x;
-			*b[1].spd.val = -spd * dir_y;
+			b[0].spd.val = -spd * dir_x;
+			b[1].spd.val = -spd * dir_y;
 			n += 1;
 		}
 	}
