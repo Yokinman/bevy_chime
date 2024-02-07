@@ -240,6 +240,7 @@ struct PredCaseData {
 	next_time: Option<Duration>,
 	next_end_time: Option<Duration>,
 	last_time: Option<Duration>,
+	prev_time: Option<Duration>,
 	receivers: Vec<PredId>,
 	schedule: Schedule,
 	end_schedule: Schedule,
@@ -343,15 +344,16 @@ impl PredMap {
 			
 			 // Fetch Next Time:
 			case.next_time = None;
-			let prev_end_time = std::mem::take(&mut case.next_end_time);
+			let prev_time = std::mem::take(&mut case.prev_time);
 			let mut is_active = std::mem::take(&mut case.is_active);
 			let mut next_time = None;
 			loop {
 				next_time = case.next_time();
 				if let Some(t) = next_time {
-					if t > pred_time || (t == pred_time && !is_active) {
+					if t > pred_time || (t == pred_time && !is_active && prev_time != Some(t)) {
 						break
 					}
+					case.prev_time = Some(t);
 					case.is_active = !case.is_active;
 				} else {
 					break
@@ -429,6 +431,7 @@ impl PredMap {
 			.get_mut(&key.1).expect("this should always work");
 		
 		debug_assert_eq!(case.last_time, Some(time));
+		case.prev_time = Some(time);
 		
 		 // Queue Up Next Prediction:
 		case.is_active = !case.is_active;
