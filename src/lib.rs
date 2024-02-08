@@ -149,12 +149,7 @@ fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule)
 				}
 				
 				 // Call Event:
-				// !!! Add a separate event binding for mid-range occurrence?  
-				/*else if last_time == Some(duration) {
-					if let Some(outlier_schedule) = &mut case.outlier_schedule {
-						outlier_schedule.run(world);
-					}
-				}*/ else {
+				else {
 					case.schedule.run(world);
 				}
 				
@@ -183,24 +178,9 @@ fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule)
 	}
 }
 
-/// What uniquely identifies a case of prediction.
+/// Unique identifier for a case of prediction.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
-pub enum PredId {
-	None,
-	Entity(Entity),
-	Entity2([Entity; 2]),
-}
-
-impl PredId {
-	pub fn simplify(self) -> Self {
-		match self {
-			PredId::Entity2([a, b]) if a > b => {
-				PredId::Entity2([b, a])
-			},
-			other => other
-		}
-	}
-}
+pub struct PredId(u128);
 
 /// A case of prediction, like what it's based on.
 pub trait PredCase: Copy + Clone {
@@ -209,19 +189,23 @@ pub trait PredCase: Copy + Clone {
 
 impl PredCase for () {
 	fn into_id(self) -> PredId {
-		PredId::None
+		PredId(0)
 	}
 }
 
 impl PredCase for Entity {
 	fn into_id(self) -> PredId {
-		PredId::Entity(self)
+		PredId(self.to_bits() as u128)
 	}
 }
 
 impl PredCase for [Entity; 2] {
 	fn into_id(self) -> PredId {
-		PredId::Entity2(self)
+		let [mut min, mut max] = self;
+		if min > max {
+			std::mem::swap(&mut min, &mut max);
+		}
+		PredId((min.to_bits() as u128) | ((max.to_bits() as u128) << 64))
 	}
 }
 
@@ -320,8 +304,8 @@ impl PredMap {
 		for (new_times, pred_case) in input.0 {
 			// let a_time = Instant::now();
 			let pred_id = pred_case.into_id();
-			let key = (system_id, pred_id.simplify());
-			let case = table.entry(key.1).or_default(); // !!! very slow
+			let key = (system_id, pred_id);
+			let case = table.entry(key.1).or_default();
 			case.times = new_times;
 			// let b_time = Instant::now();
 			
