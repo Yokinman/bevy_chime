@@ -99,7 +99,7 @@ fn add_two_dogs(world: &mut World) {
 				pos: [
 					PosX { val: 0., spd: SpdX { val: 00., acc: AccX { val: 0. } } },
 					PosX { val: 0., spd: SpdX { val: 20.,  acc: AccX { val: -1000. } } }
-				].to_flux(Duration::ZERO),
+				].to_flux_vec(Duration::ZERO),
 				radius: 6,
 			},
 		},
@@ -116,7 +116,7 @@ fn add_two_dogs(world: &mut World) {
 				pos: [
 					PosX { val: 40., spd: SpdX { val: 100., acc: AccX { val: 0. } } },
 					PosX { val: 0., spd: SpdX { val: 20.,  acc: AccX { val: -1000. } } }
-				].to_flux(Duration::ZERO),
+				].to_flux_vec(Duration::ZERO),
 				radius: 12,
 			},
 		},
@@ -128,7 +128,7 @@ fn add_two_dogs(world: &mut World) {
 				pos: [
 					PosX { val: 0.0, spd: SpdX { val: -00., acc: AccX { val: 00. } } },
 					PosX { val: -40., spd: SpdX { val: -60., acc: AccX { val: -1000. } } }
-				].to_flux(Duration::ZERO),
+				].to_flux_vec(Duration::ZERO),
 				radius: 6,
 			},
 		},
@@ -140,7 +140,7 @@ fn add_two_dogs(world: &mut World) {
 				pos: [
 					PosX { val: 0.0, spd: SpdX { val: -00., acc: AccX { val: 00. } } },
 					PosX { val: 40., spd: SpdX { val: -40., acc: AccX { val: -1000. } } }
-				].to_flux(Duration::ZERO),
+				].to_flux_vec(Duration::ZERO),
 				radius: 6,
 			},
 		},
@@ -171,7 +171,7 @@ fn add_many_dogs(world: &mut World) {
 								acc: AccX { val: 0. }
 							}
 						}
-					].to_flux(Duration::ZERO),
+					].to_flux_vec(Duration::ZERO),
 					radius,
 				},
 			}
@@ -220,7 +220,7 @@ fn when_func_b(In(mut pred): In<PredCollector<Entity>>, query: Query<(&Pos, Enti
 
 fn do_func_b(In(ent): In<Entity>, time: Res<Time>, mut query: Query<&mut Pos>) {
 	let mut pos = query.get_mut(ent).unwrap();
-	let mut poss = pos.at_mut(time.elapsed());
+	let mut poss = pos.at_vec_mut(time.elapsed());
 	let mut pos_y = &mut poss[1];
 	pos_y.spd.val *= -1.;
 	if pos_y.spd.val >= 0. && pos_y.spd.val < 1. { // > -(2. * pos_y.spd.acc.val.abs()).sqrt()
@@ -355,8 +355,8 @@ fn do_func_c(In(ents): In<[Entity; 2]>, time: Res<Time>, mut query: Query<&mut P
 		+ (poss[1].poly(poss[1].base_time()) - b_poss[1].poly(b_poss[1].base_time())).sqr();
 	assert!(poly.rate_at(time.elapsed()) <= 0., "{:?}", poly);
 	
-	let mut pos = poss.at_mut(time.elapsed());
-	let mut b_pos = b_poss.at_mut(time.elapsed());
+	let mut pos = poss.at_vec_mut(time.elapsed());
+	let mut b_pos = b_poss.at_vec_mut(time.elapsed());
 	let x = pos[0].val - b_pos[0].val;
 	let y = pos[1].val - b_pos[1].val;
 	let dir_x = x / x.hypot(y);
@@ -434,8 +434,8 @@ fn outlier_func_c(In(ents): In<[Entity; 2]>, time: Res<Time>, mut query: Query<&
 		return
 	}
 	let [mut poss, mut b_poss] = query.get_many_mut(ents).unwrap();
-	let mut pos = poss.at_mut(time.elapsed());
-	let mut b_pos = b_poss.at_mut(time.elapsed());
+	let mut pos = poss.at_vec_mut(time.elapsed());
+	let mut b_pos = b_poss.at_vec_mut(time.elapsed());
 	pos[0].spd.val = 0.; pos[0].spd.acc.val = 0.;
 	pos[1].spd.val = 0.; pos[1].spd.acc.val = 0.;
 	b_pos[0].spd.val = 0.; b_pos[0].spd.acc.val = 0.;
