@@ -243,6 +243,36 @@ impl_pred_case_for_ints!(
 	i8, i16, i32, i64, i128, isize
 );
 
+impl<A: PredHash> PredHash for (A,) {
+	fn pred_hash(mut self, state: &mut PredCaseHasher) {
+		self.0.pred_hash(state);
+	}
+}
+
+impl<A: PredHash, B: PredHash> PredHash for (A, B) {
+	fn pred_hash(mut self, state: &mut PredCaseHasher) {
+		self.0.pred_hash(state);
+		self.1.pred_hash(state);
+	}
+}
+
+impl<A: PredHash, B: PredHash, C: PredHash> PredHash for (A, B, C) {
+	fn pred_hash(mut self, state: &mut PredCaseHasher) {
+		self.0.pred_hash(state);
+		self.1.pred_hash(state);
+		self.2.pred_hash(state);
+	}
+}
+
+impl<A: PredHash, B: PredHash, C: PredHash, D: PredHash> PredHash for (A, B, C, D) {
+	fn pred_hash(mut self, state: &mut PredCaseHasher) {
+		self.0.pred_hash(state);
+		self.1.pred_hash(state);
+		self.2.pred_hash(state);
+		self.3.pred_hash(state);
+	}
+}
+
 /// Collects predictions from "when" systems, for later compilation.
 pub struct PredCollector<Case: PredHash = ()>(Vec<(TimeRanges, Case)>);
 
