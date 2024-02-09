@@ -27,7 +27,7 @@ pub fn world_add_chime_system<Case, WhenMarker, WhenSys, BeginMarker, BeginSys, 
 	outlier_system: OutlierSys,
 )
 where
-	Case: PredCase + Send + Sync + 'static,
+	Case: PredHash + Send + Sync + 'static,
 	WhenSys: IntoSystem<PredCollector<Case>, PredCollector<Case>, WhenMarker> + 'static,
 	WhenSys::System: ReadOnlySystem,
 	BeginSys: IntoSystem<Case, (), BeginMarker> + Copy + Send + Sync + 'static,
@@ -182,37 +182,71 @@ fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule)
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct PredId(u128);
 
+#[derive(Default)]
+pub struct PredCaseHasher {
+	bytes: [u8; std::mem::size_of::<PredId>()],
+	index: usize,
+}
+
+impl PredCaseHasher {
+	fn write(&mut self, bytes: &[u8]) {
+		let next_index = self.index + bytes.len();
+		assert!(next_index <= self.bytes.len(), "overflowed maximum id size");
+		self.bytes[self.index..next_index]
+			.copy_from_slice(bytes);
+		self.index = next_index;
+	}
+	fn finish(&self) -> PredId {
+		PredId(u128::from_ne_bytes(self.bytes))
+	}
+}
+
 /// A case of prediction, like what it's based on.
-pub trait PredCase: Copy + Clone {
-	fn into_id(self) -> PredId;
+pub trait PredHash: Copy + Clone {
+	fn pred_hash(self, state: &mut PredCaseHasher);
 }
 
-impl PredCase for () {
-	fn into_id(self) -> PredId {
-		PredId(0)
+impl PredHash for () {
+	fn pred_hash(self, state: &mut PredCaseHasher) {
+		state.write(&[]);
 	}
 }
 
-impl PredCase for Entity {
-	fn into_id(self) -> PredId {
-		PredId(self.to_bits() as u128)
+impl PredHash for Entity {
+	fn pred_hash(self, state: &mut PredCaseHasher) {
+		self.to_bits().pred_hash(state);
 	}
 }
 
-impl PredCase for [Entity; 2] {
-	fn into_id(self) -> PredId {
-		let [mut min, mut max] = self;
-		if min > max {
-			std::mem::swap(&mut min, &mut max);
+impl<const SIZE: usize> PredHash for [Entity; SIZE] {
+	fn pred_hash(mut self, state: &mut PredCaseHasher) {
+		self.sort_unstable();
+		for ent in self {
+			ent.pred_hash(state);
 		}
-		PredId((min.to_bits() as u128) | ((max.to_bits() as u128) << 64))
 	}
 }
+
+macro_rules! impl_pred_case_for_ints {
+	($($int:ty),+) => {
+		$(
+			impl PredHash for $int {
+				fn pred_hash(self, state: &mut PredCaseHasher) {
+					state.write(&self.to_ne_bytes());
+				}
+			}
+		)+
+	};
+}
+impl_pred_case_for_ints!(
+	u8, u16, u32, u64, u128, usize,
+	i8, i16, i32, i64, i128, isize
+);
 
 /// Collects predictions from "when" systems, for later compilation.
-pub struct PredCollector<Case: PredCase = ()>(Vec<(TimeRanges, Case)>);
+pub struct PredCollector<Case: PredHash = ()>(Vec<(TimeRanges, Case)>);
 
-impl<Case: PredCase> PredCollector<Case> {
+impl<Case: PredHash> PredCollector<Case> {
 	pub fn add(&mut self, times: TimeRanges, case: Case) {
 		self.0.push((times, case));
 	}
@@ -256,7 +290,7 @@ impl PredCaseData {
 	}
 }
 
-pub fn temp_default_outlier<T: PredCase>(_: In<T>) {}
+pub fn temp_default_outlier<T: PredHash>(_: In<T>) {}
 
 /// Event handler.
 #[derive(Resource, Default)]
@@ -291,7 +325,7 @@ impl PredMap {
 		outlier_system: OutlierSys,
 	)
 	where
-		Case: PredCase + Send + Sync + 'static,
+		Case: PredHash + Send + Sync + 'static,
 		BeginSys: IntoSystem<Case, (), BeginMarker> + Copy + Sync + 'static,
 		EndSys: IntoSystem<Case, (), EndMarker> + Copy + Sync + 'static,
 		OutlierSys: IntoSystem<Case, (), OutlierMarker> + Copy + Sync + 'static,
@@ -303,7 +337,9 @@ impl PredMap {
 		
 		for (new_times, pred_case) in input.0 {
 			// let a_time = Instant::now();
-			let pred_id = pred_case.into_id();
+			let mut pred_state = PredCaseHasher::default();
+			pred_case.pred_hash(&mut pred_state);
+			let pred_id = pred_state.finish();
 			let key = (system_id, pred_id);
 			let case = table.entry(key.1).or_default();
 			case.times = new_times;
