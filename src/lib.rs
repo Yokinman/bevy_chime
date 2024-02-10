@@ -277,7 +277,7 @@ impl<A: PredHash, B: PredHash, C: PredHash, D: PredHash> PredHash for (A, B, C, 
 pub struct PredCollector<Case: PredHash = ()>(Vec<(TimeRanges, Case)>);
 
 impl<Case: PredHash> PredCollector<Case> {
-	pub fn add(&mut self, times: TimeRanges, case: Case) {
+	pub fn set(&mut self, case: Case, times: TimeRanges) {
 		self.0.push((times, case));
 	}
 }
