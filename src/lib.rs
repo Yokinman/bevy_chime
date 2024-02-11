@@ -19,34 +19,153 @@ use chime::time::TimeRanges;
 
 use bevy::input::{Input, keyboard::KeyCode};
 
-pub fn world_add_chime_system<Case, WhenMarker, WhenSys, BeginMarker, BeginSys, EndMarker, EndSys, OutlierMarker, OutlierSys>(
-	world: &mut World,
-	when_system: WhenSys,
-	begin_system: BeginSys,
-	end_system: EndSys,
-	outlier_system: OutlierSys,
-)
+/// Builder entry point for adding a chime event to a [`World`].
+pub trait AddChimeEvent {
+	fn add_chime_event<P, S, M>(&mut self, pred_sys: S)
+		-> ChimeEventBuilder<P, S::System>
+	where
+		P: PredHash + Send + Sync + 'static,
+		S: IntoSystem<PredCollector<P>, PredCollector<P>, M>,
+		S::System: ReadOnlySystem + Clone;
+}
+
+impl AddChimeEvent for World {
+	fn add_chime_event<P, S, M>(&mut self, pred_sys: S)
+		-> ChimeEventBuilder<P, S::System>
+	where
+		P: PredHash + Send + Sync + 'static,
+		S: IntoSystem<PredCollector<P>, PredCollector<P>, M>,
+		S::System: ReadOnlySystem + Clone,
+	{
+		ChimeEventBuilder {
+			world: self,
+			case: std::marker::PhantomData,
+			pred_sys: IntoSystem::into_system(pred_sys),
+			begin_sys: None,
+			end_sys: None,
+			outlier_sys: None,
+		}
+	}
+}
+
+/// Begin/end-type system for a chime event (object-safe).
+trait ChimeEventSystem: System<Out=()> + Send + Sync {
+	fn cloned(&self) -> Box<dyn ChimeEventSystem<In=Self::In, Out=Self::Out>>;
+	fn add_to_schedule(&self, schedule: &mut Schedule, input: Self::In);
+}
+
+impl<T: System<Out=()> + Send + Sync + Clone> ChimeEventSystem for T
 where
-	Case: PredHash + Send + Sync + 'static,
-	WhenSys: IntoSystem<PredCollector<Case>, PredCollector<Case>, WhenMarker> + 'static,
-	WhenSys::System: ReadOnlySystem,
-	BeginSys: IntoSystem<Case, (), BeginMarker> + Copy + Send + Sync + 'static,
-	EndSys: IntoSystem<Case, (), EndMarker> + Copy + Send + Sync + 'static,
-	OutlierSys: IntoSystem<Case, (), OutlierMarker> + Copy + Send + Sync + 'static,
+	<T as System>::In: Send + Sync + Copy
 {
-	let id = world.resource_mut::<PredMap>().setup_id();
+	fn cloned(&self) -> Box<dyn ChimeEventSystem<In=Self::In, Out=Self::Out>> {
+		Box::new(self.clone())
+	}
+	fn add_to_schedule(&self, schedule: &mut Schedule, input: Self::In) {
+		let input_sys = move || -> Self::In {
+			input
+		};
+		schedule.add_systems(input_sys.pipe(self.clone()));
+	}
+}
+
+/// Builder for inserting a chime event into a [`World`].  
+pub struct ChimeEventBuilder<'w, P, S>
+where
+	P: PredHash + Send + Sync + 'static,
+	S: ReadOnlySystem<In=PredCollector<P>, Out=PredCollector<P>> + Clone,
+{
+	world: &'w mut World,
+	case: std::marker::PhantomData<P>,
+	pred_sys: S,
+	begin_sys: Option<Box<dyn ChimeEventSystem<In=P, Out=()>>>,
+	end_sys: Option<Box<dyn ChimeEventSystem<In=P, Out=()>>>,
+	outlier_sys: Option<Box<dyn ChimeEventSystem<In=P, Out=()>>>,
+}
+
+impl<P, S> Drop for ChimeEventBuilder<'_, P, S>
+where
+	P: PredHash + Send + Sync + 'static,
+	S: ReadOnlySystem<In=PredCollector<P>, Out=PredCollector<P>> + Clone,
+{
+	fn drop(&mut self) {
+		let ChimeEventBuilder {
+			world,
+			pred_sys,
+			begin_sys,
+			end_sys,
+			outlier_sys,
+			..
+		} = self;
+		
+		let begin_sys = begin_sys.as_ref().map(|x| x.cloned());
+		let end_sys = end_sys.as_ref().map(|x| x.cloned());
+		let outlier_sys = outlier_sys.as_ref().map(|x| x.cloned());
+		
+		assert!(begin_sys.is_some() || end_sys.is_some() || outlier_sys.is_some());
+		
+		let id = world.resource_mut::<PredMap>().setup_id();
+		
+		let input = || -> PredCollector<P> {
+			PredCollector(Vec::new())
+		};
+		
+		let compile = move |In(state): In<PredCollector<P>>, mut pred: ResMut<PredMap>, time: Res<Time>| {
+			pred.sched(
+				state,
+				time.elapsed(),
+				id,
+				begin_sys.as_ref(),
+				end_sys.as_ref(),
+				outlier_sys.as_ref()
+			);
+		};
+		
+		let system = input.pipe(pred_sys.clone()).pipe(compile);
+		
+		world.resource_mut::<Schedules>()
+			.get_mut(ChimeSchedule).unwrap()
+			.add_systems(system);
+	}
+}
+
+impl<P, S> ChimeEventBuilder<'_, P, S>
+where
+	P: PredHash + Send + Sync + 'static,
+	S: ReadOnlySystem<In=PredCollector<P>, Out=PredCollector<P>> + Clone,
+{
+	/// The system that runs when the event's prediction becomes active.
+	pub fn on_begin<T, M>(mut self, sys: T) -> Self
+	where
+		T: IntoSystem<P, (), M>,
+		T::System: Send + Sync + Clone,
+	{
+		assert!(self.begin_sys.is_none(), "can't have >1 begin systems");
+		self.begin_sys = Some(Box::new(IntoSystem::into_system(sys)));
+		self
+	}
 	
-	let input = || -> PredCollector<Case> {
-		PredCollector(Vec::new())
-	};
+	/// The system that runs when the event's prediction becomes inactive.
+	pub fn on_end<T, M>(mut self, sys: T) -> Self
+	where
+		T: IntoSystem<P, (), M>,
+		T::System: Send + Sync + Clone,
+	{
+		assert!(self.end_sys.is_none(), "can't have >1 end systems");
+		self.end_sys = Some(Box::new(IntoSystem::into_system(sys)));
+		self
+	}
 	
-	let compile = move |In(input): In<PredCollector<Case>>, mut pred: ResMut<PredMap>, pred_time: Res<Time>| {
-		pred.sched(input, pred_time.elapsed(), id, begin_system, end_system, outlier_system);
-	};
-	
-	world.resource_mut::<Schedules>()
-		.get_mut(ChimeSchedule).unwrap()
-		.add_systems(input.pipe(when_system).pipe(compile));
+	/// The system that runs when the event's prediction repeats excessively.
+	pub fn on_repeat<T, M>(mut self, sys: T) -> Self
+	where
+		T: IntoSystem<P, (), M>,
+		T::System: Send + Sync + Clone,
+	{
+		assert!(self.outlier_sys.is_none(), "can't have >1 outlier systems");
+		self.outlier_sys = Some(Box::new(IntoSystem::into_system(sys)));
+		self
+	}
 }
 
 fn setup(world: &mut World) {
@@ -320,8 +439,6 @@ impl PredCaseData {
 	}
 }
 
-pub fn temp_default_outlier<T: PredHash>(_: In<T>) {}
-
 /// Event handler.
 #[derive(Resource, Default)]
 struct PredMap {
@@ -345,21 +462,15 @@ impl PredMap {
 		self.time_table.len() - 1
 	}
 	
-	fn sched<Case, BeginMarker, BeginSys, EndMarker, EndSys, OutlierMarker, OutlierSys>(
+	fn sched<Case: PredHash + Send + Sync + 'static>(
 		&mut self,
 		input: PredCollector<Case>,
 		pred_time: Duration,
 		system_id: usize,
-		system: BeginSys,
-		end_system: EndSys,
-		outlier_system: OutlierSys,
-	)
-	where
-		Case: PredHash + Send + Sync + 'static,
-		BeginSys: IntoSystem<Case, (), BeginMarker> + Copy + Sync + 'static,
-		EndSys: IntoSystem<Case, (), EndMarker> + Copy + Sync + 'static,
-		OutlierSys: IntoSystem<Case, (), OutlierMarker> + Copy + Sync + 'static,
-	{
+		begin_sys: Option<&Box<dyn ChimeEventSystem<In=Case, Out=()>>>,
+		end_sys: Option<&Box<dyn ChimeEventSystem<In=Case, Out=()>>>,
+		outlier_sys: Option<&Box<dyn ChimeEventSystem<In=Case, Out=()>>>,
+	) {
 		// let n = input.0.len();
 		// let a_time = Instant::now();
 		let table = self.time_table.get_mut(system_id)
@@ -378,16 +489,17 @@ impl PredMap {
 			 // Store Receiver:
 			if !case.receivers.contains(&pred_id) {
 				case.receivers.push(pred_id);
-				let input = move || -> Case { pred_case };
-				case.schedule.add_systems(input.pipe(system));
-				case.end_schedule.add_systems(input.pipe(end_system));
-				if IntoSystem::into_system(outlier_system).name()
-					!= IntoSystem::into_system(temp_default_outlier::<Case>).name()
-				{
+				if let Some(sys) = begin_sys {
+					sys.add_to_schedule(&mut case.schedule, pred_case);
+				}
+				if let Some(sys) = end_sys {
+					sys.add_to_schedule(&mut case.end_schedule, pred_case);
+				}
+				if let Some(sys) = outlier_sys {
 					if case.outlier_schedule.is_none() {
 						case.outlier_schedule = Some(Schedule::default());
 					}
-					case.outlier_schedule.as_mut().unwrap().add_systems(input.pipe(outlier_system));
+					sys.add_to_schedule(&mut case.outlier_schedule.as_mut().unwrap(), pred_case);
 				}
 			}
 			// let c_time = Instant::now();
