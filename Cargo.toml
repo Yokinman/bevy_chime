@@ -6,6 +6,8 @@ edition = "2021"
 [dependencies]
 bevy = { version = "0.12.1" } # default-features = false
 chime = { path = "../chime" }
+
+[dev-dependencies]
 accurate = "0.3.1"
 
 [target.'cfg(windows)'.dependencies.bevy]
@@ -19,6 +21,5 @@ opt-level = 3 # Faster dependency compilation
 name = "bevy_chime"
 path = "src/lib.rs"
 
-[[bin]]
-name = "testing"
-path = "src/bin/testing.rs"
+[[example]]
+name = "testing" # cargo run --example testing
