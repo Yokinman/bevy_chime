@@ -4,10 +4,9 @@ use bevy::prelude::*;
 use bevy::window::PresentMode;
 
 use chime::*;
-use chime::kind::{WhenDisEq, WhenDis, WhenEq, When};
+use chime::kind::{WhenDisEq, /*WhenDis, WhenEq, When*/};
 
-use std::cmp::Ordering;
-use std::time::{Duration, Instant};
+use std::time::{Duration, /*Instant*/};
 
 use impl_op::impl_op;
 
@@ -53,11 +52,11 @@ struct Pos {
 
 impl_op!{ *a -> [<PosX as Moment>::Flux; 2] { Pos => a.pos } }
 
-fn pos_speed(pos: &[PosX; 2]) -> f64 {
-	let x = pos[0].spd.val;
-	let y = pos[1].spd.val;
-	(x*x + y*y).sqrt()
-}
+// fn pos_speed(pos: &[PosX; 2]) -> f64 {
+// 	let x = pos[0].spd.val;
+// 	let y = pos[1].spd.val;
+// 	(x*x + y*y).sqrt()
+// }
 
 #[derive(Bundle, Debug)]
 struct Dog {
@@ -221,7 +220,7 @@ fn when_func_b(In(mut pred): In<PredState<Entity>>, query: Query<(&Pos, Entity),
 fn do_func_b(In(ent): In<Entity>, time: Res<Time>, mut query: Query<&mut Pos>) {
 	let mut pos = query.get_mut(ent).unwrap();
 	let mut poss = pos.at_vec_mut(time.elapsed());
-	let mut pos_y = &mut poss[1];
+	let pos_y = &mut poss[1];
 	pos_y.spd.val *= -1.;
 	if pos_y.spd.val >= 0. && pos_y.spd.val < 1. { // > -(2. * pos_y.spd.acc.val.abs()).sqrt()
 		pos_y.spd.val = 0.;
@@ -256,7 +255,7 @@ fn when_func_c(
 	In(mut pred): In<PredState<[Entity; 2]>>,
 	query: Query<(&Pos, Entity), Changed<Pos>>,
 	b_query: Query<(&Pos, Entity)>,
-	timm: Res<Time>,
+	// timm: Res<Time>,
 ) -> PredState<[Entity; 2]> {
 	// let mut n = 0;
 	// let a_time = Instant::now();
@@ -279,7 +278,7 @@ fn when_func_c(
 			let b_pos_vec = b_pos.polys(b_pos.max_base_time());
 			// println!("A: {:?}", Instant::now().duration_since(a_time));
 			// let a_time = Instant::now();
-			let mut times = pos_poly_vec.when_dis_eq(b_pos_vec, dis);
+			let /*mut*/ times = pos_poly_vec.when_dis_eq(b_pos_vec, dis);
 			// println!("B: {:?}", Instant::now().duration_since(a_time));
 			pred.set([entity.min(b_entity), b_entity.max(entity)], times/*.clone()*/);
 			// print!(" -- {:?}", ((entity, b_entity), times.clone().collect::<Vec<_>>()));
@@ -462,7 +461,6 @@ fn outlier_func_c(In(ents): In<[Entity; 2]>, time: Res<Time>, mut query: Query<&
 
 #[allow(dead_code)]
 fn discrete_update(mut query: Query<&mut Pos>, time: Res<Time>) {
-	let a_time = Instant::now();
 	let delta = time.delta().as_secs_f64();
 	for mut pos in &mut query {
 		pos[0].spd.val += pos[0].spd.acc.val * delta / 2.;
@@ -480,7 +478,6 @@ fn discrete_update(mut query: Query<&mut Pos>, time: Res<Time>) {
 			pos[1].spd.val *= -1.;
 		}
 	}
-	let mut n = 0;
 	let mut combinations = query.iter_combinations_mut();
 	while let Some([mut a, mut b]) = combinations.fetch_next() {
 		let x = a[0].val - b[0].val;
@@ -499,7 +496,6 @@ fn discrete_update(mut query: Query<&mut Pos>, time: Res<Time>) {
 			let spd = (h*h + v*v).sqrt();
 			b[0].spd.val = -spd * dir_x;
 			b[1].spd.val = -spd * dir_y;
-			n += 1;
 		}
 	}
 }

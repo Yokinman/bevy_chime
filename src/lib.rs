@@ -373,20 +373,20 @@ impl_pred_case_for_ints!(
 );
 
 impl<A: PredHash> PredHash for (A,) {
-	fn pred_hash(mut self, state: &mut PredHasher) {
+	fn pred_hash(self, state: &mut PredHasher) {
 		self.0.pred_hash(state);
 	}
 }
 
 impl<A: PredHash, B: PredHash> PredHash for (A, B) {
-	fn pred_hash(mut self, state: &mut PredHasher) {
+	fn pred_hash(self, state: &mut PredHasher) {
 		self.0.pred_hash(state);
 		self.1.pred_hash(state);
 	}
 }
 
 impl<A: PredHash, B: PredHash, C: PredHash> PredHash for (A, B, C) {
-	fn pred_hash(mut self, state: &mut PredHasher) {
+	fn pred_hash(self, state: &mut PredHasher) {
 		self.0.pred_hash(state);
 		self.1.pred_hash(state);
 		self.2.pred_hash(state);
@@ -394,7 +394,7 @@ impl<A: PredHash, B: PredHash, C: PredHash> PredHash for (A, B, C) {
 }
 
 impl<A: PredHash, B: PredHash, C: PredHash, D: PredHash> PredHash for (A, B, C, D) {
-	fn pred_hash(mut self, state: &mut PredHasher) {
+	fn pred_hash(self, state: &mut PredHasher) {
 		self.0.pred_hash(state);
 		self.1.pred_hash(state);
 		self.2.pred_hash(state);
@@ -521,8 +521,8 @@ impl ChimeEventMap {
 			 // Fetch Next Time:
 			event.next_time = None;
 			let prev_time = std::mem::take(&mut event.prev_time);
-			let mut is_active = std::mem::take(&mut event.is_active);
-			let mut next_time = None;
+			let is_active = std::mem::take(&mut event.is_active);
+			let mut next_time;
 			loop {
 				next_time = event.next_time();
 				if let Some(t) = next_time {
@@ -569,7 +569,7 @@ impl ChimeEventMap {
 				 // Insert New Prediction:
 				event.curr_time = next_time;
 				if let Some(time) = next_time {
-					let mut list = self.time_event_map.entry(time)
+					let list = self.time_event_map.entry(time)
 						.or_default();
 					
 					if is_active {
