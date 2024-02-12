@@ -468,7 +468,6 @@ dependencies = [
  "accurate",
  "bevy",
  "chime",
- "impl_op",
 ]
 
 [[package]]
@@ -1284,8 +1283,18 @@ checksum = "fd16c4719339c4530435d38e511904438d07cce7950afa3718a84ac36c10e89e"
 name = "chime"
 version = "0.1.0"
 dependencies = [
- "flux-proc-macro",
- "impl_op",
+ "chime-flux-proc-macro",
+]
+
+[[package]]
+name = "chime-flux-proc-macro"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "74c3b0a42a379565c33e86e02982d8ce64cb765c6a6e988fa35d883b835f50a8"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.48",
 ]
 
 [[package]]
@@ -1691,15 +1700,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "flux-proc-macro"
-version = "0.1.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.48",
-]
-
-[[package]]
 name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2049,10 +2049,6 @@ dependencies = [
  "num-traits",
  "png",
 ]
-
-[[package]]
-name = "impl_op"
-version = "0.1.0"
 
 [[package]]
 name = "indexmap"

@@ -1,3 +1,4 @@
+use std::ops::{Deref, DerefMut};
 use bevy_chime::*;
 
 use bevy::prelude::*;
@@ -7,8 +8,6 @@ use chime::*;
 use chime::kind::{WhenDisEq, /*WhenDis, WhenEq, When*/};
 
 use std::time::{Duration, /*Instant*/};
-
-use impl_op::impl_op;
 
 #[derive(PartialOrd, PartialEq)]
 #[flux(
@@ -50,7 +49,18 @@ struct Pos {
 	radius: i64,
 }
 
-impl_op!{ *a -> [<PosX as Moment>::Flux; 2] { Pos => a.pos } }
+impl Deref for Pos {
+	type Target = [<PosX as Moment>::Flux; 2];
+	fn deref(&self) -> &Self::Target {
+		&self.pos
+	}
+}
+
+impl DerefMut for Pos {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.pos
+	}
+}
 
 // fn pos_speed(pos: &[PosX; 2]) -> f64 {
 // 	let x = pos[0].spd.val;
