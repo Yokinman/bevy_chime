@@ -115,9 +115,9 @@ where
 				state,
 				time.elapsed(),
 				id,
-				begin_sys.as_ref(),
-				end_sys.as_ref(),
-				outlier_sys.as_ref()
+				begin_sys.as_ref().map(|x| x.as_ref()),
+				end_sys.as_ref().map(|x| x.as_ref()),
+				outlier_sys.as_ref().map(|x| x.as_ref()),
 			);
 		};
 		
@@ -230,7 +230,7 @@ fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule)
 			}
 			
 			let a_time = Instant::now();
-			if world.resource_scope(|world, mut pred: Mut<ChimeEventMap>| -> bool {
+			let did_nothing = world.resource_scope(|world, mut pred: Mut<ChimeEventMap>| -> bool {
 				let key = pred.pop();
 				let event = pred.table
 					.get_mut(key.0).unwrap()
@@ -283,7 +283,8 @@ fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule)
 				}
 				
 				false
-			}) {
+			});
+			if did_nothing {
 				continue
 			}
 			tot_a += Instant::now().duration_since(a_time);
@@ -478,9 +479,9 @@ impl ChimeEventMap {
 		input: PredState<Case>,
 		pred_time: Duration,
 		event_id: usize,
-		begin_sys: Option<&Box<dyn ChimeEventSystem<In=Case, Out=()>>>,
-		end_sys: Option<&Box<dyn ChimeEventSystem<In=Case, Out=()>>>,
-		outlier_sys: Option<&Box<dyn ChimeEventSystem<In=Case, Out=()>>>,
+		begin_sys: Option<&dyn ChimeEventSystem<In=Case, Out=()>>,
+		end_sys: Option<&dyn ChimeEventSystem<In=Case, Out=()>>,
+		outlier_sys: Option<&dyn ChimeEventSystem<In=Case, Out=()>>,
 	) {
 		// let n = input.0.len();
 		// let a_time = Instant::now();
@@ -511,7 +512,7 @@ impl ChimeEventMap {
 						event.outlier_schedule = Some(Schedule::default());
 					}
 					sys.add_to_schedule(
-						&mut event.outlier_schedule.as_mut().unwrap(),
+						event.outlier_schedule.as_mut().unwrap(),
 						pred_case
 					);
 				}
