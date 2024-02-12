@@ -19,9 +19,9 @@ use chime::time::TimeRanges;
 
 use bevy::input::{Input, keyboard::KeyCode};
 
-/// Builder entry point for adding a chime event to a [`World`].
+/// Builder entry point for adding chime events to a [`World`].
 pub trait AddChimeEvent {
-	fn add_chime_event<P, S, M>(&mut self, pred_sys: S)
+	fn add_chime_events<P, S, M>(&mut self, pred_sys: S)
 		-> ChimeEventBuilder<P, S::System>
 	where
 		P: PredHash + Send + Sync + 'static,
@@ -30,7 +30,7 @@ pub trait AddChimeEvent {
 }
 
 impl AddChimeEvent for World {
-	fn add_chime_event<P, S, M>(&mut self, pred_sys: S)
+	fn add_chime_events<P, S, M>(&mut self, pred_sys: S)
 		-> ChimeEventBuilder<P, S::System>
 	where
 		P: PredHash + Send + Sync + 'static,
@@ -279,7 +279,7 @@ fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule)
 				
 				 // Call Event:
 				else {
-					event.schedule.run(world);
+					event.begin_schedule.run(world);
 				}
 				
 				false
@@ -416,10 +416,10 @@ struct ChimeEvent {
 	times: TimeRanges,
 	next_time: Option<Duration>,
 	next_end_time: Option<Duration>,
-	last_time: Option<Duration>,
+	curr_time: Option<Duration>,
 	prev_time: Option<Duration>,
 	receivers: Vec<PredId>,
-	schedule: Schedule,
+	begin_schedule: Schedule,
 	end_schedule: Schedule,
 	outlier_schedule: Option<Schedule>,
 	recent_times: BinaryHeap<Reverse<Duration>>,
@@ -501,7 +501,7 @@ impl ChimeEventMap {
 			if !event.receivers.contains(&pred_id) {
 				event.receivers.push(pred_id);
 				if let Some(sys) = begin_sys {
-					sys.add_to_schedule(&mut event.schedule, pred_case);
+					sys.add_to_schedule(&mut event.begin_schedule, pred_case);
 				}
 				if let Some(sys) = end_sys {
 					sys.add_to_schedule(&mut event.end_schedule, pred_case);
@@ -547,9 +547,9 @@ impl ChimeEventMap {
 			
 			 // Update Prediction:
 			// let d_time = Instant::now();
-			if next_time != event.last_time {
+			if next_time != event.curr_time {
 				 // Remove Old Prediction:
-				if let Some(time) = event.last_time {
+				if let Some(time) = event.curr_time {
 					if let btree_map::Entry::Occupied(mut e)
 						= self.time_event_map.entry(time)
 					{
@@ -567,7 +567,7 @@ impl ChimeEventMap {
 				}
 				
 				 // Insert New Prediction:
-				event.last_time = next_time;
+				event.curr_time = next_time;
 				if let Some(time) = next_time {
 					let mut list = self.time_event_map.entry(time)
 						.or_default();
@@ -606,13 +606,13 @@ impl ChimeEventMap {
 			.get_mut(key.0).expect("this should always work")
 			.get_mut(&key.1).expect("this should always work");
 		
-		debug_assert_eq!(event.last_time, Some(time));
+		debug_assert_eq!(event.curr_time, Some(time));
 		event.prev_time = Some(time);
 		
 		 // Queue Up Next Prediction:
 		event.is_active = !event.is_active;
-		event.last_time = event.next_time();
-		if let Some(t) = event.last_time {
+		event.curr_time = event.next_time();
+		if let Some(t) = event.curr_time {
 			self.time_event_map.entry(t)
 				.or_default()
 				.push(key);

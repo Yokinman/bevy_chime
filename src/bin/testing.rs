@@ -83,9 +83,9 @@ fn setup(world: &mut World) {
 	// };
 	
 	 // Chime Systems:
-	world.add_chime_event(when_func_a).on_begin(do_func_a);
-	world.add_chime_event(when_func_b).on_begin(do_func_b).on_repeat(outlier_func_b);
-	world.add_chime_event(when_func_c).on_begin(do_func_c).on_repeat(outlier_func_c);
+	world.add_chime_events(when_func_a).on_begin(do_func_a);
+	world.add_chime_events(when_func_b).on_begin(do_func_b).on_repeat(outlier_func_b);
+	world.add_chime_events(when_func_c).on_begin(do_func_c).on_repeat(outlier_func_c);
 	
 	add_two_dogs(world);
 	// add_many_dogs(world);
