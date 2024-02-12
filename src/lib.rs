@@ -25,7 +25,7 @@ pub trait AddChimeEvent {
 		-> ChimeEventBuilder<P, S::System>
 	where
 		P: PredHash + Send + Sync + 'static,
-		S: IntoSystem<PredCollector<P>, PredCollector<P>, M>,
+		S: IntoSystem<PredState<P>, PredState<P>, M>,
 		S::System: ReadOnlySystem + Clone;
 }
 
@@ -34,7 +34,7 @@ impl AddChimeEvent for World {
 		-> ChimeEventBuilder<P, S::System>
 	where
 		P: PredHash + Send + Sync + 'static,
-		S: IntoSystem<PredCollector<P>, PredCollector<P>, M>,
+		S: IntoSystem<PredState<P>, PredState<P>, M>,
 		S::System: ReadOnlySystem + Clone,
 	{
 		ChimeEventBuilder {
@@ -73,7 +73,7 @@ where
 pub struct ChimeEventBuilder<'w, P, S>
 where
 	P: PredHash + Send + Sync + 'static,
-	S: ReadOnlySystem<In=PredCollector<P>, Out=PredCollector<P>> + Clone,
+	S: ReadOnlySystem<In=PredState<P>, Out=PredState<P>> + Clone,
 {
 	world: &'w mut World,
 	case: std::marker::PhantomData<P>,
@@ -86,7 +86,7 @@ where
 impl<P, S> Drop for ChimeEventBuilder<'_, P, S>
 where
 	P: PredHash + Send + Sync + 'static,
-	S: ReadOnlySystem<In=PredCollector<P>, Out=PredCollector<P>> + Clone,
+	S: ReadOnlySystem<In=PredState<P>, Out=PredState<P>> + Clone,
 {
 	fn drop(&mut self) {
 		let ChimeEventBuilder {
@@ -104,13 +104,13 @@ where
 		
 		assert!(begin_sys.is_some() || end_sys.is_some() || outlier_sys.is_some());
 		
-		let id = world.resource_mut::<PredMap>().setup_id();
+		let id = world.resource_mut::<ChimeEventMap>().setup_id();
 		
-		let input = || -> PredCollector<P> {
-			PredCollector(Vec::new())
+		let input = || -> PredState<P> {
+			PredState(Vec::new())
 		};
 		
-		let compile = move |In(state): In<PredCollector<P>>, mut pred: ResMut<PredMap>, time: Res<Time>| {
+		let compile = move |In(state): In<PredState<P>>, mut pred: ResMut<ChimeEventMap>, time: Res<Time>| {
 			pred.sched(
 				state,
 				time.elapsed(),
@@ -132,7 +132,7 @@ where
 impl<P, S> ChimeEventBuilder<'_, P, S>
 where
 	P: PredHash + Send + Sync + 'static,
-	S: ReadOnlySystem<In=PredCollector<P>, Out=PredCollector<P>> + Clone,
+	S: ReadOnlySystem<In=PredState<P>, Out=PredState<P>> + Clone,
 {
 	/// The system that runs when the event's prediction becomes active.
 	pub fn on_begin<T, M>(mut self, sys: T) -> Self
@@ -170,7 +170,7 @@ where
 
 fn setup(world: &mut World) {
 	world.insert_resource(Time::<Chime>::default());
-	world.insert_resource(PredMap::default());
+	world.insert_resource(ChimeEventMap::default());
 	world.add_schedule(Schedule::new(ChimeSchedule));
 }
 
@@ -210,7 +210,7 @@ fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule)
 	
 	pred_schedule.run(world);
 	
-	while let Some(duration) = world.resource::<PredMap>().first_time() {
+	while let Some(duration) = world.resource::<ChimeEventMap>().first_time() {
 		if time >= duration {
 			world.resource_mut::<Time>().advance_to(duration);
 			
@@ -220,7 +220,7 @@ fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule)
 			}
 			
 			let a_time = Instant::now();
-			if world.resource_scope(|world, mut pred: Mut<PredMap>| -> bool {
+			if world.resource_scope(|world, mut pred: Mut<ChimeEventMap>| -> bool {
 				let key = pred.pop();
 				let case = pred.time_table
 					.get_mut(key.0).unwrap()
@@ -299,15 +299,15 @@ fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule)
 
 /// Unique identifier for a case of prediction.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
-pub struct PredId(u128);
+struct PredId(u128);
 
 #[derive(Default)]
-pub struct PredCaseHasher {
+pub struct PredHasher {
 	bytes: [u8; std::mem::size_of::<PredId>()],
 	index: usize,
 }
 
-impl PredCaseHasher {
+impl PredHasher {
 	fn write(&mut self, bytes: &[u8]) {
 		let next_index = self.index + bytes.len();
 		assert!(next_index <= self.bytes.len(), "overflowed maximum id size");
@@ -320,25 +320,25 @@ impl PredCaseHasher {
 	}
 }
 
-/// A case of prediction, like what it's based on.
+/// A case of prediction, hashable into a unique identifier.
 pub trait PredHash: Copy + Clone {
-	fn pred_hash(self, state: &mut PredCaseHasher);
+	fn pred_hash(self, state: &mut PredHasher);
 }
 
 impl PredHash for () {
-	fn pred_hash(self, state: &mut PredCaseHasher) {
+	fn pred_hash(self, state: &mut PredHasher) {
 		state.write(&[]);
 	}
 }
 
 impl PredHash for Entity {
-	fn pred_hash(self, state: &mut PredCaseHasher) {
+	fn pred_hash(self, state: &mut PredHasher) {
 		self.to_bits().pred_hash(state);
 	}
 }
 
 impl<const SIZE: usize> PredHash for [Entity; SIZE] {
-	fn pred_hash(mut self, state: &mut PredCaseHasher) {
+	fn pred_hash(mut self, state: &mut PredHasher) {
 		self.sort_unstable();
 		for ent in self {
 			ent.pred_hash(state);
@@ -350,7 +350,7 @@ macro_rules! impl_pred_case_for_ints {
 	($($int:ty),+) => {
 		$(
 			impl PredHash for $int {
-				fn pred_hash(self, state: &mut PredCaseHasher) {
+				fn pred_hash(self, state: &mut PredHasher) {
 					state.write(&self.to_ne_bytes());
 				}
 			}
@@ -363,20 +363,20 @@ impl_pred_case_for_ints!(
 );
 
 impl<A: PredHash> PredHash for (A,) {
-	fn pred_hash(mut self, state: &mut PredCaseHasher) {
+	fn pred_hash(mut self, state: &mut PredHasher) {
 		self.0.pred_hash(state);
 	}
 }
 
 impl<A: PredHash, B: PredHash> PredHash for (A, B) {
-	fn pred_hash(mut self, state: &mut PredCaseHasher) {
+	fn pred_hash(mut self, state: &mut PredHasher) {
 		self.0.pred_hash(state);
 		self.1.pred_hash(state);
 	}
 }
 
 impl<A: PredHash, B: PredHash, C: PredHash> PredHash for (A, B, C) {
-	fn pred_hash(mut self, state: &mut PredCaseHasher) {
+	fn pred_hash(mut self, state: &mut PredHasher) {
 		self.0.pred_hash(state);
 		self.1.pred_hash(state);
 		self.2.pred_hash(state);
@@ -384,7 +384,7 @@ impl<A: PredHash, B: PredHash, C: PredHash> PredHash for (A, B, C) {
 }
 
 impl<A: PredHash, B: PredHash, C: PredHash, D: PredHash> PredHash for (A, B, C, D) {
-	fn pred_hash(mut self, state: &mut PredCaseHasher) {
+	fn pred_hash(mut self, state: &mut PredHasher) {
 		self.0.pred_hash(state);
 		self.1.pred_hash(state);
 		self.2.pred_hash(state);
@@ -393,16 +393,16 @@ impl<A: PredHash, B: PredHash, C: PredHash, D: PredHash> PredHash for (A, B, C, 
 }
 
 /// Collects predictions from "when" systems, for later compilation.
-pub struct PredCollector<Case: PredHash = ()>(Vec<(TimeRanges, Case)>);
+pub struct PredState<P: PredHash = ()>(Vec<(TimeRanges, P)>);
 
-impl<Case: PredHash> PredCollector<Case> {
-	pub fn set(&mut self, case: Case, times: TimeRanges) {
+impl<P: PredHash> PredState<P> {
+	pub fn set(&mut self, case: P, times: TimeRanges) {
 		self.0.push((times, case));
 	}
 }
 
 #[derive(Default)]
-struct PredCaseData {
+struct ChimeEvent {
 	times: TimeRanges,
 	next_time: Option<Duration>,
 	next_end_time: Option<Duration>,
@@ -417,7 +417,7 @@ struct PredCaseData {
 	is_active: bool,
 }
 
-impl PredCaseData {
+impl ChimeEvent {
 	fn next_time(&mut self) -> Option<Duration> {
 		let next_time = if self.is_active {
 			&mut self.next_end_time
@@ -441,16 +441,16 @@ impl PredCaseData {
 
 /// Event handler.
 #[derive(Resource, Default)]
-struct PredMap {
-	time_stack: BTreeMap<Duration, Vec<PredKey>>,
-	time_table: Vec<HashMap<PredId, PredCaseData>>,
+struct ChimeEventMap {
+	table: Vec<HashMap<PredId, ChimeEvent>>,
+	time_event_map: BTreeMap<Duration, Vec<ChimeEventKey>>,
 }
 
-type PredKey = (usize, PredId);
+type ChimeEventKey = (usize, PredId);
 
-impl PredMap {
+impl ChimeEventMap {
 	fn first_time(&self) -> Option<Duration> {
-		if let Some((&duration, _)) = self.time_stack.first_key_value() {
+		if let Some((&duration, _)) = self.time_event_map.first_key_value() {
 			Some(duration)
 		} else {
 			None
@@ -458,13 +458,13 @@ impl PredMap {
 	}
 	
 	fn setup_id(&mut self) -> usize {
-		self.time_table.push(Default::default());
-		self.time_table.len() - 1
+		self.table.push(Default::default());
+		self.table.len() - 1
 	}
 	
 	fn sched<Case: PredHash + Send + Sync + 'static>(
 		&mut self,
-		input: PredCollector<Case>,
+		input: PredState<Case>,
 		pred_time: Duration,
 		system_id: usize,
 		begin_sys: Option<&Box<dyn ChimeEventSystem<In=Case, Out=()>>>,
@@ -473,12 +473,12 @@ impl PredMap {
 	) {
 		// let n = input.0.len();
 		// let a_time = Instant::now();
-		let table = self.time_table.get_mut(system_id)
+		let table = self.table.get_mut(system_id)
 			.expect("id must be initialized with PredMap::setup_id");
 		
 		for (new_times, pred_case) in input.0 {
 			// let a_time = Instant::now();
-			let mut pred_state = PredCaseHasher::default();
+			let mut pred_state = PredHasher::default();
 			pred_case.pred_hash(&mut pred_state);
 			let pred_id = pred_state.finish();
 			let key = (system_id, pred_id);
@@ -537,7 +537,7 @@ impl PredMap {
 				 // Remove Old Prediction:
 				if let Some(time) = case.last_time {
 					if let btree_map::Entry::Occupied(mut e)
-						= self.time_stack.entry(time)
+						= self.time_event_map.entry(time)
 					{
 						let list = e.get_mut();
 						let pos = list.iter()
@@ -555,7 +555,7 @@ impl PredMap {
 				 // Insert New Prediction:
 				case.last_time = next_time;
 				if let Some(time) = next_time {
-					let mut list = self.time_stack.entry(time)
+					let mut list = self.time_event_map.entry(time)
 						.or_default();
 					
 					if is_active {
@@ -575,8 +575,8 @@ impl PredMap {
 		// println!("  compile: {:?} // {:?}", Instant::now().duration_since(a_time), n);
 	}
 	
-	fn pop(&mut self) -> PredKey {
-		let mut entry = self.time_stack.first_entry()
+	fn pop(&mut self) -> ChimeEventKey {
+		let mut entry = self.time_event_map.first_entry()
 			.expect("this should always work");
 		
 		let time = *entry.key();
@@ -588,7 +588,7 @@ impl PredMap {
 			entry.remove();
 		}
 		
-		let case = self.time_table
+		let case = self.table
 			.get_mut(key.0).expect("this should always work")
 			.get_mut(&key.1).expect("this should always work");
 		
@@ -599,7 +599,7 @@ impl PredMap {
 		case.is_active = !case.is_active;
 		case.last_time = case.next_time();
 		if let Some(t) = case.last_time {
-			self.time_stack.entry(t)
+			self.time_event_map.entry(t)
 				.or_default()
 				.push(key);
 		}

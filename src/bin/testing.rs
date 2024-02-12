@@ -179,7 +179,7 @@ fn add_many_dogs(world: &mut World) {
 	}}
 }
 
-fn when_func_a(In(mut pred): In<PredCollector<Entity>>, query: Query<(&Pos, Entity), Changed<Pos>>) -> PredCollector<Entity> {
+fn when_func_a(In(mut pred): In<PredState<Entity>>, query: Query<(&Pos, Entity), Changed<Pos>>) -> PredState<Entity> {
 	// let a_time = Instant::now();
 	for (pos, entity) in &query {
 		let times =
@@ -197,7 +197,7 @@ fn do_func_a(In(ent): In<Entity>, time: Res<Time>, mut query: Query<&mut Pos>) {
 	pos_x.spd.val *= -1.;
 }
 
-fn when_func_b(In(mut pred): In<PredCollector<Entity>>, query: Query<(&Pos, Entity), Changed<Pos>>/*, time: Res<Time>*/) -> PredCollector<Entity> {
+fn when_func_b(In(mut pred): In<PredState<Entity>>, query: Query<(&Pos, Entity), Changed<Pos>>/*, time: Res<Time>*/) -> PredState<Entity> {
 	// let a_time = Instant::now();
 	// let time = time.elapsed();
 	for (pos, entity) in &query {
@@ -253,11 +253,11 @@ fn outlier_func_b(In(ent): In<Entity>, time: Res<Time>, mut query: Query<&mut Po
 }
 
 fn when_func_c(
-	In(mut pred): In<PredCollector<[Entity; 2]>>,
+	In(mut pred): In<PredState<[Entity; 2]>>,
 	query: Query<(&Pos, Entity), Changed<Pos>>,
 	b_query: Query<(&Pos, Entity)>,
 	timm: Res<Time>,
-) -> PredCollector<[Entity; 2]> {
+) -> PredState<[Entity; 2]> {
 	// let mut n = 0;
 	// let a_time = Instant::now();
 	for (pos, entity) in &query {
