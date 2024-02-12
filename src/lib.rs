@@ -168,14 +168,24 @@ where
 	}
 }
 
+const RECENT_TIME: Duration = Duration::from_millis(500);
+const OLDER_TIME: Duration = Duration::from_secs(10);
+
+/// Chime event scheduling handler.
+pub struct ChimePlugin;
+
+impl Plugin for ChimePlugin {
+	fn build(&self, app: &mut App) {
+		app.add_systems(Startup, setup);
+		app.add_systems(Update, update);
+	}
+}
+
 fn setup(world: &mut World) {
 	world.insert_resource(Time::<Chime>::default());
 	world.insert_resource(ChimeEventMap::default());
 	world.add_schedule(Schedule::new(ChimeSchedule));
 }
-
-const RECENT_TIME: Duration = Duration::from_millis(500);
-const OLDER_TIME: Duration = Duration::from_secs(10);
 
 fn update(world: &mut World) {
 	world.resource_scope(|world, old_time: Mut<Time>| {
@@ -631,13 +641,3 @@ struct ChimeSchedule;
 /// Context for a `bevy::time::Time`.
 #[derive(Default)]
 pub struct Chime;
-
-/// ...
-pub struct ChimePlugin;
-
-impl Plugin for ChimePlugin {
-	fn build(&self, app: &mut App) {
-		app.add_systems(Startup, setup);
-		app.add_systems(Update, update);
-	}
-}
