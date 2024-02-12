@@ -232,19 +232,19 @@ fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule)
 			let a_time = Instant::now();
 			if world.resource_scope(|world, mut pred: Mut<ChimeEventMap>| -> bool {
 				let key = pred.pop();
-				let case = pred.time_table
+				let event = pred.table
 					.get_mut(key.0).unwrap()
 					.get_mut(&key.1).unwrap();
 				
-				if !case.is_active {
-					case.end_schedule.run(world);
+				if !event.is_active {
+					event.end_schedule.run(world);
 					return false
 				}
-				// let last_time = std::mem::replace(&mut case.last_time, Some(duration));
+				// let last_time = std::mem::replace(&mut event.last_time, Some(duration));
 				
 				 // Ignore Rapidly Repeating Events:
-				let new_avg = (case.recent_times.len() as f32) / RECENT_TIME.as_secs_f32();
-				let old_avg = (case.older_times.len() as f32) / OLDER_TIME.as_secs_f32();
+				let new_avg = (event.recent_times.len() as f32) / RECENT_TIME.as_secs_f32();
+				let old_avg = (event.older_times.len() as f32) / OLDER_TIME.as_secs_f32();
 				if can_can_print {
 					println!(
 						"> {:?} at {:?} (avg: {:?}/sec, recent: {:?}/sec)",
@@ -255,10 +255,10 @@ fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule)
 					);
 				}
 				const LIMIT: f32 = 100.;
-				let min_avg = (500 >> case.older_times.len().min(16)) as f32;
+				let min_avg = (500 >> event.older_times.len().min(16)) as f32;
 				let is_outlier = new_avg > (old_avg * LIMIT).max(min_avg);
 				if is_outlier {
-					if let Some(outlier_schedule) = &mut case.outlier_schedule {
+					if let Some(outlier_schedule) = &mut event.outlier_schedule {
 						outlier_schedule.run(world);
 					} else {
 						// ??? Ignore, crash, warning, etc.
@@ -279,7 +279,7 @@ fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule)
 				
 				 // Call Event:
 				else {
-					case.schedule.run(world);
+					event.schedule.run(world);
 				}
 				
 				false
@@ -437,8 +437,6 @@ impl ChimeEvent {
 		if next_time.is_some() {
 			return std::mem::take(next_time)
 		}
-		
-		 // :
 		if let Some((a, b)) = self.times.next() {
 			self.next_time = Some(a);
 			self.next_end_time = Some(b);
@@ -452,7 +450,10 @@ impl ChimeEvent {
 /// Event handler.
 #[derive(Resource, Default)]
 struct ChimeEventMap {
+	/// All events, distinguished per prediction system and the system's cases.
 	table: Vec<HashMap<PredId, ChimeEvent>>,
+	
+	/// Reverse time-to-events map for quickly rescheduling events.
 	time_event_map: BTreeMap<Duration, Vec<ChimeEventKey>>,
 }
 
@@ -476,14 +477,14 @@ impl ChimeEventMap {
 		&mut self,
 		input: PredState<Case>,
 		pred_time: Duration,
-		system_id: usize,
+		event_id: usize,
 		begin_sys: Option<&Box<dyn ChimeEventSystem<In=Case, Out=()>>>,
 		end_sys: Option<&Box<dyn ChimeEventSystem<In=Case, Out=()>>>,
 		outlier_sys: Option<&Box<dyn ChimeEventSystem<In=Case, Out=()>>>,
 	) {
 		// let n = input.0.len();
 		// let a_time = Instant::now();
-		let table = self.table.get_mut(system_id)
+		let events = self.table.get_mut(event_id)
 			.expect("id must be initialized with PredMap::setup_id");
 		
 		for (new_times, pred_case) in input.0 {
@@ -491,61 +492,64 @@ impl ChimeEventMap {
 			let mut pred_state = PredHasher::default();
 			pred_case.pred_hash(&mut pred_state);
 			let pred_id = pred_state.finish();
-			let key = (system_id, pred_id);
-			let case = table.entry(key.1).or_default();
-			case.times = new_times;
+			let key = (event_id, pred_id);
+			let event = events.entry(key.1).or_default();
+			event.times = new_times;
 			// let b_time = Instant::now();
 			
 			 // Store Receiver:
-			if !case.receivers.contains(&pred_id) {
-				case.receivers.push(pred_id);
+			if !event.receivers.contains(&pred_id) {
+				event.receivers.push(pred_id);
 				if let Some(sys) = begin_sys {
-					sys.add_to_schedule(&mut case.schedule, pred_case);
+					sys.add_to_schedule(&mut event.schedule, pred_case);
 				}
 				if let Some(sys) = end_sys {
-					sys.add_to_schedule(&mut case.end_schedule, pred_case);
+					sys.add_to_schedule(&mut event.end_schedule, pred_case);
 				}
 				if let Some(sys) = outlier_sys {
-					if case.outlier_schedule.is_none() {
-						case.outlier_schedule = Some(Schedule::default());
+					if event.outlier_schedule.is_none() {
+						event.outlier_schedule = Some(Schedule::default());
 					}
-					sys.add_to_schedule(&mut case.outlier_schedule.as_mut().unwrap(), pred_case);
+					sys.add_to_schedule(
+						&mut event.outlier_schedule.as_mut().unwrap(),
+						pred_case
+					);
 				}
 			}
 			// let c_time = Instant::now();
 			
 			 // Fetch Next Time:
-			case.next_time = None;
-			let prev_time = std::mem::take(&mut case.prev_time);
-			let mut is_active = std::mem::take(&mut case.is_active);
+			event.next_time = None;
+			let prev_time = std::mem::take(&mut event.prev_time);
+			let mut is_active = std::mem::take(&mut event.is_active);
 			let mut next_time = None;
 			loop {
-				next_time = case.next_time();
+				next_time = event.next_time();
 				if let Some(t) = next_time {
 					if t > pred_time || (t == pred_time && !is_active && prev_time != Some(t)) {
 						break
 					}
-					case.prev_time = Some(t);
-					case.is_active = !case.is_active;
+					event.prev_time = Some(t);
+					event.is_active = !event.is_active;
 				} else {
 					break
 				}
 			}
-			if case.is_active != is_active {
-				case.is_active = is_active;
+			if event.is_active != is_active {
+				event.is_active = is_active;
 				if is_active {
-					case.next_time = next_time;
+					event.next_time = next_time;
 				} else {
-					case.next_end_time = next_time;
+					event.next_end_time = next_time;
 				}
 				next_time = Some(pred_time);
 			}
 			
 			 // Update Prediction:
 			// let d_time = Instant::now();
-			if next_time != case.last_time {
+			if next_time != event.last_time {
 				 // Remove Old Prediction:
-				if let Some(time) = case.last_time {
+				if let Some(time) = event.last_time {
 					if let btree_map::Entry::Occupied(mut e)
 						= self.time_event_map.entry(time)
 					{
@@ -563,7 +567,7 @@ impl ChimeEventMap {
 				}
 				
 				 // Insert New Prediction:
-				case.last_time = next_time;
+				event.last_time = next_time;
 				if let Some(time) = next_time {
 					let mut list = self.time_event_map.entry(time)
 						.or_default();
@@ -598,37 +602,37 @@ impl ChimeEventMap {
 			entry.remove();
 		}
 		
-		let case = self.table
+		let event = self.table
 			.get_mut(key.0).expect("this should always work")
 			.get_mut(&key.1).expect("this should always work");
 		
-		debug_assert_eq!(case.last_time, Some(time));
-		case.prev_time = Some(time);
+		debug_assert_eq!(event.last_time, Some(time));
+		event.prev_time = Some(time);
 		
 		 // Queue Up Next Prediction:
-		case.is_active = !case.is_active;
-		case.last_time = case.next_time();
-		if let Some(t) = case.last_time {
+		event.is_active = !event.is_active;
+		event.last_time = event.next_time();
+		if let Some(t) = event.last_time {
 			self.time_event_map.entry(t)
 				.or_default()
 				.push(key);
 		}
 		
 		 // Overall vs Recent Average:
-		while let Some(Reverse(t)) = case.older_times.peek() {
+		while let Some(Reverse(t)) = event.older_times.peek() {
 			if time < *t {
 				break
 			}
-			case.older_times.pop();
+			event.older_times.pop();
 		}
-		while let Some(Reverse(t)) = case.recent_times.peek() {
+		while let Some(Reverse(t)) = event.recent_times.peek() {
 			if time < *t {
 				break
 			}
-			case.older_times.push(Reverse(*t + OLDER_TIME));
-			case.recent_times.pop();
+			event.older_times.push(Reverse(*t + OLDER_TIME));
+			event.recent_times.pop();
 		}
-		case.recent_times.push(Reverse(time + RECENT_TIME));
+		event.recent_times.push(Reverse(time + RECENT_TIME));
 		
 		key
 	}
