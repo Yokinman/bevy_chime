@@ -91,11 +91,6 @@ fn setup(world: &mut World) {
 	// 	wait: Duration::from_secs_f64(1./60.)
 	// };
 	
-	 // Chime Systems:
-	world.add_chime_events(ChimeEventBuilder::new(when_func_a).on_begin(do_func_a));
-	world.add_chime_events(ChimeEventBuilder::new(when_func_b).on_begin(do_func_b).on_repeat(outlier_func_b));
-	world.add_chime_events(ChimeEventBuilder::new(when_func_c).on_begin(do_func_c).on_repeat(outlier_func_c));
-	
 	/* ??? macro syntax:
 		#[chime_system]
 		fn friction_freeze(query: ChimeQuery<Pos2D>) {
@@ -561,6 +556,9 @@ fn main() {
 		.add_plugins(ChimePlugin)
 		.add_systems(Startup, setup)
 		.add_systems(Update, debug_draw)
+		.add_chime_events(ChimeEventBuilder::new(when_func_a).on_begin(do_func_a))
+		.add_chime_events(ChimeEventBuilder::new(when_func_b).on_begin(do_func_b).on_repeat(outlier_func_b))
+		.add_chime_events(ChimeEventBuilder::new(when_func_c).on_begin(do_func_c).on_repeat(outlier_func_c))
 		// .add_systems(Update, discrete_update)
         // .add_plugins(bevy::diagnostic::LogDiagnosticsPlugin::default())
         // .add_plugins(bevy::diagnostic::FrameTimeDiagnosticsPlugin::default())

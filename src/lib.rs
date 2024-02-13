@@ -7,7 +7,7 @@ use std::cmp::Reverse;
 use std::collections::{BinaryHeap, btree_map, BTreeMap, HashMap};
 use std::hash::Hash;
 
-use bevy::app::{App, Plugin, Startup, Update};
+use bevy::app::{App, Plugin, Update};
 use bevy::ecs::entity::Entity;
 use bevy::ecs::schedule::{Schedule, Schedules, ScheduleLabel};
 use bevy::ecs::system::{In, IntoSystem, Res, ResMut, Resource, ReadOnlySystem, System};
@@ -21,18 +21,20 @@ use bevy::input::{Input, keyboard::KeyCode};
 
 /// Builder entry point for adding chime events to a [`World`].
 pub trait AddChimeEvent {
-	fn add_chime_events<P, S>(&mut self, events: ChimeEventBuilder<P, S>)
+	fn add_chime_events<P, S>(&mut self, events: ChimeEventBuilder<P, S>) -> &mut Self
 	where
 		P: PredHash + Send + Sync + 'static,
 		S: ReadOnlySystem<In=PredState<P>, Out=PredState<P>>;
 }
 
-impl AddChimeEvent for World {
-	fn add_chime_events<P, S>(&mut self, events: ChimeEventBuilder<P, S>)
+impl AddChimeEvent for App {
+	fn add_chime_events<P, S>(&mut self, events: ChimeEventBuilder<P, S>) -> &mut Self
 	where
 		P: PredHash + Send + Sync + 'static,
 		S: ReadOnlySystem<In=PredState<P>, Out=PredState<P>>,
 	{
+		assert!(self.is_plugin_added::<ChimePlugin>());
+		
 		let ChimeEventBuilder {
 			pred_sys,
 			begin_sys,
@@ -43,7 +45,7 @@ impl AddChimeEvent for World {
 		
 		assert!(begin_sys.is_some() || end_sys.is_some() || outlier_sys.is_some());
 		
-		let id = self.resource_mut::<ChimeEventMap>().setup_id();
+		let id = self.world.resource_mut::<ChimeEventMap>().setup_id();
 		
 		let input = || -> PredState<P> {
 			PredState(Vec::new())
@@ -62,9 +64,11 @@ impl AddChimeEvent for World {
 		
 		let system = input.pipe(pred_sys).pipe(compile);
 		
-		self.resource_mut::<Schedules>()
+		self.world.resource_mut::<Schedules>()
 			.get_mut(ChimeSchedule).unwrap()
 			.add_systems(system);
+		
+		self
 	}
 }
 
@@ -151,15 +155,11 @@ pub struct ChimePlugin;
 
 impl Plugin for ChimePlugin {
 	fn build(&self, app: &mut App) {
-		app.add_systems(Startup, setup);
 		app.add_systems(Update, update);
+		app.world.insert_resource(Time::<Chime>::default());
+		app.world.insert_resource(ChimeEventMap::default());
+		app.world.add_schedule(Schedule::new(ChimeSchedule));
 	}
-}
-
-fn setup(world: &mut World) {
-	world.insert_resource(Time::<Chime>::default());
-	world.insert_resource(ChimeEventMap::default());
-	world.add_schedule(Schedule::new(ChimeSchedule));
 }
 
 fn update(world: &mut World) {
