@@ -21,90 +21,29 @@ use bevy::input::{Input, keyboard::KeyCode};
 
 /// Builder entry point for adding chime events to a [`World`].
 pub trait AddChimeEvent {
-	fn add_chime_events<P, S, M>(&mut self, pred_sys: S)
-		-> ChimeEventBuilder<P, S::System>
+	fn add_chime_events<P, S>(&mut self, events: ChimeEventBuilder<P, S>)
 	where
 		P: PredHash + Send + Sync + 'static,
-		S: IntoSystem<PredState<P>, PredState<P>, M>,
-		S::System: ReadOnlySystem + Clone;
+		S: ReadOnlySystem<In=PredState<P>, Out=PredState<P>>;
 }
 
 impl AddChimeEvent for World {
-	fn add_chime_events<P, S, M>(&mut self, pred_sys: S)
-		-> ChimeEventBuilder<P, S::System>
+	fn add_chime_events<P, S>(&mut self, events: ChimeEventBuilder<P, S>)
 	where
 		P: PredHash + Send + Sync + 'static,
-		S: IntoSystem<PredState<P>, PredState<P>, M>,
-		S::System: ReadOnlySystem + Clone,
+		S: ReadOnlySystem<In=PredState<P>, Out=PredState<P>>,
 	{
-		ChimeEventBuilder {
-			world: self,
-			case: std::marker::PhantomData,
-			pred_sys: IntoSystem::into_system(pred_sys),
-			begin_sys: None,
-			end_sys: None,
-			outlier_sys: None,
-		}
-	}
-}
-
-/// Begin/end-type system for a chime event (object-safe).
-trait ChimeEventSystem: System<Out=()> + Send + Sync {
-	fn cloned(&self) -> Box<dyn ChimeEventSystem<In=Self::In, Out=Self::Out>>;
-	fn add_to_schedule(&self, schedule: &mut Schedule, input: Self::In);
-}
-
-impl<T: System<Out=()> + Send + Sync + Clone> ChimeEventSystem for T
-where
-	<T as System>::In: Send + Sync + Copy
-{
-	fn cloned(&self) -> Box<dyn ChimeEventSystem<In=Self::In, Out=Self::Out>> {
-		Box::new(self.clone())
-	}
-	fn add_to_schedule(&self, schedule: &mut Schedule, input: Self::In) {
-		let input_sys = move || -> Self::In {
-			input
-		};
-		schedule.add_systems(input_sys.pipe(self.clone()));
-	}
-}
-
-/// Builder for inserting a chime event into a [`World`].  
-pub struct ChimeEventBuilder<'w, P, S>
-where
-	P: PredHash + Send + Sync + 'static,
-	S: ReadOnlySystem<In=PredState<P>, Out=PredState<P>> + Clone,
-{
-	world: &'w mut World,
-	case: std::marker::PhantomData<P>,
-	pred_sys: S,
-	begin_sys: Option<Box<dyn ChimeEventSystem<In=P, Out=()>>>,
-	end_sys: Option<Box<dyn ChimeEventSystem<In=P, Out=()>>>,
-	outlier_sys: Option<Box<dyn ChimeEventSystem<In=P, Out=()>>>,
-}
-
-impl<P, S> Drop for ChimeEventBuilder<'_, P, S>
-where
-	P: PredHash + Send + Sync + 'static,
-	S: ReadOnlySystem<In=PredState<P>, Out=PredState<P>> + Clone,
-{
-	fn drop(&mut self) {
 		let ChimeEventBuilder {
-			world,
 			pred_sys,
 			begin_sys,
 			end_sys,
 			outlier_sys,
 			..
-		} = self;
-		
-		let begin_sys = begin_sys.as_ref().map(|x| x.cloned());
-		let end_sys = end_sys.as_ref().map(|x| x.cloned());
-		let outlier_sys = outlier_sys.as_ref().map(|x| x.cloned());
+		} = events;
 		
 		assert!(begin_sys.is_some() || end_sys.is_some() || outlier_sys.is_some());
 		
-		let id = world.resource_mut::<ChimeEventMap>().setup_id();
+		let id = self.resource_mut::<ChimeEventMap>().setup_id();
 		
 		let input = || -> PredState<P> {
 			PredState(Vec::new())
@@ -121,19 +60,55 @@ where
 			);
 		};
 		
-		let system = input.pipe(pred_sys.clone()).pipe(compile);
+		let system = input.pipe(pred_sys).pipe(compile);
 		
-		world.resource_mut::<Schedules>()
+		self.resource_mut::<Schedules>()
 			.get_mut(ChimeSchedule).unwrap()
 			.add_systems(system);
 	}
 }
 
-impl<P, S> ChimeEventBuilder<'_, P, S>
+/// Begin/end-type system for a chime event (object-safe).
+trait ChimeEventSystem: System<Out=()> + Send + Sync {
+	fn add_to_schedule(&self, schedule: &mut Schedule, input: Self::In);
+}
+
+impl<T: System<Out=()> + Send + Sync + Clone> ChimeEventSystem for T
+where
+	<T as System>::In: Send + Sync + Copy
+{
+	fn add_to_schedule(&self, schedule: &mut Schedule, input: Self::In) {
+		let input_sys = move || -> Self::In {
+			input
+		};
+		schedule.add_systems(input_sys.pipe(self.clone()));
+	}
+}
+
+/// Builder for inserting a chime event into a [`World`].  
+pub struct ChimeEventBuilder<P, S> {
+	case: std::marker::PhantomData<P>,
+	pred_sys: S,
+	begin_sys: Option<Box<dyn ChimeEventSystem<In=P, Out=()>>>,
+	end_sys: Option<Box<dyn ChimeEventSystem<In=P, Out=()>>>,
+	outlier_sys: Option<Box<dyn ChimeEventSystem<In=P, Out=()>>>,
+}
+
+impl<P, S> ChimeEventBuilder<P, S>
 where
 	P: PredHash + Send + Sync + 'static,
-	S: ReadOnlySystem<In=PredState<P>, Out=PredState<P>> + Clone,
+	S: ReadOnlySystem<In=PredState<P>, Out=PredState<P>>,
 {
+	pub fn new<M>(pred_sys: impl IntoSystem<S::In, S::Out, M, System=S>) -> Self {
+		Self {
+			case: std::marker::PhantomData,
+			pred_sys: IntoSystem::into_system(pred_sys),
+			begin_sys: None,
+			end_sys: None,
+			outlier_sys: None,
+		}
+	}
+	
 	/// The system that runs when the event's prediction becomes active.
 	pub fn on_begin<T, M>(mut self, sys: T) -> Self
 	where

@@ -92,9 +92,25 @@ fn setup(world: &mut World) {
 	// };
 	
 	 // Chime Systems:
-	world.add_chime_events(when_func_a).on_begin(do_func_a);
-	world.add_chime_events(when_func_b).on_begin(do_func_b).on_repeat(outlier_func_b);
-	world.add_chime_events(when_func_c).on_begin(do_func_c).on_repeat(outlier_func_c);
+	world.add_chime_events(ChimeEventBuilder::new(when_func_a).on_begin(do_func_a));
+	world.add_chime_events(ChimeEventBuilder::new(when_func_b).on_begin(do_func_b).on_repeat(outlier_func_b));
+	world.add_chime_events(ChimeEventBuilder::new(when_func_c).on_begin(do_func_c).on_repeat(outlier_func_c));
+	
+	/* ??? macro syntax:
+		#[chime_system]
+		fn friction_freeze(query: ChimeQuery<Pos2D>) {
+			for pos in query {
+				for i in 0..2 {
+					when pos.spd.when_index_eq(i, &0.) {
+						pos.spd.rate.fric.val[i] = 0;
+					} else {
+						pos.spd.rate.fric.val[i] = pos.spd.rate.fric.full_val[i];
+					}
+				}
+				// Repetition outlier handler?
+			}
+		}
+	*/
 	
 	add_two_dogs(world);
 	// add_many_dogs(world);
