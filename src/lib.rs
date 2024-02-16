@@ -205,7 +205,7 @@ fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule)
 			}
 			
 			let a_time = Instant::now();
-			let did_nothing = world.resource_scope(|world, mut pred: Mut<ChimeEventMap>| -> bool {
+			world.resource_scope(|world, mut pred: Mut<ChimeEventMap>| {
 				let key = pred.pop();
 				let event = pred.table
 					.get_mut(key.0).unwrap()
@@ -213,7 +213,7 @@ fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule)
 				
 				if !event.is_active {
 					event.end_schedule.run(world);
-					return false
+					return
 				}
 				// let last_time = std::mem::replace(&mut event.last_time, Some(duration));
 				
@@ -248,7 +248,7 @@ fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule)
 							old_avg,
 							new_avg,
 						);
-						return true // Don't reschedule
+						event.begin_schedule.run(world);
 					}
 				}
 				
@@ -256,12 +256,7 @@ fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule)
 				else {
 					event.begin_schedule.run(world);
 				}
-				
-				false
 			});
-			if did_nothing {
-				continue
-			}
 			tot_a += Instant::now().duration_since(a_time);
 			
 			 // Reschedule Events:
