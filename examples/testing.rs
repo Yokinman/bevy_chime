@@ -15,7 +15,7 @@ use std::time::{Duration, /*Instant*/};
 	value = val,
 	change = |c| c + spd.per(time::SEC)
 )]
-#[derive(Component, Debug)]
+#[derive(Component, Clone, Debug)]
 struct PosX {
 	val: f64,
 	spd: SpdX,
@@ -27,7 +27,7 @@ struct PosX {
 	value = val,
 	change = |c| c + acc.per(time::SEC)
 )]
-#[derive(Component, Debug)]
+#[derive(Component, Clone, Debug)]
 struct SpdX {
 	val: f64,
 	acc: AccX,
@@ -38,12 +38,12 @@ struct SpdX {
 	kind = "sum::Sum<f64, 0>",
 	value = val,
 )]
-#[derive(Component, Debug)]
+#[derive(Component, Clone, Debug)]
 struct AccX {
 	val: f64,
 }
 
-#[derive(Component, Debug)]
+#[derive(Component, Clone, Debug)]
 struct Pos {
 	pos: [<PosX as Moment>::Flux; 2],
 	radius: i64,
