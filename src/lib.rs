@@ -17,7 +17,7 @@ use std::time::{Duration, Instant};
 use bevy::time::Time;
 use chime::time::TimeRanges;
 
-use bevy::input::{Input, keyboard::KeyCode};
+use bevy::input::{ButtonInput, keyboard::KeyCode};
 
 /// Builder entry point for adding chime events to a [`World`].
 pub trait AddChimeEvent {
@@ -190,7 +190,7 @@ fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule)
 	let mut num = 0;
 	let a_time = Instant::now();
 	
-	let can_can_print = world.resource::<Input<KeyCode>>().pressed(KeyCode::Space);
+	let can_can_print = world.resource::<ButtonInput<KeyCode>>().pressed(KeyCode::Space);
 	let mut can_print = can_can_print;
 	
 	pred_schedule.run(world);
@@ -374,17 +374,16 @@ impl<A: PredHash, B: PredHash, C: PredHash, D: PredHash> PredHash for (A, B, C, 
 }
 
 /// Collects predictions from "when" systems, for later compilation.
-pub struct PredState<P: PredHash = ()>(Vec<(TimeRanges, P)>);
+pub struct PredState<P: PredHash = ()>(Vec<(Box<dyn Iterator<Item = (Duration, Duration)> + Send + Sync>, P)>);
 
 impl<P: PredHash> PredState<P> {
-	pub fn set(&mut self, case: P, times: TimeRanges) {
-		self.0.push((times, case));
+	pub fn set(&mut self, case: P, times: impl Iterator<Item = (Duration, Duration)> + Send + Sync + 'static) {
+		self.0.push((Box::new(times), case));
 	}
 }
 
-#[derive(Default)]
 struct ChimeEvent {
-	times: TimeRanges,
+	times: Box<dyn Iterator<Item = (Duration, Duration)> + Send + Sync>,
 	next_time: Option<Duration>,
 	next_end_time: Option<Duration>,
 	curr_time: Option<Duration>,
@@ -396,6 +395,25 @@ struct ChimeEvent {
 	recent_times: BinaryHeap<Reverse<Duration>>,
 	older_times: BinaryHeap<Reverse<Duration>>,
 	is_active: bool,
+}
+
+impl Default for ChimeEvent {
+	fn default() -> Self {
+		ChimeEvent {
+			times: Box::new(std::iter::empty()),
+			next_time: None,
+			next_end_time: None,
+			curr_time: None,
+			prev_time: None,
+			receivers: Vec::new(),
+			begin_schedule: Schedule::default(),
+			end_schedule: Schedule::default(),
+			outlier_schedule: None,
+			recent_times: BinaryHeap::new(),
+			older_times: BinaryHeap::new(),
+			is_active: false,
+		}
+	}
 }
 
 impl ChimeEvent {
@@ -471,6 +489,7 @@ impl ChimeEventMap {
 			 // Store Receiver:
 			if !event.receivers.contains(&pred_id) {
 				event.receivers.push(pred_id);
+				// !!! https://bevyengine.org/news/bevy-0-13/#more-flexible-one-shot-systems
 				if let Some(sys) = begin_sys {
 					sys.add_to_schedule(&mut event.begin_schedule, pred_case);
 				}
