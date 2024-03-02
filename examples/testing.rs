@@ -282,7 +282,7 @@ fn when_func_c(
 	// let a_time = Instant::now();
 	for (pos, entity) in &query {
 		let time = pos.max_base_time();
-		let pos_poly_vec = pos.polys(time);
+		let pos_poly_vec = pos.poly_vec(time);
 		for (b_pos, b_entity) in &b_query {
 			if entity == b_entity {
 				continue
@@ -296,7 +296,7 @@ fn when_func_c(
 				.poly(Duration::ZERO);
 			
 			// let a_time = Instant::now();
-			let b_pos_vec = b_pos.polys(b_pos.max_base_time());
+			let b_pos_vec = b_pos.poly_vec(b_pos.max_base_time());
 			// println!("A: {:?}", Instant::now().duration_since(a_time));
 			// let a_time = Instant::now();
 			let /*mut*/ times = pos_poly_vec.when_dis_eq(b_pos_vec, dis);
