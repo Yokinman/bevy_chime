@@ -205,7 +205,7 @@ fn when_func_a(In(mut pred): In<PredState<Entity>>, query: Query<(&Pos, Entity),
 		let times =
 			(pos[0].when_eq(&((RIGHT - pos.radius) as f64))/* & pos[0].spd.when(Ordering::Greater, &0.)*/) |
 			(pos[0].when_eq(&((LEFT  + pos.radius) as f64))/* & pos[0].spd.when(Ordering::Less, &0.)*/);
-		pred.set(entity, times);
+		pred.set(entity, times.pre());
 	}
 	// println!("  when_func_a: {:?}", Instant::now().duration_since(a_time));
 	pred
@@ -224,7 +224,7 @@ fn when_func_b(In(mut pred): In<PredState<Entity>>, query: Query<(&Pos, Entity),
 		let/* mut*/ times =
 			(pos[1].when_eq(&((TOP    - pos.radius) as f64)) /*& pos[1].spd.when(Ordering::Greater, &0.)*/) |
 			(pos[1].when_eq(&((BOTTOM + pos.radius) as f64)) /*& pos[1].spd.when(Ordering::Less, &0.)*/);
-		pred.set(entity, times/*.clone()*/);
+		pred.set(entity, times.pre()/*.clone()*/);
 		// if times.find(|t| *t > time).is_none() && pos[1].at(time).spd.acc.val != 0. {
 		// 	println!("Wow! {time:?}, {:?}, {:?}\n  {:?}, spd: {:?}",
 		// 		(pos[1].poly(time) - chime::Constant::from((BOTTOM + pos.radius) as f64).into()),
@@ -301,7 +301,7 @@ fn when_func_c(
 			// let a_time = Instant::now();
 			let /*mut*/ times = pos_poly_vec.when_dis_eq(b_pos_vec, dis);
 			// println!("B: {:?}", Instant::now().duration_since(a_time));
-			pred.set([entity.min(b_entity), b_entity.max(entity)], times/*.clone()*/);
+			pred.set([entity, b_entity], times.pre()/*.clone()*/);
 			// print!(" -- {:?}", ((entity, b_entity), times.clone().collect::<Vec<_>>()));
 			
 			// println!("    k0 HERE {:?}", (entity, b_entity, timm.elapsed()));

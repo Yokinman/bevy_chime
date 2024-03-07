@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 bevy = { version = "0.13.0", default-features = false }
-chime = "0.5"
+chime = "0.6"
 #chime = { path = "../chime" }
 
 [dev-dependencies]

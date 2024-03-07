@@ -377,7 +377,10 @@ impl<A: PredHash, B: PredHash, C: PredHash, D: PredHash> PredHash for (A, B, C, 
 pub struct PredState<P: PredHash = ()>(Vec<(Box<dyn Iterator<Item = (Duration, Duration)> + Send + Sync>, P)>);
 
 impl<P: PredHash> PredState<P> {
-	pub fn set(&mut self, case: P, times: impl Iterator<Item = (Duration, Duration)> + Send + Sync + 'static) {
+	pub fn set<I>(&mut self, case: P, times: TimeRanges<I>)
+	where
+		TimeRanges<I>: Iterator<Item = (Duration, Duration)> + Send + Sync + 'static
+	{
 		self.0.push((Box::new(times), case));
 	}
 }
