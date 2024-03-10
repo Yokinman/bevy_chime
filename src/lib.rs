@@ -8,10 +8,12 @@ use std::collections::{BinaryHeap, btree_map, BTreeMap, HashMap};
 use std::hash::Hash;
 
 use bevy::app::{App, Plugin, Update};
+use bevy::ecs::change_detection::DetectChanges;
+use bevy::ecs::component::Component;
 use bevy::ecs::entity::Entity;
 use bevy::ecs::schedule::{Schedule, Schedules, ScheduleLabel};
-use bevy::ecs::system::{In, IntoSystem, Res, ResMut, Resource, ReadOnlySystem, System};
-use bevy::ecs::world::{Mut, World};
+use bevy::ecs::system::{In, IntoSystem, Query, Res, ResMut, Resource, ReadOnlySystem, System};
+use bevy::ecs::world::{Mut, Ref, World};
 
 use std::time::{Duration, Instant};
 use bevy::time::Time;
@@ -373,18 +375,45 @@ impl<A: PredHash, B: PredHash, C: PredHash, D: PredHash> PredHash for (A, B, C, 
 	}
 }
 
-/// Collects predictions from "when" systems, for later compilation.
-pub struct PredState<P: PredHash = ()>(Vec<(Box<dyn Iterator<Item = (Duration, Duration)> + Send + Sync>, P)>);
+/// Collects predictions from "when" systems for later compilation.
+pub struct PredState<P = ()>(Vec<PredStateCase<P>>);
+
+impl PredState<Entity> {
+	pub fn test<'world, 'state, 'a, 's, A: Component, B: Resource>(
+		&'s mut self,
+		a_iter: Query<'world, 'state, (Ref<'a, A>, Entity), ()>,
+		b_iter: Res<'world, B>,
+	) -> PredCombinatorBuilder<'world, 'state, 'a, 's, A, B> {
+		PredCombinatorBuilder {
+			a_iter,
+			b_iter,
+			state: self,
+		}
+	}
+}
 
 impl<P: PredHash> PredState<P> {
 	pub fn set<I>(&mut self, case: P, times: TimeRanges<I>)
 	where
 		TimeRanges<I>: Iterator<Item = (Duration, Duration)> + Send + Sync + 'static
 	{
-		self.0.push((Box::new(times), case));
+		self.0.push(PredStateCase(Box::new(times), case));
 	}
 }
 
+/// A scheduled case of prediction, used in [`PredState`].
+pub struct PredStateCase<P>(Box<dyn Iterator<Item = (Duration, Duration)> + Send + Sync>, P);
+
+impl<P: PredHash> PredStateCase<P> {
+	pub fn set<I>(&mut self, times: TimeRanges<I>)
+	where
+		TimeRanges<I>: Iterator<Item = (Duration, Duration)> + Send + Sync + 'static
+	{
+		self.0 = Box::new(times);
+	}
+}
+
+/// ...
 struct ChimeEvent {
 	times: Box<dyn Iterator<Item = (Duration, Duration)> + Send + Sync>,
 	next_time: Option<Duration>,
@@ -479,7 +508,7 @@ impl ChimeEventMap {
 		let events = self.table.get_mut(event_id)
 			.expect("id must be initialized with PredMap::setup_id");
 		
-		for (new_times, pred_case) in input.0 {
+		for PredStateCase(new_times, pred_case) in input.0 {
 			// let a_time = Instant::now();
 			let mut pred_state = PredHasher::default();
 			pred_case.pred_hash(&mut pred_state);
@@ -638,3 +667,84 @@ struct ChimeSchedule;
 /// Context for a `bevy::time::Time`.
 #[derive(Default)]
 pub struct Chime;
+
+/// Builder for a [`PredCombinator`].
+pub struct PredCombinatorBuilder<'world, 'state, 'a, 's, A: Component, B: Resource> {
+	a_iter: Query<'world, 'state, (Ref<'a, A>, Entity), ()>,
+	b_iter: Res<'world, B>,
+	state: &'s mut PredState<Entity>,
+}
+
+impl<'world, 'state, 'a, 's, A: Component, B: Resource> IntoIterator for PredCombinatorBuilder<'world, 'state, 'a, 's, A, B> {
+	type Item = <PredCombinator<'s, Entity, (&'world A, &'world B)> as Iterator>::Item;
+	type IntoIter = PredCombinator<'s, Entity, (&'world A, &'world B)>;
+	fn into_iter(self) -> Self::IntoIter {
+		let mut vec = Vec::new();
+		
+		let index = self.state.0.len();
+		// self.state.0.reserve()
+		
+		for (a, a_id) in self.a_iter.iter_inner() {
+			if a.is_changed() {
+				let b_ref = Res::clone(&self.b_iter).into_inner();
+				let a_ref = a.into_inner();
+				for (b, _b_id) in std::iter::once((b_ref, ())) {
+					vec.push((a_ref, b));
+					self.state.0.push(PredStateCase(Box::new(TimeRanges::empty()), a_id));
+				}
+			}
+		}
+		
+		if self.b_iter.is_changed() {
+			for (b, _b_id) in std::iter::once((self.b_iter.into_inner(), ())) {
+				for (a, a_id) in self.a_iter.iter_inner() {
+					if !a.is_changed() {
+						vec.push((a.into_inner(), b));
+						self.state.0.push(PredStateCase(Box::new(TimeRanges::empty()), a_id));
+					}
+				}
+			}
+		}
+		
+		// Options for combinator logic.
+		// - For each A, for each B, if A or B changed.
+		// - For each changed A, for each B.
+		//   For each changed B, for each unchanged A.
+		// - For each A:
+		//   - If changed, for each B.
+		//   - If unchanged, collect into a list.
+		//   For each changed B, for each A in list.
+		// 
+		// Options for iteration structure.
+		// - Iterate over all cases initially, and then
+		//   produce an iterator around a Vec.
+		// - Cache sub-iterators in the main iterator to
+		//   allow continued step-by-step iteration.
+		// 
+		// Put A/B in order of ascending
+		// ExactSizeIterator::len to reduce redundancy.
+		
+		PredCombinator {
+			inner: vec.into_iter(),
+			state: self.state.0[index..].iter_mut(),
+		}
+	}
+}
+
+/// Produces all case combinations in need of a new prediction, alongside a
+/// [`PredStateCase`] for scheduling.
+pub struct PredCombinator<'s, P: PredHash, C> {
+	inner: std::vec::IntoIter<C>,
+	state: std::slice::IterMut<'s, PredStateCase<P>>,
+}
+
+impl<'s, P: PredHash, C> Iterator for PredCombinator<'s, P, C> {
+	type Item = (&'s mut PredStateCase<P>, C);
+	fn next(&mut self) -> Option<Self::Item> {
+		if let (Some(state), Some(case)) = (self.state.next(), self.inner.next()) {
+			Some((state, case))
+		} else {
+			None
+		}
+	}
+}
