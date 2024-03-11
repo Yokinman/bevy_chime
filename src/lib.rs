@@ -16,6 +16,7 @@ use bevy::ecs::system::{In, IntoSystem, Query, Res, ResMut, Resource, ReadOnlySy
 use bevy::ecs::world::{Mut, Ref, World};
 
 use std::time::{Duration, Instant};
+use bevy::ecs::query::QueryIter;
 use bevy::time::Time;
 use chime::time::TimeRanges;
 
@@ -303,7 +304,7 @@ impl PredHasher {
 	}
 }
 
-/// A case of prediction, hashable into a unique identifier.
+/// A hashable unique identifier for a case of prediction.
 pub trait PredHash: Copy + Clone {
 	fn pred_hash(self, state: &mut PredHasher);
 }
@@ -378,12 +379,12 @@ impl<A: PredHash, B: PredHash, C: PredHash, D: PredHash> PredHash for (A, B, C, 
 /// Collects predictions from "when" systems for later compilation.
 pub struct PredState<P = ()>(Vec<PredStateCase<P>>);
 
-impl PredState<Entity> {
-	pub fn test<'world, 'state, 'a, 's, A: Component, B: Resource>(
-		&'s mut self,
-		a_iter: Query<'world, 'state, (Ref<'a, A>, Entity), ()>,
-		b_iter: Res<'world, B>,
-	) -> PredCombinatorBuilder<'world, 'state, 'a, 's, A, B> {
+impl<A, B> PredState<(A, B)> {
+	pub fn test<'p, X: PredGroup<'p, Id=A>, Y: PredGroup<'p, Id=B>>(
+		&'p mut self,
+		a_iter: X,
+		b_iter: Y,
+	) -> PredCombinatorBuilder<'p, X, Y> {
 		PredCombinatorBuilder {
 			a_iter,
 			b_iter,
@@ -668,39 +669,92 @@ struct ChimeSchedule;
 #[derive(Default)]
 pub struct Chime;
 
-/// Builder for a [`PredCombinator`].
-pub struct PredCombinatorBuilder<'world, 'state, 'a, 's, A: Component, B: Resource> {
-	a_iter: Query<'world, 'state, (Ref<'a, A>, Entity), ()>,
-	b_iter: Res<'world, B>,
-	state: &'s mut PredState<Entity>,
+/// Bevy query [`PredGroup`].
+#[allow(type_alias_bounds)]
+pub type ChimeQuery<'w, 's, 't, T: Component> = Query<'w, 's, (Ref<'t, T>, Entity), ()>;
+
+/// A case of prediction.
+pub trait PredItem<'w> {
+	type Inner: 'w;
+	fn into_inner(self) -> &'w Self::Inner;
 }
 
-impl<'world, 'state, 'a, 's, A: Component, B: Resource> IntoIterator for PredCombinatorBuilder<'world, 'state, 'a, 's, A, B> {
-	type Item = <PredCombinator<'s, Entity, (&'world A, &'world B)> as Iterator>::Item;
-	type IntoIter = PredCombinator<'s, Entity, (&'world A, &'world B)>;
+impl<'w, T> PredItem<'w> for Ref<'w, T> {
+	type Inner = T;
+	fn into_inner(self) -> &'w Self::Inner {
+		Ref::into_inner(self)
+	}
+}
+
+impl<'w, R: Resource> PredItem<'w> for Res<'w, R> {
+	type Inner = R;
+	fn into_inner(self) -> &'w Self::Inner {
+		Res::into_inner(self)
+	}
+}
+
+/// A set of unique [`PredItem`] values used to predict & schedule events.
+pub trait PredGroup<'w> {
+	type Id: PredHash;
+	type Item: PredItem<'w> + DetectChanges;
+	type Iterator: Iterator<Item = (Self::Item, Self::Id)>;
+	fn gimme_iter(&self) -> Self::Iterator;
+}
+
+impl<'w, 's, 't, T: Component> PredGroup<'w> for ChimeQuery<'w, 's, 't, T> {
+	type Id = Entity;
+	type Item = Ref<'w, T>;
+	type Iterator = QueryIter<'w, 's, (Ref<'t, T>, Self::Id), ()>;
+	fn gimme_iter(&self) -> Self::Iterator {
+		self.iter_inner()
+	}
+}
+
+impl<'w, R: Resource> PredGroup<'w> for Res<'w, R> {
+	type Id = ();
+	type Item = Res<'w, R>;
+	type Iterator = std::iter::Once<(Self::Item, Self::Id)>;
+	fn gimme_iter(&self) -> Self::Iterator {
+		std::iter::once((Res::clone(self), ()))
+	}
+}
+
+/// Builder for a [`PredCombinator`].
+pub struct PredCombinatorBuilder<'p, A: PredGroup<'p>, B: PredGroup<'p>> {
+	a_iter: A,
+	b_iter: B,
+	state: &'p mut PredState<(A::Id, B::Id)>,
+}
+
+impl<'p, A: PredGroup<'p>, B: PredGroup<'p>> IntoIterator for PredCombinatorBuilder<'p, A, B> {
+	type Item = <Self::IntoIter as Iterator>::Item;
+	type IntoIter = PredCombinator<'p, (A::Id, B::Id), (
+		&'p <A::Item as PredItem<'p>>::Inner,
+		&'p <B::Item as PredItem<'p>>::Inner
+	)>;
 	fn into_iter(self) -> Self::IntoIter {
 		let mut vec = Vec::new();
 		
 		let index = self.state.0.len();
 		// self.state.0.reserve()
 		
-		for (a, a_id) in self.a_iter.iter_inner() {
+		for (a, a_id) in self.a_iter.gimme_iter() {
 			if a.is_changed() {
-				let b_ref = Res::clone(&self.b_iter).into_inner();
 				let a_ref = a.into_inner();
-				for (b, _b_id) in std::iter::once((b_ref, ())) {
-					vec.push((a_ref, b));
-					self.state.0.push(PredStateCase(Box::new(TimeRanges::empty()), a_id));
+				for (b, b_id) in self.b_iter.gimme_iter() {
+					vec.push((a_ref, b.into_inner()));
+					self.state.0.push(PredStateCase(Box::new(TimeRanges::empty()), (a_id, b_id)));
 				}
 			}
 		}
 		
-		if self.b_iter.is_changed() {
-			for (b, _b_id) in std::iter::once((self.b_iter.into_inner(), ())) {
-				for (a, a_id) in self.a_iter.iter_inner() {
+		for (b, b_id) in self.b_iter.gimme_iter() {
+			if b.is_changed() {
+				let b_ref = b.into_inner();
+				for (a, a_id) in self.a_iter.gimme_iter() {
 					if !a.is_changed() {
-						vec.push((a.into_inner(), b));
-						self.state.0.push(PredStateCase(Box::new(TimeRanges::empty()), a_id));
+						vec.push((a.into_inner(), b_ref));
+						self.state.0.push(PredStateCase(Box::new(TimeRanges::empty()), (a_id, b_id)));
 					}
 				}
 			}
@@ -733,13 +787,13 @@ impl<'world, 'state, 'a, 's, A: Component, B: Resource> IntoIterator for PredCom
 
 /// Produces all case combinations in need of a new prediction, alongside a
 /// [`PredStateCase`] for scheduling.
-pub struct PredCombinator<'s, P: PredHash, C> {
+pub struct PredCombinator<'p, P, C> {
 	inner: std::vec::IntoIter<C>,
-	state: std::slice::IterMut<'s, PredStateCase<P>>,
+	state: std::slice::IterMut<'p, PredStateCase<P>>,
 }
 
-impl<'s, P: PredHash, C> Iterator for PredCombinator<'s, P, C> {
-	type Item = (&'s mut PredStateCase<P>, C);
+impl<'p, P: PredHash, C> Iterator for PredCombinator<'p, P, C> {
+	type Item = (&'p mut PredStateCase<P>, C);
 	fn next(&mut self) -> Option<Self::Item> {
 		if let (Some(state), Some(case)) = (self.state.next(), self.inner.next()) {
 			Some((state, case))
