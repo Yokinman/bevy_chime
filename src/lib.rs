@@ -379,21 +379,17 @@ impl<A: PredHash, B: PredHash, C: PredHash, D: PredHash> PredHash for (A, B, C, 
 /// Collects predictions from "when" systems for later compilation.
 pub struct PredState<P = ()>(Vec<PredStateCase<P>>);
 
-impl<A, B> PredState<(A, B)> {
-	pub fn test<'p, X: PredGroup<'p, Id=A>, Y: PredGroup<'p, Id=B>>(
-		&'p mut self,
-		a_iter: X,
-		b_iter: Y,
-	) -> PredCombinatorBuilder<'p, X, Y> {
+impl<P: PredHash> PredState<P> {
+	pub fn test<'p, T>(&'p mut self, iter: T) -> PredCombinatorBuilder<'p, T>
+	where
+		T: PredGroup<'p, Id=P>
+	{
 		PredCombinatorBuilder {
-			a_iter,
-			b_iter,
+			iter: iter,
 			state: self,
 		}
 	}
-}
-
-impl<P: PredHash> PredState<P> {
+	
 	pub fn set<I>(&mut self, case: P, times: TimeRanges<I>)
 	where
 		TimeRanges<I>: Iterator<Item = (Duration, Duration)> + Send + Sync + 'static
@@ -675,108 +671,162 @@ pub type ChimeQuery<'w, 's, 't, T: Component> = Query<'w, 's, (Ref<'t, T>, Entit
 
 /// A case of prediction.
 pub trait PredItem<'w> {
+	type Ref<'i>: Copy/* + std::ops::Deref<Target=Self::Inner>*/;
 	type Inner: 'w;
-	fn into_inner(self) -> &'w Self::Inner;
+	fn gimme_ref(self) -> Self::Ref<'w>;
+	fn is_updated(&self) -> bool;
 }
 
-impl<'w, T> PredItem<'w> for Ref<'w, T> {
+impl<'w, T: 'static> PredItem<'w> for Ref<'w, T> {
+	type Ref<'i> = &'i Self::Inner;
 	type Inner = T;
-	fn into_inner(self) -> &'w Self::Inner {
+	fn gimme_ref(self) -> Self::Ref<'w> {
 		Ref::into_inner(self)
+	}
+	fn is_updated(&self) -> bool {
+		DetectChanges::is_changed(self)
 	}
 }
 
 impl<'w, R: Resource> PredItem<'w> for Res<'w, R> {
+	type Ref<'i> = &'i Self::Inner;
 	type Inner = R;
-	fn into_inner(self) -> &'w Self::Inner {
+	fn gimme_ref(self) -> Self::Ref<'w> {
 		Res::into_inner(self)
+	}
+	fn is_updated(&self) -> bool {
+		DetectChanges::is_changed(self)
+	}
+}
+
+impl<'w, A, B> PredItem<'w> for (A, B)
+where
+	A: PredItem<'w>,
+	B: PredItem<'w>,
+{
+	type Ref<'i> = (A::Ref<'i>, B::Ref<'i>);
+	type Inner = (A::Inner, B::Inner);
+	fn gimme_ref(self) -> Self::Ref<'w> {
+		(self.0.gimme_ref(), self.1.gimme_ref())
+	}
+	fn is_updated(&self) -> bool {
+		self.0.is_updated() || self.1.is_updated()
 	}
 }
 
 /// A set of unique [`PredItem`] values used to predict & schedule events.
 pub trait PredGroup<'w> {
 	type Id: PredHash;
-	type Item: PredItem<'w> + DetectChanges;
-	type Iterator: Iterator<Item = (Self::Item, Self::Id)>;
+	type Item: PredItem<'w>;
+	type Iterator: Iterator<Item = (<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id, bool)>;
 	fn gimme_iter(&self) -> Self::Iterator;
+	fn updated_iter(&self) -> impl Iterator<Item = (<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id)>;
 }
 
 impl<'w, 's, 't, T: Component> PredGroup<'w> for ChimeQuery<'w, 's, 't, T> {
 	type Id = Entity;
 	type Item = Ref<'w, T>;
-	type Iterator = QueryIter<'w, 's, (Ref<'t, T>, Self::Id), ()>;
+	type Iterator = std::vec::IntoIter<(<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id, bool)>;
 	fn gimme_iter(&self) -> Self::Iterator {
-		self.iter_inner()
+		let mut vec = Vec::new();
+		for (item, id) in self.iter_inner() {
+			let is_updated = item.is_updated();
+			vec.push((item.gimme_ref(), id, is_updated));
+		}
+		vec.into_iter()
+	}
+	fn updated_iter(&self) -> impl Iterator<Item = (<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id)> {
+		let mut vec = Vec::new();
+		for (item, id) in self.iter_inner() {
+			if item.is_updated() {
+				vec.push((item.gimme_ref(), id));
+			}
+		}
+		vec.into_iter()
 	}
 }
 
 impl<'w, R: Resource> PredGroup<'w> for Res<'w, R> {
 	type Id = ();
 	type Item = Res<'w, R>;
-	type Iterator = std::iter::Once<(Self::Item, Self::Id)>;
+	type Iterator = std::iter::Once<(<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id, bool)>;
 	fn gimme_iter(&self) -> Self::Iterator {
-		std::iter::once((Res::clone(self), ()))
+		let is_updated = self.is_updated();
+		std::iter::once((Res::clone(self).gimme_ref(), (), is_updated))
+	}
+	fn updated_iter(&self) -> impl Iterator<Item = (<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id)> {
+		if self.is_updated() {
+			Some((Res::clone(self).gimme_ref(), ()))
+		} else {
+			None
+		}.into_iter()
+	}
+}
+
+impl<'w, A: PredGroup<'w>, B: PredGroup<'w>> PredGroup<'w> for (A, B) {
+	type Id = (A::Id, B::Id);
+	type Item = (A::Item, B::Item);
+	type Iterator = std::vec::IntoIter<(<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id, bool)>;
+	fn gimme_iter(&self) -> Self::Iterator {
+		let mut vec = Vec::new();
+		for (a, a_id, a_is_updated) in self.0.gimme_iter() {
+			for (b, b_id, b_is_updated) in self.1.gimme_iter() {
+				vec.push((
+					(a, b),
+					(a_id, b_id),
+					a_is_updated || b_is_updated,
+				));
+			}
+		}
+		vec.into_iter()
+	}
+	fn updated_iter(&self) -> impl Iterator<Item = (<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id)> {
+		let mut vec = Vec::new();
+		let mut a_vec = Vec::new();
+		
+		// vec.reserve()
+		// a_vec.reserve()
+		
+		// !!! Put A/B in order of ascending size to reduce redundancy.
+		
+		for (a, a_id, a_is_updated) in self.0.gimme_iter() {
+			if a_is_updated {
+				for (b, b_id, _) in self.1.gimme_iter() {
+					vec.push(((a, b), (a_id, b_id)));
+				}
+			} else {
+				a_vec.push((a, a_id));
+			}
+		}
+		
+		for (b, b_id) in self.1.updated_iter() {
+			for (a, a_id) in &a_vec {
+				vec.push(((*a, b), (*a_id, b_id)));
+			}
+		}
+		
+		vec.into_iter()
 	}
 }
 
 /// Builder for a [`PredCombinator`].
-pub struct PredCombinatorBuilder<'p, A: PredGroup<'p>, B: PredGroup<'p>> {
-	a_iter: A,
-	b_iter: B,
-	state: &'p mut PredState<(A::Id, B::Id)>,
+pub struct PredCombinatorBuilder<'p, T: PredGroup<'p>> {
+	iter: T,
+	state: &'p mut PredState<T::Id>,
 }
 
-impl<'p, A: PredGroup<'p>, B: PredGroup<'p>> IntoIterator for PredCombinatorBuilder<'p, A, B> {
+impl<'p, T: PredGroup<'p>> IntoIterator for PredCombinatorBuilder<'p, T> {
 	type Item = <Self::IntoIter as Iterator>::Item;
-	type IntoIter = PredCombinator<'p, (A::Id, B::Id), (
-		&'p <A::Item as PredItem<'p>>::Inner,
-		&'p <B::Item as PredItem<'p>>::Inner
-	)>;
+	type IntoIter = PredCombinator<'p, T::Id, <T::Item as PredItem<'p>>::Ref<'p>>;
 	fn into_iter(self) -> Self::IntoIter {
 		let mut vec = Vec::new();
 		
 		let index = self.state.0.len();
-		// self.state.0.reserve()
 		
-		for (a, a_id) in self.a_iter.gimme_iter() {
-			if a.is_changed() {
-				let a_ref = a.into_inner();
-				for (b, b_id) in self.b_iter.gimme_iter() {
-					vec.push((a_ref, b.into_inner()));
-					self.state.0.push(PredStateCase(Box::new(TimeRanges::empty()), (a_id, b_id)));
-				}
-			}
+		for (item, id) in self.iter.updated_iter() {
+			vec.push(item);
+			self.state.0.push(PredStateCase(Box::new(TimeRanges::empty()), id));
 		}
-		
-		for (b, b_id) in self.b_iter.gimme_iter() {
-			if b.is_changed() {
-				let b_ref = b.into_inner();
-				for (a, a_id) in self.a_iter.gimme_iter() {
-					if !a.is_changed() {
-						vec.push((a.into_inner(), b_ref));
-						self.state.0.push(PredStateCase(Box::new(TimeRanges::empty()), (a_id, b_id)));
-					}
-				}
-			}
-		}
-		
-		// Options for combinator logic.
-		// - For each A, for each B, if A or B changed.
-		// - For each changed A, for each B.
-		//   For each changed B, for each unchanged A.
-		// - For each A:
-		//   - If changed, for each B.
-		//   - If unchanged, collect into a list.
-		//   For each changed B, for each A in list.
-		// 
-		// Options for iteration structure.
-		// - Iterate over all cases initially, and then
-		//   produce an iterator around a Vec.
-		// - Cache sub-iterators in the main iterator to
-		//   allow continued step-by-step iteration.
-		// 
-		// Put A/B in order of ascending
-		// ExactSizeIterator::len to reduce redundancy.
 		
 		PredCombinator {
 			inner: vec.into_iter(),
