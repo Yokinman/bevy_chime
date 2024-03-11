@@ -24,8 +24,8 @@ features = [
     "debug_glam_assert",
 ]
 
-#[profile.dev.package."*"]
-#opt-level = 3 # Faster dependencies, slower clean build
+[profile.dev.package."*"]
+opt-level = 3 # Faster dependencies, slower clean build
 
 [lib]
 name = "bevy_chime"
