@@ -719,14 +719,16 @@ pub trait PredGroup<'w> {
 	type Id: PredHash;
 	type Item: PredItem<'w>;
 	type Iterator: Iterator<Item = (<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id, bool)>;
+	type UpdatedIterator: Iterator<Item = (<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id)>;
 	fn gimme_iter(&self) -> Self::Iterator;
-	fn updated_iter(&self) -> impl Iterator<Item = (<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id)>;
+	fn updated_iter(self) -> Self::UpdatedIterator;
 }
 
 impl<'w, 's, 't, T: Component> PredGroup<'w> for ChimeQuery<'w, 's, 't, T> {
 	type Id = Entity;
 	type Item = Ref<'w, T>;
 	type Iterator = std::vec::IntoIter<(<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id, bool)>;
+	type UpdatedIterator = std::vec::IntoIter<(<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id)>;
 	fn gimme_iter(&self) -> Self::Iterator {
 		let mut vec = Vec::new();
 		for (item, id) in self.iter_inner() {
@@ -735,7 +737,7 @@ impl<'w, 's, 't, T: Component> PredGroup<'w> for ChimeQuery<'w, 's, 't, T> {
 		}
 		vec.into_iter()
 	}
-	fn updated_iter(&self) -> impl Iterator<Item = (<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id)> {
+	fn updated_iter(self) -> Self::UpdatedIterator {
 		let mut vec = Vec::new();
 		for (item, id) in self.iter_inner() {
 			if item.is_updated() {
@@ -750,13 +752,14 @@ impl<'w, R: Resource> PredGroup<'w> for Res<'w, R> {
 	type Id = ();
 	type Item = Res<'w, R>;
 	type Iterator = std::iter::Once<(<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id, bool)>;
+	type UpdatedIterator = std::option::IntoIter<(<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id)>;
 	fn gimme_iter(&self) -> Self::Iterator {
 		let is_updated = self.is_updated();
 		std::iter::once((Res::clone(self).gimme_ref(), (), is_updated))
 	}
-	fn updated_iter(&self) -> impl Iterator<Item = (<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id)> {
+	fn updated_iter(self) -> Self::UpdatedIterator {
 		if self.is_updated() {
-			Some((Res::clone(self).gimme_ref(), ()))
+			Some((self.gimme_ref(), ()))
 		} else {
 			None
 		}.into_iter()
@@ -767,6 +770,7 @@ impl<'w, A: PredGroup<'w>, B: PredGroup<'w>> PredGroup<'w> for (A, B) {
 	type Id = (A::Id, B::Id);
 	type Item = (A::Item, B::Item);
 	type Iterator = std::vec::IntoIter<(<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id, bool)>;
+	type UpdatedIterator = PredGroupIter<'w, A, B>;
 	fn gimme_iter(&self) -> Self::Iterator {
 		let mut vec = Vec::new();
 		for (a, a_id, a_is_updated) in self.0.gimme_iter() {
@@ -780,32 +784,141 @@ impl<'w, A: PredGroup<'w>, B: PredGroup<'w>> PredGroup<'w> for (A, B) {
 		}
 		vec.into_iter()
 	}
-	fn updated_iter(&self) -> impl Iterator<Item = (<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id)> {
-		let mut vec = Vec::new();
-		let mut a_vec = Vec::new();
-		
-		// vec.reserve()
-		// a_vec.reserve()
-		
-		// !!! Put A/B in order of ascending size to reduce redundancy.
-		
-		for (a, a_id, a_is_updated) in self.0.gimme_iter() {
+	fn updated_iter(self) -> Self::UpdatedIterator {
+		PredGroupIter::New(self)
+	}
+}
+
+/// Iterator for 2-tuple [`PredGroup`] types.
+pub enum PredGroupIter<'w, A, B>
+where
+	A: PredGroup<'w>,
+	B: PredGroup<'w>,
+{
+	Empty,
+	New((A, B)),
+	Primary {
+		a_iter: A::Iterator,
+		a_curr: <A::UpdatedIterator as Iterator>::Item,
+		a_vec: Vec<<A::UpdatedIterator as Iterator>::Item>,
+		b_iter: B::Iterator,
+		b_group: B,
+	},
+	Secondary {
+		b_iter: B::UpdatedIterator,
+		b_curr: <B::UpdatedIterator as Iterator>::Item,
+		a_slice: Box<[<A::UpdatedIterator as Iterator>::Item]>,
+		a_index: usize,
+	},
+}
+
+impl<'w, A, B> PredGroupIter<'w, A, B>
+where
+	A: PredGroup<'w>,
+	B: PredGroup<'w>,
+{
+	fn primary_next(
+		&mut self,
+		mut a_iter: A::Iterator,
+		mut a_vec: Vec<<A::UpdatedIterator as Iterator>::Item>,
+		b_group: B,
+	) -> Option<<Self as Iterator>::Item>
+	{
+		while let Some((a, a_id, a_is_updated)) = a_iter.next() {
 			if a_is_updated {
-				for (b, b_id, _) in self.1.gimme_iter() {
-					vec.push(((a, b), (a_id, b_id)));
+				*self = Self::Primary {
+					a_iter,
+					a_curr: (a, a_id),
+					a_vec,
+					b_iter: b_group.gimme_iter(),
+					b_group,
+				};
+				return self.next()
+			}
+			a_vec.push((a, a_id));
+		}
+		
+		 // Switch to Secondary Iteration:
+		let mut b_iter = b_group.updated_iter();
+		if let Some(b_curr) = b_iter.next() {
+			*self = Self::Secondary {
+				b_iter,
+				b_curr,
+				a_slice: a_vec.into_boxed_slice(),
+				a_index: 0,
+			};
+		}
+		
+		self.next()
+	}
+	
+	fn secondary_next(
+		&mut self,
+		mut b_iter: B::UpdatedIterator,
+		a_slice: Box<[<A::UpdatedIterator as Iterator>::Item]>,
+	) -> Option<<Self as Iterator>::Item>
+	{
+		if let Some(b_curr) = b_iter.next() {
+			*self = Self::Secondary {
+				b_iter,
+				b_curr,
+				a_slice,
+				a_index: 0,
+			};
+		}
+		self.next()
+	}
+}
+
+impl<'w, A, B> Iterator for PredGroupIter<'w, A, B>
+where
+	A: PredGroup<'w>,
+	B: PredGroup<'w>,
+{
+	type Item = (
+		<<(A, B) as PredGroup<'w>>::Item as PredItem<'w>>::Ref<'w>,
+		(A::Id, B::Id)
+	);
+	fn next(&mut self) -> Option<Self::Item> {
+		// !!! Put A/B in order of ascending size to reduce redundancy.
+		match std::mem::replace(self, Self::Empty) {
+			Self::Empty => None,
+			
+			Self::New((a_group, b_group)) => {
+				let a_iter = a_group.gimme_iter();
+				let a_vec = Vec::new(); // !!! Reserve with length of a_iter
+				self.primary_next(a_iter, a_vec, b_group)
+			},
+			
+			 // (Updated A, All B): 
+			Self::Primary { a_iter, a_curr: (a, a_id), a_vec, mut b_iter, b_group } => {
+				if let Some((b, b_id, _)) = b_iter.next() {
+					*self = Self::Primary {
+						a_iter,
+						a_curr: (a, a_id),
+						a_vec,
+						b_iter,
+						b_group,
+					};
+					return Some(((a, b), (a_id, b_id)))
 				}
-			} else {
-				a_vec.push((a, a_id));
-			}
+				self.primary_next(a_iter, a_vec, b_group)
+			},
+			
+			 // (Updated B, Non-updated A):
+			Self::Secondary { b_iter, b_curr: (b, b_id), a_slice, a_index } => {
+				if let Some((a, a_id)) = a_slice.get(a_index).copied() {
+					*self = Self::Secondary {
+						b_iter,
+						b_curr: (b, b_id),
+						a_slice,
+						a_index: a_index + 1,
+					};
+					return Some(((a, b), (a_id, b_id)))
+				}
+				self.secondary_next(b_iter, a_slice)
+			},
 		}
-		
-		for (b, b_id) in self.1.updated_iter() {
-			for (a, a_id) in &a_vec {
-				vec.push(((*a, b), (*a_id, b_id)));
-			}
-		}
-		
-		vec.into_iter()
 	}
 }
 
