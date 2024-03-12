@@ -385,7 +385,7 @@ impl<P: PredHash> PredState<P> {
 		T: PredGroup<'p, Id=P>
 	{
 		PredCombinatorBuilder {
-			iter: iter,
+			iter,
 			state: self,
 		}
 	}
