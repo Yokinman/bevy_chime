@@ -718,7 +718,7 @@ where
 pub trait PredGroup<'w> {
 	type Id: PredHash;
 	type Item: PredItem<'w>;
-	type Iterator: Iterator<Item = (<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id, bool)>;
+	type Iterator: Iterator<Item = ((<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id), bool)>;
 	type UpdatedIterator: Iterator<Item = (<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id)>;
 	fn gimme_iter(&self) -> Self::Iterator;
 	fn updated_iter(self) -> Self::UpdatedIterator;
@@ -727,13 +727,13 @@ pub trait PredGroup<'w> {
 impl<'w, 's, 't, T: Component> PredGroup<'w> for ChimeQuery<'w, 's, 't, T> {
 	type Id = Entity;
 	type Item = Ref<'w, T>;
-	type Iterator = std::vec::IntoIter<(<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id, bool)>;
+	type Iterator = std::vec::IntoIter<((<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id), bool)>;
 	type UpdatedIterator = std::vec::IntoIter<(<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id)>;
 	fn gimme_iter(&self) -> Self::Iterator {
 		let mut vec = Vec::new();
 		for (item, id) in self.iter_inner() {
 			let is_updated = item.is_updated();
-			vec.push((item.gimme_ref(), id, is_updated));
+			vec.push(((item.gimme_ref(), id), is_updated));
 		}
 		vec.into_iter()
 	}
@@ -751,11 +751,13 @@ impl<'w, 's, 't, T: Component> PredGroup<'w> for ChimeQuery<'w, 's, 't, T> {
 impl<'w, R: Resource> PredGroup<'w> for Res<'w, R> {
 	type Id = ();
 	type Item = Res<'w, R>;
-	type Iterator = std::iter::Once<(<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id, bool)>;
+	type Iterator = std::iter::Once<((<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id), bool)>;
 	type UpdatedIterator = std::option::IntoIter<(<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id)>;
 	fn gimme_iter(&self) -> Self::Iterator {
-		let is_updated = self.is_updated();
-		std::iter::once((Res::clone(self).gimme_ref(), (), is_updated))
+		std::iter::once((
+			(Res::clone(self).gimme_ref(), ()),
+			self.is_updated()
+		))
 	}
 	fn updated_iter(self) -> Self::UpdatedIterator {
 		if self.is_updated() {
@@ -769,15 +771,14 @@ impl<'w, R: Resource> PredGroup<'w> for Res<'w, R> {
 impl<'w, A: PredGroup<'w>, B: PredGroup<'w>> PredGroup<'w> for (A, B) {
 	type Id = (A::Id, B::Id);
 	type Item = (A::Item, B::Item);
-	type Iterator = std::vec::IntoIter<(<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id, bool)>;
+	type Iterator = std::vec::IntoIter<((<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id), bool)>;
 	type UpdatedIterator = PredGroupIter<'w, A, B>;
 	fn gimme_iter(&self) -> Self::Iterator {
 		let mut vec = Vec::new();
-		for (a, a_id, a_is_updated) in self.0.gimme_iter() {
-			for (b, b_id, b_is_updated) in self.1.gimme_iter() {
+		for ((a, a_id), a_is_updated) in self.0.gimme_iter() {
+			for ((b, b_id), b_is_updated) in self.1.gimme_iter() {
 				vec.push((
-					(a, b),
-					(a_id, b_id),
+					((a, b), (a_id, b_id)),
 					a_is_updated || b_is_updated,
 				));
 			}
@@ -824,18 +825,18 @@ where
 		b_group: B,
 	) -> Option<<Self as Iterator>::Item>
 	{
-		while let Some((a, a_id, a_is_updated)) = a_iter.next() {
+		while let Some((a_curr, a_is_updated)) = a_iter.next() {
 			if a_is_updated {
 				*self = Self::Primary {
 					a_iter,
-					a_curr: (a, a_id),
+					a_curr,
 					a_vec,
 					b_iter: b_group.gimme_iter(),
 					b_group,
 				};
 				return self.next()
 			}
-			a_vec.push((a, a_id));
+			a_vec.push(a_curr);
 		}
 		
 		 // Switch to Secondary Iteration:
@@ -892,7 +893,7 @@ where
 			
 			 // (Updated A, All B): 
 			Self::Primary { a_iter, a_curr: (a, a_id), a_vec, mut b_iter, b_group } => {
-				if let Some((b, b_id, _)) = b_iter.next() {
+				if let Some(((b, b_id), _)) = b_iter.next() {
 					*self = Self::Primary {
 						a_iter,
 						a_curr: (a, a_id),
