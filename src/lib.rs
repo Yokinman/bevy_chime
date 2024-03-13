@@ -6,6 +6,8 @@
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, btree_map, BTreeMap, HashMap};
 use std::hash::Hash;
+use std::marker::PhantomData;
+use std::mem::MaybeUninit;
 
 use bevy::app::{App, Plugin, Update};
 use bevy::ecs::change_detection::DetectChanges;
@@ -16,7 +18,6 @@ use bevy::ecs::system::{In, IntoSystem, Query, Res, ResMut, Resource, ReadOnlySy
 use bevy::ecs::world::{Mut, Ref, World};
 
 use std::time::{Duration, Instant};
-use bevy::ecs::query::QueryIter;
 use bevy::time::Time;
 use chime::time::TimeRanges;
 
@@ -51,7 +52,10 @@ impl AddChimeEvent for App {
 		let id = self.world.resource_mut::<ChimeEventMap>().setup_id();
 		
 		let input = || -> PredState<P> {
-			PredState(Vec::new())
+			PredState {
+				vec: Vec::new(),
+				len: 0,
+			}
 		};
 		
 		let compile = move |In(state): In<PredState<P>>, mut pred: ResMut<ChimeEventMap>, time: Res<Time>| {
@@ -377,7 +381,38 @@ impl<A: PredHash, B: PredHash, C: PredHash, D: PredHash> PredHash for (A, B, C, 
 }
 
 /// Collects predictions from "when" systems for later compilation.
-pub struct PredState<P = ()>(Vec<PredStateCase<P>>);
+pub struct PredState<P = ()> {
+	vec: Vec<PredStateCase<P>>,
+	len: usize,
+}
+
+impl<P> PredState<P> {
+	fn vec_mut(&mut self) -> &mut Vec<PredStateCase<P>> {
+		if self.len > self.vec.len() {
+			unsafe {
+				// SAFETY: `len` is only incremented when the capacity is
+				// initialized manually.
+				self.vec.set_len(self.len);
+			}
+		} else {
+			debug_assert_eq!(self.len, self.vec.len());
+		}
+		&mut self.vec
+	}
+	
+	fn into_vec(mut self) -> Vec<PredStateCase<P>> {
+		if self.len > self.vec.len() {
+			unsafe {
+				// SAFETY: `len` is only incremented when the capacity is
+				// initialized manually.
+				self.vec.set_len(self.len);
+			}
+		} else {
+			debug_assert_eq!(self.len, self.vec.len());
+		}
+		self.vec
+	}
+}
 
 impl<P: PredHash> PredState<P> {
 	pub fn test<'p, T>(&'p mut self, iter: T) -> PredCombinatorBuilder<'p, T>
@@ -394,7 +429,16 @@ impl<P: PredHash> PredState<P> {
 	where
 		TimeRanges<I>: Iterator<Item = (Duration, Duration)> + Send + Sync + 'static
 	{
-		self.0.push(PredStateCase(Box::new(times), case));
+		self.vec_mut().push(PredStateCase(Box::new(times), case));
+		self.len = self.vec.len();
+	}
+}
+
+impl<P> IntoIterator for PredState<P> {
+	type Item = PredStateCase<P>;
+	type IntoIter = <Vec<PredStateCase<P>> as IntoIterator>::IntoIter;
+	fn into_iter(self) -> Self::IntoIter {
+		self.into_vec().into_iter()
 	}
 }
 
@@ -505,7 +549,7 @@ impl ChimeEventMap {
 		let events = self.table.get_mut(event_id)
 			.expect("id must be initialized with PredMap::setup_id");
 		
-		for PredStateCase(new_times, pred_case) in input.0 {
+		for PredStateCase(new_times, pred_case) in input {
 			// let a_time = Instant::now();
 			let mut pred_state = PredHasher::default();
 			pred_case.pred_hash(&mut pred_state);
@@ -719,7 +763,7 @@ pub trait PredGroup<'w> {
 	type Id: PredHash;
 	type Item: PredItem<'w>;
 	type Iterator: Iterator<Item = ((<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id), bool)>;
-	type UpdatedIterator: Iterator<Item = (<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id)>;
+	type UpdatedIterator: Iterator<Item = (<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id)> + ExactSizeIterator;
 	fn gimme_iter(&self) -> Self::Iterator;
 	fn updated_iter(self) -> Self::UpdatedIterator;
 }
@@ -921,7 +965,16 @@ where
 			},
 		}
 	}
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		(100, Some(100))
+	}
 }
+
+impl<'w, A, B> ExactSizeIterator for PredGroupIter<'w, A, B>
+where
+	A: PredGroup<'w>,
+	B: PredGroup<'w>,
+{}
 
 /// Builder for a [`PredCombinator`].
 pub struct PredCombinatorBuilder<'p, T: PredGroup<'p>> {
@@ -931,36 +984,41 @@ pub struct PredCombinatorBuilder<'p, T: PredGroup<'p>> {
 
 impl<'p, T: PredGroup<'p>> IntoIterator for PredCombinatorBuilder<'p, T> {
 	type Item = <Self::IntoIter as Iterator>::Item;
-	type IntoIter = PredCombinator<'p, T::Id, <T::Item as PredItem<'p>>::Ref<'p>>;
+	type IntoIter = PredCombinator<'p, T>;
 	fn into_iter(self) -> Self::IntoIter {
-		let mut vec = Vec::new();
-		
-		let index = self.state.0.len();
-		
-		for (item, id) in self.iter.updated_iter() {
-			vec.push(item);
-			self.state.0.push(PredStateCase(Box::new(TimeRanges::empty()), id));
-		}
-		
+		let inner = self.iter.updated_iter();
+		self.state.vec_mut().reserve(inner.len());
 		PredCombinator {
-			inner: vec.into_iter(),
-			state: self.state.0[index..].iter_mut(),
+			inner,
+			state: self.state.vec.spare_capacity_mut().into_iter(),
+			len: &mut self.state.len,
+			phantom: PhantomData,
 		}
 	}
 }
 
 /// Produces all case combinations in need of a new prediction, alongside a
 /// [`PredStateCase`] for scheduling.
-pub struct PredCombinator<'p, P, C> {
-	inner: std::vec::IntoIter<C>,
-	state: std::slice::IterMut<'p, PredStateCase<P>>,
+pub struct PredCombinator<'p, T: PredGroup<'p>> {
+	inner: T::UpdatedIterator,
+	state: std::slice::IterMut<'p, MaybeUninit<PredStateCase<T::Id>>>,
+	len: &'p mut usize,
+	phantom: PhantomData<T>,
 }
 
-impl<'p, P: PredHash, C> Iterator for PredCombinator<'p, P, C> {
-	type Item = (&'p mut PredStateCase<P>, C);
+impl<'p, T: PredGroup<'p>> Iterator for PredCombinator<'p, T> {
+	type Item = (&'p mut PredStateCase<T::Id>, <T::Item as PredItem<'p>>::Ref<'p>);
 	fn next(&mut self) -> Option<Self::Item> {
-		if let (Some(state), Some(case)) = (self.state.next(), self.inner.next()) {
-			Some((state, case))
+		if let (Some(case), Some((value, id))) = (self.state.next(), self.inner.next()) {
+			case.write(PredStateCase(Box::new(TimeRanges::empty()), id));
+			*self.len += 1;
+			Some((
+				unsafe {
+					// SAFETY: this memory was initialized directly above.
+					&mut *case.as_mut_ptr()
+				},
+				value
+			))
 		} else {
 			None
 		}
