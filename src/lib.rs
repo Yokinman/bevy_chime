@@ -387,7 +387,7 @@ pub struct PredState<P = ()> {
 }
 
 impl<P> PredState<P> {
-	fn vec_mut(&mut self) -> &mut Vec<PredStateCase<P>> {
+	fn update_len(&mut self) {
 		if self.len > self.vec.len() {
 			unsafe {
 				// SAFETY: `len` is only incremented when the capacity is
@@ -397,19 +397,15 @@ impl<P> PredState<P> {
 		} else {
 			debug_assert_eq!(self.len, self.vec.len());
 		}
+	}
+	
+	fn vec_mut(&mut self) -> &mut Vec<PredStateCase<P>> {
+		self.update_len();
 		&mut self.vec
 	}
 	
 	fn into_vec(mut self) -> Vec<PredStateCase<P>> {
-		if self.len > self.vec.len() {
-			unsafe {
-				// SAFETY: `len` is only incremented when the capacity is
-				// initialized manually.
-				self.vec.set_len(self.len);
-			}
-		} else {
-			debug_assert_eq!(self.len, self.vec.len());
-		}
+		self.update_len();
 		self.vec
 	}
 }
@@ -763,7 +759,7 @@ pub trait PredGroup<'w> {
 	type Id: PredHash;
 	type Item: PredItem<'w>;
 	type Iterator: Iterator<Item = ((<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id), bool)>;
-	type UpdatedIterator: Iterator<Item = (<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id)> + ExactSizeIterator;
+	type UpdatedIterator: Iterator<Item = (<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id)>;
 	fn gimme_iter(&self) -> Self::Iterator;
 	fn updated_iter(self) -> Self::UpdatedIterator;
 }
@@ -830,7 +826,7 @@ impl<'w, A: PredGroup<'w>, B: PredGroup<'w>> PredGroup<'w> for (A, B) {
 		vec.into_iter()
 	}
 	fn updated_iter(self) -> Self::UpdatedIterator {
-		PredGroupIter::New(self)
+		PredGroupIter::new(self.0, self.1)
 	}
 }
 
@@ -841,12 +837,12 @@ where
 	B: PredGroup<'w>,
 {
 	Empty,
-	New((A, B)),
 	Primary {
 		a_iter: A::Iterator,
 		a_curr: <A::UpdatedIterator as Iterator>::Item,
 		a_vec: Vec<<A::UpdatedIterator as Iterator>::Item>,
-		b_iter: B::Iterator,
+		b_slice: Box<[<B::UpdatedIterator as Iterator>::Item]>,
+		b_index: usize,
 		b_group: B,
 	},
 	Secondary {
@@ -862,23 +858,33 @@ where
 	A: PredGroup<'w>,
 	B: PredGroup<'w>,
 {
+	fn new(a_group: A, b_group: B) -> Self {
+		let a_iter = a_group.gimme_iter();
+		let a_vec = Vec::with_capacity(a_iter.size_hint().1
+			.expect("should always have an upper bound"));
+		Self::primary_next(a_iter, a_vec, None, b_group)
+	}
+	
 	fn primary_next(
-		&mut self,
 		mut a_iter: A::Iterator,
 		mut a_vec: Vec<<A::UpdatedIterator as Iterator>::Item>,
+		b_slice: Option<Box<[<B::UpdatedIterator as Iterator>::Item]>>,
 		b_group: B,
-	) -> Option<<Self as Iterator>::Item>
-	{
+	) -> Self {
 		while let Some((a_curr, a_is_updated)) = a_iter.next() {
 			if a_is_updated {
-				*self = Self::Primary {
+				let b_slice = b_slice
+					.unwrap_or_else(|| b_group.gimme_iter()
+						.map(|(x, _)| x)
+						.collect());
+				return Self::Primary {
 					a_iter,
 					a_curr,
 					a_vec,
-					b_iter: b_group.gimme_iter(),
+					b_slice,
+					b_index: 0,
 					b_group,
-				};
-				return self.next()
+				}
 			}
 			a_vec.push(a_curr);
 		}
@@ -886,32 +892,30 @@ where
 		 // Switch to Secondary Iteration:
 		let mut b_iter = b_group.updated_iter();
 		if let Some(b_curr) = b_iter.next() {
-			*self = Self::Secondary {
+			return Self::Secondary {
 				b_iter,
 				b_curr,
 				a_slice: a_vec.into_boxed_slice(),
 				a_index: 0,
-			};
+			}
 		}
 		
-		self.next()
+		Self::Empty
 	}
 	
 	fn secondary_next(
-		&mut self,
 		mut b_iter: B::UpdatedIterator,
 		a_slice: Box<[<A::UpdatedIterator as Iterator>::Item]>,
-	) -> Option<<Self as Iterator>::Item>
-	{
+	) -> Self {
 		if let Some(b_curr) = b_iter.next() {
-			*self = Self::Secondary {
+			return Self::Secondary {
 				b_iter,
 				b_curr,
 				a_slice,
 				a_index: 0,
-			};
+			}
 		}
-		self.next()
+		Self::Empty
 	}
 }
 
@@ -929,52 +933,69 @@ where
 		match std::mem::replace(self, Self::Empty) {
 			Self::Empty => None,
 			
-			Self::New((a_group, b_group)) => {
-				let a_iter = a_group.gimme_iter();
-				let a_vec = Vec::new(); // !!! Reserve with length of a_iter
-				self.primary_next(a_iter, a_vec, b_group)
-			},
-			
 			 // (Updated A, All B): 
-			Self::Primary { a_iter, a_curr: (a, a_id), a_vec, mut b_iter, b_group } => {
-				if let Some(((b, b_id), _)) = b_iter.next() {
+			Self::Primary {
+				a_iter,
+				a_curr: a_curr @ (a, a_id),
+				a_vec,
+				b_slice,
+				b_index,
+				b_group,
+			} => {
+				if let Some((b, b_id)) = b_slice.get(b_index).copied() {
 					*self = Self::Primary {
 						a_iter,
-						a_curr: (a, a_id),
+						a_curr,
 						a_vec,
-						b_iter,
+						b_slice,
+						b_index: b_index + 1,
 						b_group,
 					};
 					return Some(((a, b), (a_id, b_id)))
 				}
-				self.primary_next(a_iter, a_vec, b_group)
+				*self = Self::primary_next(a_iter, a_vec, Some(b_slice), b_group);
+				self.next()
 			},
 			
 			 // (Updated B, Non-updated A):
-			Self::Secondary { b_iter, b_curr: (b, b_id), a_slice, a_index } => {
+			Self::Secondary {
+				b_iter,
+				b_curr: b_curr @ (b, b_id),
+				a_slice,
+				a_index,
+			} => {
 				if let Some((a, a_id)) = a_slice.get(a_index).copied() {
 					*self = Self::Secondary {
 						b_iter,
-						b_curr: (b, b_id),
+						b_curr,
 						a_slice,
 						a_index: a_index + 1,
 					};
 					return Some(((a, b), (a_id, b_id)))
 				}
-				self.secondary_next(b_iter, a_slice)
+				*self = Self::secondary_next(b_iter, a_slice);
+				self.next()
 			},
 		}
 	}
 	fn size_hint(&self) -> (usize, Option<usize>) {
-		(100, Some(100))
+		match self {
+			Self::Empty => (0, Some(0)),
+			Self::Primary { a_iter, a_vec, b_slice, b_index, .. } => {
+				let a_max = a_iter.size_hint().1
+					.expect("should always have an upper bound");
+				let min = b_slice.len() - b_index;
+				(min, Some(min + ((a_max + a_vec.len()) * b_slice.len())))
+			},
+			Self::Secondary { b_iter, a_slice, a_index, .. } => {
+				let b_max = b_iter.size_hint().1
+					.expect("should always have an upper bound");
+				let min = a_slice.len() - a_index;
+				(min, Some(min + (b_max * a_slice.len())))
+			},
+		}
 	}
 }
-
-impl<'w, A, B> ExactSizeIterator for PredGroupIter<'w, A, B>
-where
-	A: PredGroup<'w>,
-	B: PredGroup<'w>,
-{}
 
 /// Builder for a [`PredCombinator`].
 pub struct PredCombinatorBuilder<'p, T: PredGroup<'p>> {
@@ -987,7 +1008,9 @@ impl<'p, T: PredGroup<'p>> IntoIterator for PredCombinatorBuilder<'p, T> {
 	type IntoIter = PredCombinator<'p, T>;
 	fn into_iter(self) -> Self::IntoIter {
 		let inner = self.iter.updated_iter();
-		self.state.vec_mut().reserve(inner.len());
+		let len = inner.size_hint().1
+			.expect("should always have an upper bound");
+		self.state.vec_mut().reserve(len);
 		PredCombinator {
 			inner,
 			state: self.state.vec.spare_capacity_mut().into_iter(),
@@ -1022,5 +1045,10 @@ impl<'p, T: PredGroup<'p>> Iterator for PredCombinator<'p, T> {
 		} else {
 			None
 		}
+	}
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		let len = self.state.len();
+		let (lower, upper) = self.inner.size_hint();
+		(lower.min(len), Some(upper.unwrap_or(len).min(len)))
 	}
 }
