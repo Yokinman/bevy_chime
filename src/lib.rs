@@ -412,12 +412,12 @@ impl<P> PredState<P> {
 }
 
 impl<P: PredHash> PredState<P> {
-	pub fn test<'p, T>(&'p mut self, iter: T) -> PredCombinatorBuilder<'p, T>
+	pub fn test<'p, T>(&'p mut self, group: T) -> PredCombinatorBuilder<'p, T>
 	where
 		T: PredGroup<'p, Id=P>
 	{
 		PredCombinatorBuilder {
-			iter,
+			group,
 			state: self,
 		}
 	}
@@ -1005,7 +1005,7 @@ where
 
 /// Builder for a [`PredCombinator`].
 pub struct PredCombinatorBuilder<'p, T: PredGroup<'p>> {
-	iter: T,
+	group: T,
 	state: &'p mut PredState<T::Id>,
 }
 
@@ -1013,7 +1013,7 @@ impl<'p, T: PredGroup<'p>> IntoIterator for PredCombinatorBuilder<'p, T> {
 	type Item = <Self::IntoIter as Iterator>::Item;
 	type IntoIter = PredCombinator<'p, T>;
 	fn into_iter(self) -> Self::IntoIter {
-		let inner = self.iter.updated_iter();
+		let inner = self.group.updated_iter();
 		let len = inner.size_hint().1
 			.expect("should always have an upper bound");
 		self.state.vec_mut().reserve(len);
