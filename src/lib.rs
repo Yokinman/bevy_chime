@@ -18,6 +18,7 @@ use bevy::ecs::system::{In, IntoSystem, Query, Res, ResMut, Resource, ReadOnlySy
 use bevy::ecs::world::{Mut, Ref, World};
 
 use std::time::{Duration, Instant};
+use bevy::ecs::query::QueryIter;
 use bevy::time::Time;
 use chime::time::TimeRanges;
 
@@ -767,24 +768,28 @@ pub trait PredGroup<'w> {
 impl<'w, 's, 't, T: Component> PredGroup<'w> for ChimeQuery<'w, 's, 't, T> {
 	type Id = Entity;
 	type Item = Ref<'w, T>;
-	type Iterator = std::vec::IntoIter<((<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id), bool)>;
-	type UpdatedIterator = std::vec::IntoIter<(<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id)>;
+	type Iterator = std::iter::Map<
+		QueryIter<'w, 's, (Ref<'t, T>, Entity), ()>,
+		fn((Ref<'w, T>, Entity)) -> ((&'w T, Entity), bool)
+	>;
+	type UpdatedIterator = std::iter::FilterMap<
+		QueryIter<'w, 's, (Ref<'t, T>, Entity), ()>,
+		fn((Ref<'w, T>, Entity)) -> Option<(&'w T, Entity)>
+	>;
 	fn gimme_iter(&self) -> Self::Iterator {
-		let mut vec = Vec::new();
-		for (item, id) in self.iter_inner() {
+		self.iter_inner().map(|(item, id)| {
 			let is_updated = item.is_updated();
-			vec.push(((item.gimme_ref(), id), is_updated));
-		}
-		vec.into_iter()
+			((item.gimme_ref(), id), is_updated)
+		})
 	}
 	fn updated_iter(self) -> Self::UpdatedIterator {
-		let mut vec = Vec::new();
-		for (item, id) in self.iter_inner() {
+		self.iter_inner().filter_map(|(item, id)| {
 			if item.is_updated() {
-				vec.push((item.gimme_ref(), id));
+				Some((item.gimme_ref(), id))
+			} else {
+				None
 			}
-		}
-		vec.into_iter()
+		})
 	}
 }
 
@@ -814,6 +819,7 @@ impl<'w, A: PredGroup<'w>, B: PredGroup<'w>> PredGroup<'w> for (A, B) {
 	type Iterator = std::vec::IntoIter<((<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id), bool)>;
 	type UpdatedIterator = PredGroupIter<'w, A, B>;
 	fn gimme_iter(&self) -> Self::Iterator {
+		// !!! Change this later.
 		let mut vec = Vec::new();
 		for ((a, a_id), a_is_updated) in self.0.gimme_iter() {
 			for ((b, b_id), b_is_updated) in self.1.gimme_iter() {
