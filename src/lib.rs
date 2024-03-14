@@ -761,7 +761,7 @@ pub trait PredGroup<'w> {
 	type Item: PredItem<'w>;
 	type Iterator: Iterator<Item = ((<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id), bool)>;
 	type UpdatedIterator: Iterator<Item = (<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id)>;
-	fn gimme_iter(&self) -> Self::Iterator;
+	fn gimme_iter(&mut self) -> Self::Iterator;
 	fn updated_iter(self) -> Self::UpdatedIterator;
 }
 
@@ -776,7 +776,7 @@ impl<'w, 's, 't, T: Component> PredGroup<'w> for ChimeQuery<'w, 's, 't, T> {
 		QueryIter<'w, 's, (Ref<'t, T>, Entity), ()>,
 		fn((Ref<'w, T>, Entity)) -> Option<(&'w T, Entity)>
 	>;
-	fn gimme_iter(&self) -> Self::Iterator {
+	fn gimme_iter(&mut self) -> Self::Iterator {
 		self.iter_inner().map(|(item, id)| {
 			let is_updated = item.is_updated();
 			((item.gimme_ref(), id), is_updated)
@@ -798,7 +798,7 @@ impl<'w, R: Resource> PredGroup<'w> for Res<'w, R> {
 	type Item = Res<'w, R>;
 	type Iterator = std::iter::Once<((<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id), bool)>;
 	type UpdatedIterator = std::option::IntoIter<(<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id)>;
-	fn gimme_iter(&self) -> Self::Iterator {
+	fn gimme_iter(&mut self) -> Self::Iterator {
 		std::iter::once((
 			(Res::clone(self).gimme_ref(), ()),
 			self.is_updated()
@@ -818,7 +818,7 @@ impl<'w, A: PredGroup<'w>, B: PredGroup<'w>> PredGroup<'w> for (A, B) {
 	type Item = (A::Item, B::Item);
 	type Iterator = std::vec::IntoIter<((<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id), bool)>;
 	type UpdatedIterator = PredGroupIter<'w, A, B>;
-	fn gimme_iter(&self) -> Self::Iterator {
+	fn gimme_iter(&mut self) -> Self::Iterator {
 		// !!! Change this later.
 		let mut vec = Vec::new();
 		for ((a, a_id), a_is_updated) in self.0.gimme_iter() {
@@ -864,7 +864,7 @@ where
 	A: PredGroup<'w>,
 	B: PredGroup<'w>,
 {
-	fn new(a_group: A, b_group: B) -> Self {
+	fn new(mut a_group: A, b_group: B) -> Self {
 		let a_iter = a_group.gimme_iter();
 		let a_vec = Vec::with_capacity(a_iter.size_hint().1
 			.expect("should always have an upper bound"));
@@ -875,7 +875,7 @@ where
 		mut a_iter: A::Iterator,
 		mut a_vec: Vec<<A::UpdatedIterator as Iterator>::Item>,
 		b_slice: Option<Box<[<B::UpdatedIterator as Iterator>::Item]>>,
-		b_group: B,
+		mut b_group: B,
 	) -> Self {
 		while let Some((a_curr, a_is_updated)) = a_iter.next() {
 			if a_is_updated {
