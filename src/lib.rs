@@ -52,6 +52,18 @@ impl AddChimeEvent for App {
 		
 		let id = self.world.resource_mut::<ChimeEventMap>().setup_id();
 		
+		/*
+			- Have the input system take `&mut World`.
+			- PredState will now be generic and take a PredGroup parameter.
+			- Move the scheduling system and a SystemState of those prediction
+			  parameters into the input system.
+			- Get the prediction parameters from the World and store them in a
+			  PredState. ? It may be wise to cache this PredState so it doesn't
+			  need to reallocate its Vec.
+			- Call the scheduling system using `ReadOnlySystem::run_readonly`,
+			  passing the PredState as input, which it will then output.
+		*/
+		
 		let input = || -> PredState<P> {
 			PredState {
 				vec: Vec::new(),
