@@ -793,7 +793,7 @@ impl<'w, 's, 't, T: Component> PredGroup<'w> for ChimeQuery<'w, 's, 't, T> {
 	}
 }
 
-impl<'w, R: Resource> PredGroup<'w> for &Res<'w, R> {
+impl<'w, R: Resource> PredGroup<'w> for Res<'w, R> {
 	type Id = ();
 	type Item = Res<'w, R>;
 	type Iterator = std::iter::Once<((<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id), bool)>;
@@ -806,7 +806,7 @@ impl<'w, R: Resource> PredGroup<'w> for &Res<'w, R> {
 	}
 	fn updated_iter(self) -> Self::UpdatedIterator {
 		if self.is_updated() {
-			Some((Res::clone(self).gimme_ref(), ()))
+			Some((self.gimme_ref(), ()))
 		} else {
 			None
 		}.into_iter()
