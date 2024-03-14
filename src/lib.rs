@@ -765,7 +765,7 @@ pub trait PredGroup<'w> {
 	fn updated_iter(self) -> Self::UpdatedIterator;
 }
 
-impl<'w, 's, 't, T: Component> PredGroup<'w> for ChimeQuery<'w, 's, 't, T> {
+impl<'w, 's, 't, T: Component> PredGroup<'w> for &ChimeQuery<'w, 's, 't, T> {
 	type Id = Entity;
 	type Item = Ref<'w, T>;
 	type Iterator = std::iter::Map<
