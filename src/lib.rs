@@ -6,7 +6,6 @@
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, btree_map, BTreeMap, HashMap};
 use std::hash::Hash;
-use std::marker::PhantomData;
 use std::mem::MaybeUninit;
 
 use bevy::app::{App, Plugin, Update};
@@ -14,7 +13,7 @@ use bevy::ecs::change_detection::DetectChanges;
 use bevy::ecs::component::Component;
 use bevy::ecs::entity::Entity;
 use bevy::ecs::schedule::{Schedule, Schedules, ScheduleLabel};
-use bevy::ecs::system::{In, IntoSystem, Query, Res, ResMut, Resource, ReadOnlySystem, System};
+use bevy::ecs::system::{IntoSystem, Query, Res, ResMut, Resource, System, ReadOnlySystemParam, SystemParamItem, StaticSystemParam};
 use bevy::ecs::world::{Mut, Ref, World};
 
 use std::time::{Duration, Instant};
@@ -26,17 +25,11 @@ use bevy::input::{ButtonInput, keyboard::KeyCode};
 
 /// Builder entry point for adding chime events to a [`World`].
 pub trait AddChimeEvent {
-	fn add_chime_events<P, S>(&mut self, events: ChimeEventBuilder<P, S>) -> &mut Self
-	where
-		P: PredHash + Send + Sync + 'static,
-		S: ReadOnlySystem<In=PredState<P>, Out=PredState<P>>;
+	fn add_chime_events<P: PredParam>(&mut self, events: ChimeEventBuilder<P>) -> &mut Self;
 }
 
 impl AddChimeEvent for App {
-	fn add_chime_events<P, S>(&mut self, events: ChimeEventBuilder<P, S>) -> &mut Self
-	where
-		P: PredHash + Send + Sync + 'static,
-		S: ReadOnlySystem<In=PredState<P>, Out=PredState<P>>,
+	fn add_chime_events<P: PredParam>(&mut self, events: ChimeEventBuilder<P>) -> &mut Self
 	{
 		assert!(self.is_plugin_added::<ChimePlugin>());
 		
@@ -52,27 +45,21 @@ impl AddChimeEvent for App {
 		
 		let id = self.world.resource_mut::<ChimeEventMap>().setup_id();
 		
-		/*
-			- Have the input system take `&mut World`.
-			- PredState will now be generic and take a PredGroup parameter.
-			- Move the scheduling system and a SystemState of those prediction
-			  parameters into the input system.
-			- Get the prediction parameters from the World and store them in a
-			  PredState. ? It may be wise to cache this PredState so it doesn't
-			  need to reallocate its Vec.
-			- Call the scheduling system using `ReadOnlySystem::run_readonly`,
-			  passing the PredState as input, which it will then output.
-		*/
-		
-		let input = || -> PredState<P> {
-			PredState {
+		let system = move |
+			state: StaticSystemParam<P::Param>,
+			time: Res<Time>,
+			mut event_map: ResMut<ChimeEventMap>,
+		| {
+			// !!! Cache PredState::vec so it doesn't need to reallocate much.
+			let mut state = PredState {
 				vec: Vec::new(),
 				len: 0,
-			}
-		};
-		
-		let compile = move |In(state): In<PredState<P>>, mut pred: ResMut<ChimeEventMap>, time: Res<Time>| {
-			pred.sched(
+				state: state.into_inner(),
+			};
+			
+			state = pred_sys(state);
+			
+			event_map.sched(
 				state,
 				time.elapsed(),
 				id,
@@ -81,8 +68,6 @@ impl AddChimeEvent for App {
 				outlier_sys.as_ref().map(|x| x.as_ref()),
 			);
 		};
-		
-		let system = input.pipe(pred_sys).pipe(compile);
 		
 		self.world.resource_mut::<Schedules>()
 			.get_mut(ChimeSchedule).unwrap()
@@ -110,23 +95,19 @@ where
 }
 
 /// Builder for inserting a chime event into a [`World`].  
-pub struct ChimeEventBuilder<P, S> {
+pub struct ChimeEventBuilder<P: PredParam> {
 	case: std::marker::PhantomData<P>,
-	pred_sys: S,
-	begin_sys: Option<Box<dyn ChimeEventSystem<In=P, Out=()>>>,
-	end_sys: Option<Box<dyn ChimeEventSystem<In=P, Out=()>>>,
-	outlier_sys: Option<Box<dyn ChimeEventSystem<In=P, Out=()>>>,
+	pred_sys: for<'w, 's> fn(PredState<'w, 's, P>) -> PredState<'w, 's, P>,
+	begin_sys: Option<Box<dyn ChimeEventSystem<In=P::Id, Out=()>>>,
+	end_sys: Option<Box<dyn ChimeEventSystem<In=P::Id, Out=()>>>,
+	outlier_sys: Option<Box<dyn ChimeEventSystem<In=P::Id, Out=()>>>,
 }
 
-impl<P, S> ChimeEventBuilder<P, S>
-where
-	P: PredHash + Send + Sync + 'static,
-	S: ReadOnlySystem<In=PredState<P>, Out=PredState<P>>,
-{
-	pub fn new<M>(pred_sys: impl IntoSystem<S::In, S::Out, M, System=S>) -> Self {
+impl<P: PredParam> ChimeEventBuilder<P> {
+	pub fn new(pred_sys: for<'w, 's> fn(PredState<'w, 's, P>) -> PredState<'w, 's, P>) -> Self {
 		Self {
 			case: std::marker::PhantomData,
-			pred_sys: IntoSystem::into_system(pred_sys),
+			pred_sys,
 			begin_sys: None,
 			end_sys: None,
 			outlier_sys: None,
@@ -136,7 +117,7 @@ where
 	/// The system that runs when the event's prediction becomes active.
 	pub fn on_begin<T, M>(mut self, sys: T) -> Self
 	where
-		T: IntoSystem<P, (), M>,
+		T: IntoSystem<P::Id, (), M>,
 		T::System: Send + Sync + Clone,
 	{
 		assert!(self.begin_sys.is_none(), "can't have >1 begin systems");
@@ -147,7 +128,7 @@ where
 	/// The system that runs when the event's prediction becomes inactive.
 	pub fn on_end<T, M>(mut self, sys: T) -> Self
 	where
-		T: IntoSystem<P, (), M>,
+		T: IntoSystem<P::Id, (), M>,
 		T::System: Send + Sync + Clone,
 	{
 		assert!(self.end_sys.is_none(), "can't have >1 end systems");
@@ -158,7 +139,7 @@ where
 	/// The system that runs when the event's prediction repeats excessively.
 	pub fn on_repeat<T, M>(mut self, sys: T) -> Self
 	where
-		T: IntoSystem<P, (), M>,
+		T: IntoSystem<P::Id, (), M>,
 		T::System: Send + Sync + Clone,
 	{
 		assert!(self.outlier_sys.is_none(), "can't have >1 outlier systems");
@@ -394,12 +375,13 @@ impl<A: PredHash, B: PredHash, C: PredHash, D: PredHash> PredHash for (A, B, C, 
 }
 
 /// Collects predictions from "when" systems for later compilation.
-pub struct PredState<P = ()> {
-	vec: Vec<PredStateCase<P>>,
+pub struct PredState<'w, 's, P: PredParam> {
+	vec: Vec<PredStateCase<P::Id>>,
 	len: usize,
+	state: SystemParamItem<'w, 's, P::Param>,
 }
 
-impl<P> PredState<P> {
+impl<'w, 's, P: PredParam> PredState<'w, 's, P> {
 	fn update_len(&mut self) {
 		if self.len > self.vec.len() {
 			unsafe {
@@ -412,42 +394,28 @@ impl<P> PredState<P> {
 		}
 	}
 	
-	fn vec_mut(&mut self) -> &mut Vec<PredStateCase<P>> {
+	fn vec_mut(&mut self) -> &mut Vec<PredStateCase<P::Id>> {
 		self.update_len();
 		&mut self.vec
 	}
 	
-	fn into_vec(mut self) -> Vec<PredStateCase<P>> {
+	fn into_vec(mut self) -> Vec<PredStateCase<P::Id>> {
 		self.update_len();
 		self.vec
 	}
 }
 
-impl<P: PredHash> PredState<P> {
-	pub fn test<'p, T>(&'p mut self, group: T) -> PredCombinatorBuilder<'p, T>
-	where
-		T: PredGroup<'p, Id=P>
-	{
-		PredCombinatorBuilder {
-			group,
-			state: self,
+impl<'w, 's, P: PredParam> PredState<'w, 's, P> {
+	pub fn iter_mut<'p>(&'p mut self) -> PredCombinator<'w, 's, 'p, P> {
+		let inner = P::updated_iter(&self.state);
+		let len = inner.size_hint().1
+			.expect("should always have an upper bound");
+		self.vec_mut().reserve(len);
+		PredCombinator {
+			inner,
+			state: self.vec.spare_capacity_mut().iter_mut(),
+			len: &mut self.len,
 		}
-	}
-	
-	pub fn set<I>(&mut self, case: P, times: TimeRanges<I>)
-	where
-		TimeRanges<I>: Iterator<Item = (Duration, Duration)> + Send + Sync + 'static
-	{
-		self.vec_mut().push(PredStateCase(Box::new(times), case));
-		self.len = self.vec.len();
-	}
-}
-
-impl<P> IntoIterator for PredState<P> {
-	type Item = PredStateCase<P>;
-	type IntoIter = <Vec<PredStateCase<P>> as IntoIterator>::IntoIter;
-	fn into_iter(self) -> Self::IntoIter {
-		self.into_vec().into_iter()
 	}
 }
 
@@ -544,21 +512,21 @@ impl ChimeEventMap {
 		self.table.len() - 1
 	}
 	
-	fn sched<Case: PredHash + Send + Sync + 'static>(
+	fn sched<P: PredParam>(
 		&mut self,
-		input: PredState<Case>,
+		input: PredState<P>,
 		pred_time: Duration,
 		event_id: usize,
-		begin_sys: Option<&dyn ChimeEventSystem<In=Case, Out=()>>,
-		end_sys: Option<&dyn ChimeEventSystem<In=Case, Out=()>>,
-		outlier_sys: Option<&dyn ChimeEventSystem<In=Case, Out=()>>,
+		begin_sys: Option<&dyn ChimeEventSystem<In=P::Id, Out=()>>,
+		end_sys: Option<&dyn ChimeEventSystem<In=P::Id, Out=()>>,
+		outlier_sys: Option<&dyn ChimeEventSystem<In=P::Id, Out=()>>,
 	) {
 		// let n = input.0.len();
 		// let a_time = Instant::now();
 		let events = self.table.get_mut(event_id)
 			.expect("id must be initialized with PredMap::setup_id");
 		
-		for PredStateCase(new_times, pred_case) in input {
+		for PredStateCase(new_times, pred_case) in input.into_vec().into_iter() {
 			// let a_time = Instant::now();
 			let mut pred_state = PredHasher::default();
 			pred_case.pred_hash(&mut pred_state);
@@ -718,15 +686,15 @@ struct ChimeSchedule;
 #[derive(Default)]
 pub struct Chime;
 
-/// Bevy query [`PredGroup`].
-#[allow(type_alias_bounds)]
-pub type ChimeQuery<'w, 's, 't, T: Component> = Query<'w, 's, (Ref<'t, T>, Entity), ()>;
-
 /// A case of prediction.
 pub trait PredItem<'w> {
 	type Ref<'i>: Copy/* + std::ops::Deref<Target=Self::Inner>*/;
 	type Inner: 'w;
+	
+	/// Needed because `bevy::ecs::world::Ref` can't be cloned/copied.
 	fn gimme_ref(self) -> Self::Ref<'w>;
+	
+	/// Whether this item is in need of a prediction update.
 	fn is_updated(&self) -> bool;
 }
 
@@ -767,35 +735,58 @@ where
 	}
 }
 
-/// A set of unique [`PredItem`] values used to predict & schedule events.
-pub trait PredGroup<'w> {
-	type Id: PredHash;
-	type Item: PredItem<'w>;
-	type Iterator: Iterator<Item = ((<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id), bool)>;
-	type UpdatedIterator: Iterator<Item = (<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id)>;
-	fn gimme_iter(&mut self) -> Self::Iterator;
-	fn updated_iter(self) -> Self::UpdatedIterator;
+/// A set of [`PredItem`] values used to predict & schedule events.
+pub trait PredParam: 'static {
+	/// The equivalent [`bevy::ecs::system::SystemParam`].
+	type Param: ReadOnlySystemParam;
+	
+	/// The item that `Param` iterates over.
+	type Item<'w>: PredItem<'w>;
+	
+	/// Unique identifier of each `Item`.
+	type Id: PredHash + Send + Sync + 'static;
+	
+	/// Iterator over `Param`'s items alongside their `is_updated` state.
+	type Iterator<'w, 's>:
+		Iterator<Item = ((<Self::Item<'w> as PredItem<'w>>::Ref<'w>, Self::Id), bool)>;
+	
+	/// Iterator over `Param`'s updated items.
+	type UpdatedIterator<'w, 's>:
+		Iterator<Item = (<Self::Item<'w> as PredItem<'w>>::Ref<'w>, Self::Id)>;
+	
+	/// Produces `Self::Iterator`.
+	fn gimme_iter<'w, 's>(param: &SystemParamItem<'w, 's, Self::Param>)
+		-> Self::Iterator<'w, 's>;
+	
+	/// Produces `Self::UpdatedIterator`.
+	fn updated_iter<'w, 's>(param: &SystemParamItem<'w, 's, Self::Param>)
+		-> Self::UpdatedIterator<'w, 's>;
 }
 
-impl<'w, 's, 't, T: Component> PredGroup<'w> for ChimeQuery<'w, 's, 't, T> {
+impl<T: Component> PredParam for Query<'static, 'static, (Ref<'_, T>, Entity)> {
+	type Param = Self;
+	type Item<'w> = Ref<'w, T>;
 	type Id = Entity;
-	type Item = Ref<'w, T>;
-	type Iterator = std::iter::Map<
-		QueryIter<'w, 's, (Ref<'t, T>, Entity), ()>,
+	type Iterator<'w, 's> = std::iter::Map<
+		QueryIter<'w, 's, (Ref<'static, T>, Entity), ()>,
 		fn((Ref<'w, T>, Entity)) -> ((&'w T, Entity), bool)
 	>;
-	type UpdatedIterator = std::iter::FilterMap<
-		QueryIter<'w, 's, (Ref<'t, T>, Entity), ()>,
+	type UpdatedIterator<'w, 's> = std::iter::FilterMap<
+		QueryIter<'w, 's, (Ref<'static, T>, Entity), ()>,
 		fn((Ref<'w, T>, Entity)) -> Option<(&'w T, Entity)>
 	>;
-	fn gimme_iter(&mut self) -> Self::Iterator {
-		self.iter_inner().map(|(item, id)| {
+	fn gimme_iter<'w, 's>(param: &SystemParamItem<'w, 's, Self::Param>)
+		-> Self::Iterator<'w, 's>
+	{
+		param.iter_inner().map(|(item, id)| {
 			let is_updated = item.is_updated();
 			((item.gimme_ref(), id), is_updated)
 		})
 	}
-	fn updated_iter(self) -> Self::UpdatedIterator {
-		self.iter_inner().filter_map(|(item, id)| {
+	fn updated_iter<'w, 's>(param: &SystemParamItem<'w, 's, Self::Param>)
+		-> Self::UpdatedIterator<'w, 's>
+	{
+		param.iter_inner().filter_map(|(item, id)| {
 			if item.is_updated() {
 				Some((item.gimme_ref(), id))
 			} else {
@@ -805,36 +796,44 @@ impl<'w, 's, 't, T: Component> PredGroup<'w> for ChimeQuery<'w, 's, 't, T> {
 	}
 }
 
-impl<'w, R: Resource> PredGroup<'w> for Res<'w, R> {
+impl<R: Resource> PredParam for Res<'static, R> {
+	type Param = Self;
+	type Item<'w> = Res<'w, R>;
 	type Id = ();
-	type Item = Res<'w, R>;
-	type Iterator = std::iter::Once<((<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id), bool)>;
-	type UpdatedIterator = std::option::IntoIter<(<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id)>;
-	fn gimme_iter(&mut self) -> Self::Iterator {
+	type Iterator<'w, 's> = std::iter::Once<((<Self::Item<'w> as PredItem<'w>>::Ref<'w>, Self::Id), bool)>;
+	type UpdatedIterator<'w, 's> = std::option::IntoIter<(<Self::Item<'w> as PredItem<'w>>::Ref<'w>, Self::Id)>;
+	fn gimme_iter<'w, 's>(param: &SystemParamItem<'w, 's, Self::Param>)
+		-> Self::Iterator<'w, 's>
+	{
 		std::iter::once((
-			(Res::clone(self).gimme_ref(), ()),
-			self.is_updated()
+			(Res::clone(param).gimme_ref(), ()),
+			param.is_updated()
 		))
 	}
-	fn updated_iter(self) -> Self::UpdatedIterator {
-		if self.is_updated() {
-			Some((self.gimme_ref(), ()))
+	fn updated_iter<'w, 's>(param: &SystemParamItem<'w, 's, Self::Param>)
+		-> Self::UpdatedIterator<'w, 's>
+	{
+		if param.is_updated() {
+			Some((Res::clone(param).gimme_ref(), ()))
 		} else {
 			None
 		}.into_iter()
 	}
 }
 
-impl<'w, A: PredGroup<'w>, B: PredGroup<'w>> PredGroup<'w> for (A, B) {
+impl<A: PredParam, B: PredParam> PredParam for (A, B) {
+	type Param = (A::Param, B::Param);
+	type Item<'w> = (A::Item<'w>, B::Item<'w>);
 	type Id = (A::Id, B::Id);
-	type Item = (A::Item, B::Item);
-	type Iterator = std::vec::IntoIter<((<Self::Item as PredItem<'w>>::Ref<'w>, Self::Id), bool)>;
-	type UpdatedIterator = PredGroupIter<'w, A, B>;
-	fn gimme_iter(&mut self) -> Self::Iterator {
+	type Iterator<'w, 's> = std::vec::IntoIter<((<Self::Item<'w> as PredItem<'w>>::Ref<'w>, Self::Id), bool)>;
+	type UpdatedIterator<'w, 's> = PredGroupIter<'w, 's, A, B>;
+	fn gimme_iter<'w, 's>(param: &SystemParamItem<'w, 's, Self::Param>)
+		-> Self::Iterator<'w, 's> 
+	{
 		// !!! Change this later.
 		let mut vec = Vec::new();
-		for ((a, a_id), a_is_updated) in self.0.gimme_iter() {
-			for ((b, b_id), b_is_updated) in self.1.gimme_iter() {
+		for ((a, a_id), a_is_updated) in A::gimme_iter(&param.0) {
+			for ((b, b_id), b_is_updated) in B::gimme_iter(&param.1) {
 				vec.push((
 					((a, b), (a_id, b_id)),
 					a_is_updated || b_is_updated,
@@ -843,72 +842,74 @@ impl<'w, A: PredGroup<'w>, B: PredGroup<'w>> PredGroup<'w> for (A, B) {
 		}
 		vec.into_iter()
 	}
-	fn updated_iter(self) -> Self::UpdatedIterator {
-		PredGroupIter::new(self.0, self.1)
+	fn updated_iter<'w, 's>(param: &SystemParamItem<'w, 's, Self::Param>)
+		-> Self::UpdatedIterator<'w, 's>
+	{
+		PredGroupIter::new(&param.0, &param.1)
 	}
 }
 
 /// Iterator for 2-tuple [`PredGroup`] types.
-pub enum PredGroupIter<'w, A, B>
+pub enum PredGroupIter<'w, 's, A, B>
 where
-	A: PredGroup<'w>,
-	B: PredGroup<'w>,
+	A: PredParam,
+	B: PredParam,
 {
 	Empty,
 	Primary {
-		a_iter: A::Iterator,
-		a_curr: <A::UpdatedIterator as Iterator>::Item,
-		a_vec: Vec<<A::UpdatedIterator as Iterator>::Item>,
-		b_slice: Box<[<B::UpdatedIterator as Iterator>::Item]>,
+		a_iter: A::Iterator<'w, 's>,
+		a_curr: <A::UpdatedIterator<'w, 's> as Iterator>::Item,
+		a_vec: Vec<<A::UpdatedIterator<'w, 's> as Iterator>::Item>,
+		b_slice: Box<[<B::UpdatedIterator<'w, 's> as Iterator>::Item]>,
 		b_index: usize,
-		b_group: B,
+		b_iter: B::UpdatedIterator<'w, 's>,
 	},
 	Secondary {
-		b_iter: B::UpdatedIterator,
-		b_curr: <B::UpdatedIterator as Iterator>::Item,
-		a_slice: Box<[<A::UpdatedIterator as Iterator>::Item]>,
+		b_iter: B::UpdatedIterator<'w, 's>,
+		b_curr: <B::UpdatedIterator<'w, 's> as Iterator>::Item,
+		a_slice: Box<[<A::UpdatedIterator<'w, 's> as Iterator>::Item]>,
 		a_index: usize,
 	},
 }
 
-impl<'w, A, B> PredGroupIter<'w, A, B>
+impl<'w, 's, A, B> PredGroupIter<'w, 's, A, B>
 where
-	A: PredGroup<'w>,
-	B: PredGroup<'w>,
+	A: PredParam,
+	B: PredParam,
 {
-	fn new(mut a_group: A, b_group: B) -> Self {
-		let a_iter = a_group.gimme_iter();
+	fn new(
+		a_param: &SystemParamItem<'w, 's, A::Param>,
+		b_param: &SystemParamItem<'w, 's, B::Param>,
+	) -> Self {
+		let a_iter = A::gimme_iter(a_param);
 		let a_vec = Vec::with_capacity(a_iter.size_hint().1
 			.expect("should always have an upper bound"));
-		Self::primary_next(a_iter, a_vec, None, b_group)
+		let b_slice = B::gimme_iter(b_param).map(|(x, _)| x).collect();
+		let b_iter = B::updated_iter(b_param);
+		Self::primary_next(a_iter, a_vec, b_slice, b_iter)
 	}
 	
 	fn primary_next(
-		mut a_iter: A::Iterator,
-		mut a_vec: Vec<<A::UpdatedIterator as Iterator>::Item>,
-		b_slice: Option<Box<[<B::UpdatedIterator as Iterator>::Item]>>,
-		mut b_group: B,
+		mut a_iter: A::Iterator<'w, 's>,
+		mut a_vec: Vec<<A::UpdatedIterator<'w, 's> as Iterator>::Item>,
+		b_slice: Box<[<B::UpdatedIterator<'w, 's> as Iterator>::Item]>,
+		mut b_iter: B::UpdatedIterator<'w, 's>,
 	) -> Self {
 		while let Some((a_curr, a_is_updated)) = a_iter.next() {
 			if a_is_updated {
-				let b_slice = b_slice
-					.unwrap_or_else(|| b_group.gimme_iter()
-						.map(|(x, _)| x)
-						.collect());
 				return Self::Primary {
 					a_iter,
 					a_curr,
 					a_vec,
 					b_slice,
 					b_index: 0,
-					b_group,
+					b_iter,
 				}
 			}
 			a_vec.push(a_curr);
 		}
 		
 		 // Switch to Secondary Iteration:
-		let mut b_iter = b_group.updated_iter();
 		if let Some(b_curr) = b_iter.next() {
 			return Self::Secondary {
 				b_iter,
@@ -922,8 +923,8 @@ where
 	}
 	
 	fn secondary_next(
-		mut b_iter: B::UpdatedIterator,
-		a_slice: Box<[<A::UpdatedIterator as Iterator>::Item]>,
+		mut b_iter: B::UpdatedIterator<'w, 's>,
+		a_slice: Box<[<A::UpdatedIterator<'w, 's> as Iterator>::Item]>,
 	) -> Self {
 		if let Some(b_curr) = b_iter.next() {
 			return Self::Secondary {
@@ -937,14 +938,14 @@ where
 	}
 }
 
-impl<'w, A, B> Iterator for PredGroupIter<'w, A, B>
+impl<'w, 's, A, B> Iterator for PredGroupIter<'w, 's, A, B>
 where
-	A: PredGroup<'w>,
-	B: PredGroup<'w>,
+	A: PredParam,
+	B: PredParam,
 {
 	type Item = (
-		<<(A, B) as PredGroup<'w>>::Item as PredItem<'w>>::Ref<'w>,
-		(A::Id, B::Id)
+		<<(A, B) as PredParam>::Item<'w> as PredItem<'w>>::Ref<'w>,
+		<(A, B) as PredParam>::Id
 	);
 	fn next(&mut self) -> Option<Self::Item> {
 		// !!! Put A/B in order of ascending size to reduce redundancy.
@@ -958,7 +959,7 @@ where
 				a_vec,
 				b_slice,
 				b_index,
-				b_group,
+				b_iter,
 			} => {
 				if let Some((b, b_id)) = b_slice.get(b_index).copied() {
 					*self = Self::Primary {
@@ -967,11 +968,11 @@ where
 						a_vec,
 						b_slice,
 						b_index: b_index + 1,
-						b_group,
+						b_iter,
 					};
 					return Some(((a, b), (a_id, b_id)))
 				}
-				*self = Self::primary_next(a_iter, a_vec, Some(b_slice), b_group);
+				*self = Self::primary_next(a_iter, a_vec, b_slice, b_iter);
 				self.next()
 			},
 			
@@ -1015,40 +1016,19 @@ where
 	}
 }
 
-/// Builder for a [`PredCombinator`].
-pub struct PredCombinatorBuilder<'p, T: PredGroup<'p>> {
-	group: T,
-	state: &'p mut PredState<T::Id>,
-}
-
-impl<'p, T: PredGroup<'p>> IntoIterator for PredCombinatorBuilder<'p, T> {
-	type Item = <Self::IntoIter as Iterator>::Item;
-	type IntoIter = PredCombinator<'p, T>;
-	fn into_iter(self) -> Self::IntoIter {
-		let inner = self.group.updated_iter();
-		let len = inner.size_hint().1
-			.expect("should always have an upper bound");
-		self.state.vec_mut().reserve(len);
-		PredCombinator {
-			inner,
-			state: self.state.vec.spare_capacity_mut().into_iter(),
-			len: &mut self.state.len,
-			phantom: PhantomData,
-		}
-	}
-}
-
 /// Produces all case combinations in need of a new prediction, alongside a
 /// [`PredStateCase`] for scheduling.
-pub struct PredCombinator<'p, T: PredGroup<'p>> {
-	inner: T::UpdatedIterator,
-	state: std::slice::IterMut<'p, MaybeUninit<PredStateCase<T::Id>>>,
+pub struct PredCombinator<'w, 's, 'p, P: PredParam> {
+	inner: P::UpdatedIterator<'w, 's>,
+	state: std::slice::IterMut<'p, MaybeUninit<PredStateCase<P::Id>>>,
 	len: &'p mut usize,
-	phantom: PhantomData<T>,
 }
 
-impl<'p, T: PredGroup<'p>> Iterator for PredCombinator<'p, T> {
-	type Item = (&'p mut PredStateCase<T::Id>, <T::Item as PredItem<'p>>::Ref<'p>);
+impl<'w, 's, 'p, P: PredParam> Iterator for PredCombinator<'w, 's, 'p, P> {
+	type Item = (
+		&'p mut PredStateCase<P::Id>,
+		<P::Item<'w> as PredItem<'w>>::Ref<'w>
+	);
 	fn next(&mut self) -> Option<Self::Item> {
 		if let (Some(case), Some((value, id))) = (self.state.next(), self.inner.next()) {
 			case.write(PredStateCase(Box::new(TimeRanges::empty()), id));

@@ -199,13 +199,15 @@ fn add_many_dogs(world: &mut World) {
 	}}
 }
 
-fn when_func_a(In(mut pred): In<PredState<Entity>>, query: Query<(&Pos, Entity), Changed<Pos>>) -> PredState<Entity> {
+fn when_func_a<'w, 's>(mut pred: PredState<'w, 's, Query<'static, 'static, (Ref<'static, Pos>, Entity)>>)
+	-> PredState<'w, 's, Query<'static, 'static, (Ref<'static, Pos>, Entity)>>
+{
 	// let a_time = Instant::now();
-	for (pos, entity) in &query {
+	for (case, pos) in pred.iter_mut() {
 		let times =
 			(pos[0].when_eq(&((RIGHT - pos.radius) as f64))/* & pos[0].spd.when(Ordering::Greater, &0.)*/) |
 			(pos[0].when_eq(&((LEFT  + pos.radius) as f64))/* & pos[0].spd.when(Ordering::Less, &0.)*/);
-		pred.set(entity, times.pre());
+		case.set(times.pre());
 	}
 	// println!("  when_func_a: {:?}", Instant::now().duration_since(a_time));
 	pred
@@ -217,14 +219,16 @@ fn do_func_a(In(ent): In<Entity>, time: Res<Time>, mut query: Query<&mut Pos>) {
 	pos_x.spd.val *= -1.;
 }
 
-fn when_func_b(In(mut pred): In<PredState<Entity>>, query: Query<(&Pos, Entity), Changed<Pos>>/*, time: Res<Time>*/) -> PredState<Entity> {
+fn when_func_b<'w, 's>(mut pred: PredState<'w, 's, Query<'static, 'static, (Ref<'static, Pos>, Entity)>>)
+	-> PredState<'w, 's, Query<'static, 'static, (Ref<'static, Pos>, Entity)>>
+{
 	// let a_time = Instant::now();
 	// let time = time.elapsed();
-	for (pos, entity) in &query {
+	for (case, pos) in pred.iter_mut() {
 		let/* mut*/ times =
 			(pos[1].when_eq(&((TOP    - pos.radius) as f64)) /*& pos[1].spd.when(Ordering::Greater, &0.)*/) |
 			(pos[1].when_eq(&((BOTTOM + pos.radius) as f64)) /*& pos[1].spd.when(Ordering::Less, &0.)*/);
-		pred.set(entity, times.pre()/*.clone()*/);
+		case.set(times.pre()/*.clone()*/);
 		// if times.find(|t| *t > time).is_none() && pos[1].at(time).spd.acc.val != 0. {
 		// 	println!("Wow! {time:?}, {:?}, {:?}\n  {:?}, spd: {:?}",
 		// 		(pos[1].poly(time) - chime::Constant::from((BOTTOM + pos.radius) as f64).into()),
@@ -272,21 +276,14 @@ fn outlier_func_b(In(ent): In<Entity>, time: Res<Time>, mut query: Query<&mut Po
 	// 	pos[1].poly(pos[1].base_time())));
 }
 
-fn when_func_c(
-	In(mut pred): In<PredState<[Entity; 2]>>,
-	query: Query<(&Pos, Entity), Changed<Pos>>,
-	b_query: Query<(&Pos, Entity)>,
-	// timm: Res<Time>,
-) -> PredState<[Entity; 2]> {
+fn when_func_c<'w, 's>(
+	mut pred: PredState<'w, 's, (Query<'static, 'static, (Ref<'static, Pos>, Entity)>, Query<'static, 'static, (Ref<'static, Pos>, Entity)>)>
+) -> PredState<'w, 's, (Query<'static, 'static, (Ref<'static, Pos>, Entity)>, Query<'static, 'static, (Ref<'static, Pos>, Entity)>)> {
 	// let mut n = 0;
 	// let a_time = Instant::now();
-	for (pos, entity) in &query {
+	for (case, (pos, b_pos)) in pred.iter_mut() {
 		let time = pos.max_base_time();
 		let pos_poly_vec = pos.poly_vec(time);
-		for (b_pos, b_entity) in &b_query {
-			if entity == b_entity {
-				continue
-			}
 			// !!! This kind of thing could be optimized by organizing entities
 			// into grid zones, and only making predictions with entities in
 			// adjacent zones. Use a prediction case for updating the zones.
@@ -301,7 +298,7 @@ fn when_func_c(
 			// let a_time = Instant::now();
 			let /*mut*/ times = pos_poly_vec.when_dis_eq(b_pos_vec, dis);
 			// println!("B: {:?}", Instant::now().duration_since(a_time));
-			pred.set([entity, b_entity], times.pre()/*.clone()*/);
+			case.set(times.pre()/*.clone()*/);
 			// print!(" -- {:?}", ((entity, b_entity), times.clone().collect::<Vec<_>>()));
 			
 			// println!("    k0 HERE {:?}", (entity, b_entity, timm.elapsed()));
@@ -361,15 +358,14 @@ fn when_func_c(
 			// 		break
 			// 	}
 			// }
-		}
 		// n += 1;
 	}
 	// println!("  when_func_c ({n}): {:?}", Instant::now().duration_since(a_time));
 	pred
 }
 
-fn do_func_c(In(ents): In<[Entity; 2]>, time: Res<Time>, mut query: Query<&mut Pos>) {
-	let [mut poss, mut b_poss] = query.get_many_mut(ents).unwrap();
+fn do_func_c(In(ents): In<(Entity, Entity)>, time: Res<Time>, mut query: Query<&mut Pos>) {
+	let [mut poss, mut b_poss] = query.get_many_mut([ents.0, ents.1]).unwrap();
 	
 	let poly = (poss[0].poly(poss[0].base_time()) - b_poss[0].poly(b_poss[0].base_time())).sqr()
 		+ (poss[1].poly(poss[1].base_time()) - b_poss[1].poly(b_poss[1].base_time())).sqr();
@@ -449,11 +445,11 @@ fn do_func_c(In(ents): In<[Entity; 2]>, time: Res<Time>, mut query: Query<&mut P
 	// assert!(poly.rate_at(time.elapsed()) >= 0., "{:?}", poly);
 }
 
-fn outlier_func_c(In(ents): In<[Entity; 2]>, time: Res<Time>, mut query: Query<&mut Pos>) {
-	if ents[0] == ents[1] {
+fn outlier_func_c(In(ents): In<(Entity, Entity)>, time: Res<Time>, mut query: Query<&mut Pos>) {
+	if ents.0 == ents.1 {
 		return
 	}
-	let [mut poss, mut b_poss] = query.get_many_mut(ents).unwrap();
+	let [mut poss, mut b_poss] = query.get_many_mut([ents.0, ents.1]).unwrap();
 	let mut pos = poss.at_vec_mut(time.elapsed());
 	let mut b_pos = b_poss.at_vec_mut(time.elapsed());
 	pos[0].spd.val = 0.; pos[0].spd.acc.val = 0.;
