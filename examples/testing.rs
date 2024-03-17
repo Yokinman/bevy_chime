@@ -276,12 +276,12 @@ fn outlier_func_b(In(ent): In<Entity>, time: Res<Time>, mut query: Query<&mut Po
 	// 	pos[1].poly(pos[1].base_time())));
 }
 
-fn when_func_c<'w, 's>(
-	mut pred: PredState<'w, 's, (Query<'static, 'static, (Ref<'static, Pos>, Entity)>, Query<'static, 'static, (Ref<'static, Pos>, Entity)>)>
-) -> PredState<'w, 's, (Query<'static, 'static, (Ref<'static, Pos>, Entity)>, Query<'static, 'static, (Ref<'static, Pos>, Entity)>)> {
+fn when_func_c<'w, 's>(mut pred: PredState<'w, 's, [Query<'static, 'static, (Ref<'static, Pos>, Entity)>; 2]>)
+	-> PredState<'w, 's, [Query<'static, 'static, (Ref<'static, Pos>, Entity)>; 2]>
+{
 	// let mut n = 0;
 	// let a_time = Instant::now();
-	for (case, (pos, b_pos)) in pred.iter_mut() {
+	for (case, [pos, b_pos]) in pred.iter_mut() {
 		let time = pos.max_base_time();
 		let pos_poly_vec = pos.poly_vec(time);
 			// !!! This kind of thing could be optimized by organizing entities
@@ -364,8 +364,8 @@ fn when_func_c<'w, 's>(
 	pred
 }
 
-fn do_func_c(In(ents): In<(Entity, Entity)>, time: Res<Time>, mut query: Query<&mut Pos>) {
-	let [mut poss, mut b_poss] = query.get_many_mut([ents.0, ents.1]).unwrap();
+fn do_func_c(In(ents): In<[Entity; 2]>, time: Res<Time>, mut query: Query<&mut Pos>) {
+	let [mut poss, mut b_poss] = query.get_many_mut(ents).unwrap();
 	
 	let poly = (poss[0].poly(poss[0].base_time()) - b_poss[0].poly(b_poss[0].base_time())).sqr()
 		+ (poss[1].poly(poss[1].base_time()) - b_poss[1].poly(b_poss[1].base_time())).sqr();
@@ -445,11 +445,8 @@ fn do_func_c(In(ents): In<(Entity, Entity)>, time: Res<Time>, mut query: Query<&
 	// assert!(poly.rate_at(time.elapsed()) >= 0., "{:?}", poly);
 }
 
-fn outlier_func_c(In(ents): In<(Entity, Entity)>, time: Res<Time>, mut query: Query<&mut Pos>) {
-	if ents.0 == ents.1 {
-		return
-	}
-	let [mut poss, mut b_poss] = query.get_many_mut([ents.0, ents.1]).unwrap();
+fn outlier_func_c(In(ents): In<[Entity; 2]>, time: Res<Time>, mut query: Query<&mut Pos>) {
+	let [mut poss, mut b_poss] = query.get_many_mut(ents).unwrap();
 	let mut pos = poss.at_vec_mut(time.elapsed());
 	let mut b_pos = b_poss.at_vec_mut(time.elapsed());
 	pos[0].spd.val = 0.; pos[0].spd.acc.val = 0.;

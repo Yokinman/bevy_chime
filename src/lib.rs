@@ -319,11 +319,10 @@ impl PredHash for Entity {
 	}
 }
 
-impl<const SIZE: usize> PredHash for [Entity; SIZE] {
-	fn pred_hash(mut self, state: &mut PredHasher) {
-		self.sort_unstable();
-		for ent in self {
-			ent.pred_hash(state);
+impl<T: PredHash, const N: usize> PredHash for [T; N] {
+	fn pred_hash(self, state: &mut PredHasher) {
+		for id in self {
+			id.pred_hash(state);
 		}
 	}
 }
@@ -735,6 +734,20 @@ where
 	}
 }
 
+impl<'w, T> PredItem<'w> for [T; 2]
+where
+	T: PredItem<'w>
+{
+	type Ref<'i> = [T::Ref<'i>; 2];
+	type Inner = [T::Inner; 2];
+	fn gimme_ref(self) -> Self::Ref<'w> {
+		self.map(|x| x.gimme_ref())
+	}
+	fn is_updated(&self) -> bool {
+		self.iter().any(T::is_updated)
+	}
+}
+
 /// A set of [`PredItem`] values used to predict & schedule events.
 pub trait PredParam: 'static {
 	/// The equivalent [`bevy::ecs::system::SystemParam`].
@@ -846,6 +859,51 @@ impl<A: PredParam, B: PredParam> PredParam for (A, B) {
 		-> Self::UpdatedIterator<'w, 's>
 	{
 		PredGroupIter::new(&param.0, &param.1)
+	}
+}
+
+impl<T: PredParam> PredParam for [T; 2]
+where
+	T::Id: Ord
+{
+	type Param = T::Param;
+	type Item<'w> = [T::Item<'w>; 2];
+	type Id = [T::Id; 2];
+	type Iterator<'w, 's> = std::vec::IntoIter<((<Self::Item<'w> as PredItem<'w>>::Ref<'w>, Self::Id), bool)>;
+	type UpdatedIterator<'w, 's> = std::vec::IntoIter<(<Self::Item<'w> as PredItem<'w>>::Ref<'w>, Self::Id)>;
+	fn gimme_iter<'w, 's>(param: &SystemParamItem<'w, 's, Self::Param>)
+		-> Self::Iterator<'w, 's>
+	{
+		// !!! Change this later.
+		let mut vec = Vec::new();
+		for ((a, a_id), a_is_updated) in T::gimme_iter(&param) {
+			for ((b, b_id), b_is_updated) in T::gimme_iter(&param) {
+				match a_id.cmp(&b_id) {
+					std::cmp::Ordering::Greater => vec.push((([a, b], [a_id, b_id]), a_is_updated || b_is_updated)),
+					std::cmp::Ordering::Less    => vec.push((([b, a], [b_id, a_id]), a_is_updated || b_is_updated)),
+					std::cmp::Ordering::Equal   => continue,
+				}
+			}
+		}
+		vec.into_iter()
+	}
+	fn updated_iter<'w, 's>(param: &SystemParamItem<'w, 's, Self::Param>)
+		-> Self::UpdatedIterator<'w, 's>
+	{
+		// !!! Change this later.
+		let mut vec = Vec::new();
+		for ((a, a_id), a_is_updated) in T::gimme_iter(&param) {
+			if a_is_updated {
+				for ((b, b_id), _) in T::gimme_iter(&param) {
+					match a_id.cmp(&b_id) {
+						std::cmp::Ordering::Greater => vec.push(([a, b], [a_id, b_id])),
+						std::cmp::Ordering::Less    => vec.push(([b, a], [b_id, a_id])),
+						std::cmp::Ordering::Equal   => continue,
+					}
+				}
+			}
+		}
+		vec.into_iter()
 	}
 }
 
