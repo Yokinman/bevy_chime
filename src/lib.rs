@@ -734,12 +734,12 @@ where
 	}
 }
 
-impl<'w, T> PredItem<'w> for [T; 2]
+impl<'w, T, const N: usize> PredItem<'w> for [T; N]
 where
 	T: PredItem<'w>
 {
-	type Ref<'i> = [T::Ref<'i>; 2];
-	type Inner = [T::Inner; 2];
+	type Ref<'i> = [T::Ref<'i>; N];
+	type Inner = [T::Inner; N];
 	fn gimme_ref(self) -> Self::Ref<'w> {
 		self.map(|x| x.gimme_ref())
 	}
@@ -862,52 +862,28 @@ impl<A: PredParam, B: PredParam> PredParam for (A, B) {
 	}
 }
 
-impl<T: PredParam> PredParam for [T; 2]
+impl<T: PredParam, const N: usize> PredParam for [T; N]
 where
 	T::Id: Ord
 {
 	type Param = T::Param;
-	type Item<'w> = [T::Item<'w>; 2];
-	type Id = [T::Id; 2];
+	type Item<'w> = [T::Item<'w>; N];
+	type Id = [T::Id; N];
 	type Iterator<'w, 's> = std::vec::IntoIter<((<Self::Item<'w> as PredItem<'w>>::Ref<'w>, Self::Id), bool)>;
-	type UpdatedIterator<'w, 's> = std::vec::IntoIter<(<Self::Item<'w> as PredItem<'w>>::Ref<'w>, Self::Id)>;
+	type UpdatedIterator<'w, 's> = PredArrayIter<'w, 's, T, N>;
 	fn gimme_iter<'w, 's>(param: &SystemParamItem<'w, 's, Self::Param>)
 		-> Self::Iterator<'w, 's>
 	{
-		// !!! Change this later.
-		let mut vec = Vec::new();
-		for ((a, a_id), a_is_updated) in T::gimme_iter(&param) {
-			for ((b, b_id), b_is_updated) in T::gimme_iter(&param) {
-				match a_id.cmp(&b_id) {
-					std::cmp::Ordering::Greater => vec.push((([a, b], [a_id, b_id]), a_is_updated || b_is_updated)),
-					std::cmp::Ordering::Less    => vec.push((([b, a], [b_id, a_id]), a_is_updated || b_is_updated)),
-					std::cmp::Ordering::Equal   => continue,
-				}
-			}
-		}
-		vec.into_iter()
+		todo!()
 	}
 	fn updated_iter<'w, 's>(param: &SystemParamItem<'w, 's, Self::Param>)
 		-> Self::UpdatedIterator<'w, 's>
 	{
-		// !!! Change this later.
-		let mut vec = Vec::new();
-		for ((a, a_id), a_is_updated) in T::gimme_iter(&param) {
-			if a_is_updated {
-				for ((b, b_id), _) in T::gimme_iter(&param) {
-					match a_id.cmp(&b_id) {
-						std::cmp::Ordering::Greater => vec.push(([a, b], [a_id, b_id])),
-						std::cmp::Ordering::Less    => vec.push(([b, a], [b_id, a_id])),
-						std::cmp::Ordering::Equal   => continue,
-					}
-				}
-			}
-		}
-		vec.into_iter()
+		PredArrayIter::new(param)
 	}
 }
 
-/// Iterator for 2-tuple [`PredGroup`] types.
+/// Iterator for 2-tuple [`PredParam`] types.
 pub enum PredGroupIter<'w, 's, A, B>
 where
 	A: PredParam,
@@ -1070,6 +1046,129 @@ where
 				let min = a_slice.len() - a_index;
 				(min, Some(min + (b_max * a_slice.len())))
 			},
+		}
+	}
+}
+
+/// Iterator for array of [`PredParam`] type.
+pub struct PredArrayIter<'w, 's, T: PredParam, const N: usize> {
+	slice: Box<[<T::Iterator<'w, 's> as Iterator>::Item]>,
+	index: [usize; N],
+}
+
+impl<'w, 's, T: PredParam, const N: usize> PredArrayIter<'w, 's, T, N>
+where
+	T::Id: Ord,
+{
+	fn new(param: &SystemParamItem<'w, 's, T::Param>) -> Self {
+		let mut vec = T::gimme_iter(param).collect::<Vec<_>>();
+		vec.sort_unstable_by_key(|((_, id), _)| *id);
+		let mut iter = Self {
+			slice: vec.into_boxed_slice(),
+			index: [0; N],
+		};
+		iter.step_main();
+		iter
+	}
+	
+	fn step_main(&mut self) {
+		//! Moves the main index to the next updated item.
+		while let Some(&(_, is_updated)) = self.slice.get(self.index[N-1]) {
+			if is_updated && self.step_sub(N-1) {
+				break
+			}
+			self.index[N-1] += 1;
+		}
+	}
+	
+	fn step_sub(&mut self, start: usize) -> bool {
+		//! Initializes and moves the sub-indices to the next updated item.
+		//! Returns false if an index exceeds the slice's length.
+		let mut index = if start == N-1 {
+			0
+		} else {
+			self.index[start] + 1
+		};
+		for i in (0..start).rev() {
+			while index <= self.index[N-1] && self.slice[index].1 {
+				index += 1;
+			}
+			if index >= self.slice.len() {
+				return false
+			}
+			self.index[i] = index;
+			index += 1;
+		}
+		true
+	}
+}
+
+impl<'w, 's, T, const N: usize> Iterator for PredArrayIter<'w, 's, T, N>
+where
+	T: PredParam,
+	T::Id: Ord,
+{
+	type Item = (
+		<<[T; N] as PredParam>::Item<'w> as PredItem<'w>>::Ref<'w>,
+		<[T; N] as PredParam>::Id
+	);
+	fn next(&mut self) -> Option<Self::Item> {
+		// !!! Might be faster:
+		// f(slice, layer):
+		//   if layer == top_layer:
+		//     for (index, item) in updated_slice:
+		//       if index >= slice.starting_point:
+		//         yield item
+		//   else:
+		//     for (index, item) in slice:
+		//       if item.is_updated():
+		//         yield all combinations of this item and the items after it
+		//       else:
+		//         yield item + f(slice[index+1..], layer+1)
+		if self.slice.get(self.index[N-1]).is_none() {
+			return None
+		}
+		for i in 0..N-1 {
+			let mut index = self.index[i];
+			while index <= self.index[N-1] && self.slice[index].1 {
+				index += 1;
+			}
+			if index >= self.slice.len() {
+				self.index[i+1] += 1;
+				continue
+			}
+			self.index[i] = index;
+			
+			if self.step_sub(i) {
+				let (mut refs, mut ids) = (
+					self.index.map(|i| self.slice[i].0.0), // Item::Ref
+					self.index.map(|i| self.slice[i].0.1), // Id
+				);
+				let mut last = N-1;
+				while last != 0 && ids[last] > ids[last - 1] {
+					ids .swap(last, last - 1);
+					refs.swap(last, last - 1);
+					last -= 1;
+				}
+				self.index[0] += 1;
+				return Some((refs, ids))
+			}
+			
+			self.index[N-1] += 1;
+			break
+		}
+		self.step_main();
+		self.next()
+	}
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		if self.slice.get(self.index[N-1]).is_none() {
+			(0, Some(0))
+		} else {
+			// N should generally be small.
+			let len = 1 + self.slice.len();
+			let upper = (len-N..len).product::<usize>()
+				/ (1..1+N).product::<usize>();
+			(1, Some(upper))
 		}
 	}
 }
