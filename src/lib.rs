@@ -281,7 +281,7 @@ fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule)
 
 /// Unique identifier for a case of prediction.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
-struct PredId(u128);
+struct PredId([u8; 32]);
 
 #[derive(Default)]
 pub struct PredHasher {
@@ -298,7 +298,7 @@ impl PredHasher {
 		self.index = next_index;
 	}
 	fn finish(&self) -> PredId {
-		PredId(u128::from_ne_bytes(self.bytes))
+		PredId(self.bytes)
 	}
 }
 
