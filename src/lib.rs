@@ -24,11 +24,15 @@ use chime::time::TimeRanges;
 
 /// Builder entry point for adding chime events to a [`World`].
 pub trait AddChimeEvent {
-	fn add_chime_events<P: PredParam>(&mut self, events: ChimeEventBuilder<P>) -> &mut Self;
+	fn add_chime_events<P>(&mut self, events: ChimeEventBuilder<P>) -> &mut Self
+	where
+		P: PredParam + 'static;
 }
 
 impl AddChimeEvent for App {
-	fn add_chime_events<P: PredParam>(&mut self, events: ChimeEventBuilder<P>) -> &mut Self
+	fn add_chime_events<P>(&mut self, events: ChimeEventBuilder<P>) -> &mut Self
+	where
+		P: PredParam + 'static
 	{
 		assert!(self.is_plugin_added::<ChimePlugin>());
 		
@@ -823,7 +827,7 @@ where
 }
 
 /// A set of [`PredItem`] values used to predict & schedule events.
-pub trait PredParam: 'static {
+pub trait PredParam {
 	/// The equivalent [`bevy::ecs::system::SystemParam`].
 	type Param: ReadOnlySystemParam;
 	
@@ -850,8 +854,8 @@ pub trait PredParam: 'static {
 		-> Self::UpdatedIterator<'w, 's>;
 }
 
-impl<T: Component> PredParam for Query<'static, 'static, (Ref<'_, T>, Entity)> {
-	type Param = Self;
+impl<T: Component> PredParam for Query<'_, '_, (Ref<'_, T>, Entity)> {
+	type Param = Query<'static, 'static, (Ref<'static, T>, Entity)>;
 	type Item<'w> = Ref<'w, T>;
 	type Id = Entity;
 	type Iterator<'w, 's> = std::iter::Map<
@@ -883,8 +887,8 @@ impl<T: Component> PredParam for Query<'static, 'static, (Ref<'_, T>, Entity)> {
 	}
 }
 
-impl<R: Resource> PredParam for Res<'static, R> {
-	type Param = Self;
+impl<R: Resource> PredParam for Res<'_, R> {
+	type Param = Res<'static, R>;
 	type Item<'w> = Res<'w, R>;
 	type Id = ();
 	type Iterator<'w, 's> = std::iter::Once<((<Self::Item<'w> as PredItem<'w>>::Ref<'w>, Self::Id), bool)>;

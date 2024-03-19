@@ -199,7 +199,7 @@ fn add_many_dogs(world: &mut World) {
 	}}
 }
 
-fn when_func_a(pred: PredState<Query<'static, 'static, (Ref<Pos>, Entity)>>) {
+fn when_func_a(pred: PredState<Query<(Ref<Pos>, Entity)>>) {
 	// let a_time = Instant::now();
 	for (case, pos) in pred {
 		let times =
@@ -216,7 +216,7 @@ fn do_func_a(In(case): In<PredInput<Entity>>, time: Res<Time>, mut query: Query<
 	pos_x.spd.val *= -1.;
 }
 
-fn when_func_b(pred: PredState<Query<'static, 'static, (Ref<Pos>, Entity)>>) {
+fn when_func_b(pred: PredState<Query<(Ref<Pos>, Entity)>>) {
 	// let a_time = Instant::now();
 	// let time = time.elapsed();
 	for (case, pos) in pred {
@@ -270,7 +270,7 @@ fn outlier_func_b(In(case): In<PredInput<Entity>>, time: Res<Time>, mut query: Q
 	// 	pos[1].poly(pos[1].base_time())));
 }
 
-fn when_func_c(pred: PredState<[Query<'static, 'static, (Ref<Pos>, Entity)>; 2]>) {
+fn when_func_c(pred: PredState<[Query<(Ref<Pos>, Entity)>; 2]>) {
 	// let mut n = 0;
 	// let a_time = Instant::now();
 	for (case, [pos, b_pos]) in pred {
