@@ -50,16 +50,29 @@ impl AddChimeEvent for App {
 			mut event_map: ResMut<ChimeEventMap>,
 		| {
 			// !!! Cache PredState::vec so it doesn't need to reallocate much.
-			let mut state = PredState {
-				vec: Vec::new(),
-				len: 0,
+			let mut vec = Vec::new();
+			let mut len = 0;
+			
+			let state = PredState {
+				vec: &mut vec,
+				len: &mut len,
 				state: state.into_inner(),
 			};
 			
-			state = pred_sys(state);
+			pred_sys(state);
+			
+			if len > vec.len() {
+				unsafe {
+					// SAFETY: `len` is only incremented when the capacity is
+					// initialized manually.
+					vec.set_len(len);
+				}
+			} else {
+				debug_assert_eq!(len, vec.len());
+			}
 			
 			event_map.sched(
-				state,
+				vec,
 				time.elapsed(),
 				id,
 				begin_sys.as_ref().map(|x| x.as_ref()),
@@ -96,14 +109,14 @@ where
 /// Builder for inserting a chime event into a [`World`].  
 pub struct ChimeEventBuilder<P: PredParam> {
 	case: std::marker::PhantomData<P>,
-	pred_sys: for<'w, 's> fn(PredState<'w, 's, P>) -> PredState<'w, 's, P>,
+	pred_sys: for<'w, 's, 'p> fn(PredState<'w, 's, 'p, P>),
 	begin_sys: Option<Box<dyn ChimeEventSystem<In=PredInput<P::Id>, Out=()>>>,
 	end_sys: Option<Box<dyn ChimeEventSystem<In=PredInput<P::Id>, Out=()>>>,
 	outlier_sys: Option<Box<dyn ChimeEventSystem<In=PredInput<P::Id>, Out=()>>>,
 }
 
 impl<P: PredParam> ChimeEventBuilder<P> {
-	pub fn new(pred_sys: for<'w, 's> fn(PredState<'w, 's, P>) -> PredState<'w, 's, P>) -> Self {
+	pub fn new(pred_sys: for<'w, 's, 'p> fn(PredState<'w, 's, 'p, P>)) -> Self {
 		Self {
 			case: std::marker::PhantomData,
 			pred_sys,
@@ -373,46 +386,24 @@ impl<A: PredHash, B: PredHash, C: PredHash, D: PredHash> PredHash for (A, B, C, 
 }
 
 /// Collects predictions from "when" systems for later compilation.
-pub struct PredState<'w, 's, P: PredParam> {
-	vec: Vec<PredStateCase<P::Id>>,
-	len: usize,
+pub struct PredState<'w, 's, 'p, P: PredParam> {
+	vec: &'p mut Vec<PredStateCase<P::Id>>,
+	len: &'p mut usize,
 	state: SystemParamItem<'w, 's, P::Param>,
 }
 
-impl<'w, 's, P: PredParam> PredState<'w, 's, P> {
-	fn update_len(&mut self) {
-		if self.len > self.vec.len() {
-			unsafe {
-				// SAFETY: `len` is only incremented when the capacity is
-				// initialized manually.
-				self.vec.set_len(self.len);
-			}
-		} else {
-			debug_assert_eq!(self.len, self.vec.len());
-		}
-	}
-	
-	fn vec_mut(&mut self) -> &mut Vec<PredStateCase<P::Id>> {
-		self.update_len();
-		&mut self.vec
-	}
-	
-	fn into_vec(mut self) -> Vec<PredStateCase<P::Id>> {
-		self.update_len();
-		self.vec
-	}
-}
-
-impl<'w, 's, P: PredParam> PredState<'w, 's, P> {
-	pub fn iter_mut<'p>(&'p mut self) -> PredCombinator<'w, 's, 'p, P> {
+impl<'w, 's, 'p, P: PredParam> IntoIterator for PredState<'w, 's, 'p, P> {
+	type Item = <Self::IntoIter as Iterator>::Item;
+	type IntoIter = PredCombinator<'w, 's, 'p, P>;
+	fn into_iter(self) -> Self::IntoIter {
 		let inner = P::updated_iter(&self.state);
 		let len = inner.size_hint().1
 			.expect("should always have an upper bound");
-		self.vec_mut().reserve(len);
+		self.vec.reserve(len);
 		PredCombinator {
 			inner,
 			state: self.vec.spare_capacity_mut().iter_mut(),
-			len: &mut self.len,
+			len: self.len,
 		}
 	}
 }
@@ -591,21 +582,21 @@ impl ChimeEventMap {
 		self.table.len() - 1
 	}
 	
-	fn sched<P: PredParam>(
+	fn sched<I: PredHash + Send + Sync + 'static>(
 		&mut self,
-		input: PredState<P>,
+		input: impl IntoIterator<Item=PredStateCase<I>>,
 		pred_time: Duration,
 		event_id: usize,
-		begin_sys: Option<&dyn ChimeEventSystem<In=PredInput<P::Id>, Out=()>>,
-		end_sys: Option<&dyn ChimeEventSystem<In=PredInput<P::Id>, Out=()>>,
-		outlier_sys: Option<&dyn ChimeEventSystem<In=PredInput<P::Id>, Out=()>>,
+		begin_sys: Option<&dyn ChimeEventSystem<In=PredInput<I>, Out=()>>,
+		end_sys: Option<&dyn ChimeEventSystem<In=PredInput<I>, Out=()>>,
+		outlier_sys: Option<&dyn ChimeEventSystem<In=PredInput<I>, Out=()>>,
 	) {
 		// let n = input.0.len();
 		// let a_time = Instant::now();
 		let events = self.table.get_mut(event_id)
 			.expect("id must be initialized with PredMap::setup_id");
 		
-		for PredStateCase(new_times, pred_id) in input.into_vec().into_iter() {
+		for PredStateCase(new_times, pred_id) in input {
 			// let a_time = Instant::now();
 			let mut pred_hasher = PredHasher::default();
 			pred_id.pred_hash(&mut pred_hasher);

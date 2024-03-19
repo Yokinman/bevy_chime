@@ -199,18 +199,15 @@ fn add_many_dogs(world: &mut World) {
 	}}
 }
 
-fn when_func_a<'w, 's>(mut pred: PredState<'w, 's, Query<'static, 'static, (Ref<'static, Pos>, Entity)>>)
-	-> PredState<'w, 's, Query<'static, 'static, (Ref<'static, Pos>, Entity)>>
-{
+fn when_func_a(pred: PredState<Query<'static, 'static, (Ref<Pos>, Entity)>>) {
 	// let a_time = Instant::now();
-	for (case, pos) in pred.iter_mut() {
+	for (case, pos) in pred {
 		let times =
 			(pos[0].when_eq(&((RIGHT - pos.radius) as f64))/* & pos[0].spd.when(Ordering::Greater, &0.)*/) |
 			(pos[0].when_eq(&((LEFT  + pos.radius) as f64))/* & pos[0].spd.when(Ordering::Less, &0.)*/);
 		case.set(times.pre());
 	}
 	// println!("  when_func_a: {:?}", Instant::now().duration_since(a_time));
-	pred
 }
 
 fn do_func_a(In(case): In<PredInput<Entity>>, time: Res<Time>, mut query: Query<&mut Pos>) {
@@ -219,12 +216,10 @@ fn do_func_a(In(case): In<PredInput<Entity>>, time: Res<Time>, mut query: Query<
 	pos_x.spd.val *= -1.;
 }
 
-fn when_func_b<'w, 's>(mut pred: PredState<'w, 's, Query<'static, 'static, (Ref<'static, Pos>, Entity)>>)
-	-> PredState<'w, 's, Query<'static, 'static, (Ref<'static, Pos>, Entity)>>
-{
+fn when_func_b(pred: PredState<Query<'static, 'static, (Ref<Pos>, Entity)>>) {
 	// let a_time = Instant::now();
 	// let time = time.elapsed();
-	for (case, pos) in pred.iter_mut() {
+	for (case, pos) in pred {
 		let/* mut*/ times =
 			(pos[1].when_eq(&((TOP    - pos.radius) as f64)) /*& pos[1].spd.when(Ordering::Greater, &0.)*/) |
 			(pos[1].when_eq(&((BOTTOM + pos.radius) as f64)) /*& pos[1].spd.when(Ordering::Less, &0.)*/);
@@ -239,7 +234,6 @@ fn when_func_b<'w, 's>(mut pred: PredState<'w, 's, Query<'static, 'static, (Ref<
 		// }
 	}
 	// println!("  when_func_b: {:?}", Instant::now().duration_since(a_time));
-	pred
 }
 
 fn do_func_b(In(case): In<PredInput<Entity>>, time: Res<Time>, mut query: Query<&mut Pos>) {
@@ -276,12 +270,10 @@ fn outlier_func_b(In(case): In<PredInput<Entity>>, time: Res<Time>, mut query: Q
 	// 	pos[1].poly(pos[1].base_time())));
 }
 
-fn when_func_c<'w, 's>(mut pred: PredState<'w, 's, [Query<'static, 'static, (Ref<'static, Pos>, Entity)>; 2]>)
-	-> PredState<'w, 's, [Query<'static, 'static, (Ref<'static, Pos>, Entity)>; 2]>
-{
+fn when_func_c(pred: PredState<[Query<'static, 'static, (Ref<Pos>, Entity)>; 2]>) {
 	// let mut n = 0;
 	// let a_time = Instant::now();
-	for (case, [pos, b_pos]) in pred.iter_mut() {
+	for (case, [pos, b_pos]) in pred {
 		let time = pos.max_base_time();
 		let pos_poly_vec = pos.poly_vec(time);
 			// !!! This kind of thing could be optimized by organizing entities
@@ -361,7 +353,6 @@ fn when_func_c<'w, 's>(mut pred: PredState<'w, 's, [Query<'static, 'static, (Ref
 		// n += 1;
 	}
 	// println!("  when_func_c ({n}): {:?}", Instant::now().duration_since(a_time));
-	pred
 }
 
 fn do_func_c(In(case): In<PredInput<[Entity; 2]>>, time: Res<Time>, mut query: Query<&mut Pos>) {
