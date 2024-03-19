@@ -403,14 +403,14 @@ impl<'w, 's, 'p, P: PredParam> IntoIterator for PredState<'w, 's, 'p, P> {
 }
 
 /// A scheduled case of prediction, used in [`PredState`].
-pub struct PredStateCase<P>(Box<dyn Iterator<Item = (Duration, Duration)> + Send + Sync>, P);
+pub struct PredStateCase<P>(Option<Box<dyn Iterator<Item = (Duration, Duration)> + Send + Sync>>, P);
 
 impl<P: PredHash> PredStateCase<P> {
 	pub fn set<I>(&mut self, times: TimeRanges<I>)
 	where
 		TimeRanges<I>: Iterator<Item = (Duration, Duration)> + Send + Sync + 'static
 	{
-		self.0 = Box::new(times);
+		self.0 = Some(Box::new(times));
 	}
 }
 
@@ -597,7 +597,8 @@ impl ChimeEventMap {
 			let pred_hash = pred_hasher.finish();
 			let key = (event_id, pred_hash);
 			let event = events.entry(key.1).or_default();
-			event.times = new_times;
+			event.times = new_times.unwrap_or_else(||
+				Box::new(TimeRanges::empty()));
 			// let b_time = Instant::now();
 			
 			 // Store Receiver:
@@ -1260,7 +1261,7 @@ impl<'w, 's, 'p, P: PredParam> Iterator for PredCombinator<'w, 's, 'p, P> {
 	fn next(&mut self) -> Option<Self::Item> {
 		if let Some((item, id)) = self.iter.next() {
 			Some((
-				self.node.write(PredStateCase(Box::new(TimeRanges::empty()), id)),
+				self.node.write(PredStateCase(None, id)),
 				item
 			))
 		} else {
