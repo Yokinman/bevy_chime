@@ -213,8 +213,8 @@ fn when_func_a<'w, 's>(mut pred: PredState<'w, 's, Query<'static, 'static, (Ref<
 	pred
 }
 
-fn do_func_a(In(ent): In<Entity>, time: Res<Time>, mut query: Query<&mut Pos>) {
-	let mut pos = query.get_mut(ent).unwrap();
+fn do_func_a(In(case): In<PredInput<Entity>>, time: Res<Time>, mut query: Query<&mut Pos>) {
+	let mut pos = case.get(&mut query).unwrap();
 	let mut pos_x = pos[0].at_mut(time.elapsed());
 	pos_x.spd.val *= -1.;
 }
@@ -242,8 +242,8 @@ fn when_func_b<'w, 's>(mut pred: PredState<'w, 's, Query<'static, 'static, (Ref<
 	pred
 }
 
-fn do_func_b(In(ent): In<Entity>, time: Res<Time>, mut query: Query<&mut Pos>) {
-	let mut pos = query.get_mut(ent).unwrap();
+fn do_func_b(In(case): In<PredInput<Entity>>, time: Res<Time>, mut query: Query<&mut Pos>) {
+	let mut pos = case.get(&mut query).unwrap();
 	let mut poss = pos.at_vec_mut(time.elapsed());
 	let pos_y = &mut poss[1];
 	pos_y.spd.val *= -1.;
@@ -264,8 +264,8 @@ fn do_func_b(In(ent): In<Entity>, time: Res<Time>, mut query: Query<&mut Pos>) {
 	// ));
 }
 
-fn outlier_func_b(In(ent): In<Entity>, time: Res<Time>, mut query: Query<&mut Pos>) {
-	let mut pos = query.get_mut(ent).unwrap();
+fn outlier_func_b(In(case): In<PredInput<Entity>>, time: Res<Time>, mut query: Query<&mut Pos>) {
+	let mut pos = case.get(&mut query).unwrap();
 	let mut pos_y = pos[1].at_mut(time.elapsed());
 	pos_y.spd.val = 0.;
 	pos_y.spd.acc.val = 0.;
@@ -364,8 +364,8 @@ fn when_func_c<'w, 's>(mut pred: PredState<'w, 's, [Query<'static, 'static, (Ref
 	pred
 }
 
-fn do_func_c(In(ents): In<[Entity; 2]>, time: Res<Time>, mut query: Query<&mut Pos>) {
-	let [mut poss, mut b_poss] = query.get_many_mut(ents).unwrap();
+fn do_func_c(In(case): In<PredInput<[Entity; 2]>>, time: Res<Time>, mut query: Query<&mut Pos>) {
+	let [mut poss, mut b_poss] = case.get(&mut query).unwrap();
 	
 	let poly = (poss[0].poly(poss[0].base_time()) - b_poss[0].poly(b_poss[0].base_time())).sqr()
 		+ (poss[1].poly(poss[1].base_time()) - b_poss[1].poly(b_poss[1].base_time())).sqr();
@@ -445,8 +445,8 @@ fn do_func_c(In(ents): In<[Entity; 2]>, time: Res<Time>, mut query: Query<&mut P
 	// assert!(poly.rate_at(time.elapsed()) >= 0., "{:?}", poly);
 }
 
-fn outlier_func_c(In(ents): In<[Entity; 2]>, time: Res<Time>, mut query: Query<&mut Pos>) {
-	let [mut poss, mut b_poss] = query.get_many_mut(ents).unwrap();
+fn outlier_func_c(In(case): In<PredInput<[Entity; 2]>>, time: Res<Time>, mut query: Query<&mut Pos>) {
+	let [mut poss, mut b_poss] = case.get(&mut query).unwrap();
 	let mut pos = poss.at_vec_mut(time.elapsed());
 	let mut b_pos = b_poss.at_vec_mut(time.elapsed());
 	pos[0].spd.val = 0.; pos[0].spd.acc.val = 0.;

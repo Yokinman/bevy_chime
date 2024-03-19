@@ -7,21 +7,20 @@ use std::cmp::Reverse;
 use std::collections::{BinaryHeap, btree_map, BTreeMap, HashMap};
 use std::hash::Hash;
 use std::mem::MaybeUninit;
+use std::time::{Duration, Instant};
 
 use bevy::app::{App, Plugin, Update};
 use bevy::ecs::change_detection::DetectChanges;
 use bevy::ecs::component::Component;
 use bevy::ecs::entity::Entity;
+use bevy::ecs::query::{QueryData, QueryEntityError, QueryFilter, QueryItem, QueryIter, ROQueryItem};
 use bevy::ecs::schedule::{Schedule, Schedules, ScheduleLabel};
 use bevy::ecs::system::{IntoSystem, Query, Res, ResMut, Resource, System, ReadOnlySystemParam, SystemParamItem, StaticSystemParam};
 use bevy::ecs::world::{Mut, Ref, World};
-
-use std::time::{Duration, Instant};
-use bevy::ecs::query::QueryIter;
-use bevy::time::Time;
-use chime::time::TimeRanges;
-
 use bevy::input::{ButtonInput, keyboard::KeyCode};
+use bevy::time::Time;
+
+use chime::time::TimeRanges;
 
 /// Builder entry point for adding chime events to a [`World`].
 pub trait AddChimeEvent {
@@ -98,9 +97,9 @@ where
 pub struct ChimeEventBuilder<P: PredParam> {
 	case: std::marker::PhantomData<P>,
 	pred_sys: for<'w, 's> fn(PredState<'w, 's, P>) -> PredState<'w, 's, P>,
-	begin_sys: Option<Box<dyn ChimeEventSystem<In=P::Id, Out=()>>>,
-	end_sys: Option<Box<dyn ChimeEventSystem<In=P::Id, Out=()>>>,
-	outlier_sys: Option<Box<dyn ChimeEventSystem<In=P::Id, Out=()>>>,
+	begin_sys: Option<Box<dyn ChimeEventSystem<In=PredInput<P::Id>, Out=()>>>,
+	end_sys: Option<Box<dyn ChimeEventSystem<In=PredInput<P::Id>, Out=()>>>,
+	outlier_sys: Option<Box<dyn ChimeEventSystem<In=PredInput<P::Id>, Out=()>>>,
 }
 
 impl<P: PredParam> ChimeEventBuilder<P> {
@@ -117,7 +116,7 @@ impl<P: PredParam> ChimeEventBuilder<P> {
 	/// The system that runs when the event's prediction becomes active.
 	pub fn on_begin<T, M>(mut self, sys: T) -> Self
 	where
-		T: IntoSystem<P::Id, (), M>,
+		T: IntoSystem<PredInput<P::Id>, (), M>,
 		T::System: Send + Sync + Clone,
 	{
 		assert!(self.begin_sys.is_none(), "can't have >1 begin systems");
@@ -128,7 +127,7 @@ impl<P: PredParam> ChimeEventBuilder<P> {
 	/// The system that runs when the event's prediction becomes inactive.
 	pub fn on_end<T, M>(mut self, sys: T) -> Self
 	where
-		T: IntoSystem<P::Id, (), M>,
+		T: IntoSystem<PredInput<P::Id>, (), M>,
 		T::System: Send + Sync + Clone,
 	{
 		assert!(self.end_sys.is_none(), "can't have >1 end systems");
@@ -139,7 +138,7 @@ impl<P: PredParam> ChimeEventBuilder<P> {
 	/// The system that runs when the event's prediction repeats excessively.
 	pub fn on_repeat<T, M>(mut self, sys: T) -> Self
 	where
-		T: IntoSystem<P::Id, (), M>,
+		T: IntoSystem<PredInput<P::Id>, (), M>,
 		T::System: Send + Sync + Clone,
 	{
 		assert!(self.outlier_sys.is_none(), "can't have >1 outlier systems");
@@ -430,6 +429,87 @@ impl<P: PredHash> PredStateCase<P> {
 	}
 }
 
+/// Types that can be used to query for a specific entity.  
+pub trait PredQuery<I> {
+	type Output;
+	fn get(self, id: I) -> Self::Output;
+}
+
+impl<I> PredQuery<I> for () {
+	type Output = ();
+	fn get(self, _id: I) -> Self::Output {}
+}
+
+impl<'a, D, F> PredQuery<Entity> for &'a Query<'_, '_, D, F>
+where
+	D: QueryData,
+	F: QueryFilter,
+{
+	type Output = Result<ROQueryItem<'a, D>, QueryEntityError>;
+	fn get(self, id: Entity) -> Self::Output {
+		self.get(id)
+	}
+}
+
+impl<'a, D, F> PredQuery<Entity> for &'a mut Query<'_, '_, D, F>
+where
+	D: QueryData,
+	F: QueryFilter,
+{
+	type Output = Result<QueryItem<'a, D>, QueryEntityError>;
+	fn get(self, id: Entity) -> Self::Output {
+		self.get_mut(id)
+	}
+}
+
+impl<'a, D, F, const N: usize> PredQuery<[Entity; N]> for &'a Query<'_, '_, D, F>
+where
+	D: QueryData,
+	F: QueryFilter,
+{
+	type Output = Result<[ROQueryItem<'a, D>; N], QueryEntityError>;
+	fn get(self, id: [Entity; N]) -> Self::Output {
+		self.get_many(id)
+	}
+}
+
+impl<'a, D, F, const N: usize> PredQuery<[Entity; N]> for &'a mut Query<'_, '_, D, F>
+where
+	D: QueryData,
+	F: QueryFilter,
+{
+	type Output = Result<[QueryItem<'a, D>; N], QueryEntityError>;
+	fn get(self, id: [Entity; N]) -> Self::Output {
+		self.get_many_mut(id)
+	}
+}
+
+impl<A, B, X, Y> PredQuery<(X, Y)> for (A, B)
+where
+	A: PredQuery<X>,
+	B: PredQuery<Y>,
+{
+	type Output = (A::Output, B::Output);
+	fn get(self, (x, y): (X, Y)) -> Self::Output {
+		(self.0.get(x), self.1.get(y))
+	}
+}
+
+/// Prediction data fed as input to a [`ChimeEvent`]'s systems.
+#[derive(Copy, Clone)]
+pub struct PredInput<T> {
+	inner: T,
+}
+
+impl<T: PredHash> PredInput<T> {
+	pub fn get<P>(self, param: P) -> P::Output
+	where
+		P: PredQuery<T>
+	{
+		param.get(self.inner)
+	}
+}
+
 /// ...
 struct ChimeEvent {
 	times: Box<dyn Iterator<Item = (Duration, Duration)> + Send + Sync>,
@@ -516,34 +596,37 @@ impl ChimeEventMap {
 		input: PredState<P>,
 		pred_time: Duration,
 		event_id: usize,
-		begin_sys: Option<&dyn ChimeEventSystem<In=P::Id, Out=()>>,
-		end_sys: Option<&dyn ChimeEventSystem<In=P::Id, Out=()>>,
-		outlier_sys: Option<&dyn ChimeEventSystem<In=P::Id, Out=()>>,
+		begin_sys: Option<&dyn ChimeEventSystem<In=PredInput<P::Id>, Out=()>>,
+		end_sys: Option<&dyn ChimeEventSystem<In=PredInput<P::Id>, Out=()>>,
+		outlier_sys: Option<&dyn ChimeEventSystem<In=PredInput<P::Id>, Out=()>>,
 	) {
 		// let n = input.0.len();
 		// let a_time = Instant::now();
 		let events = self.table.get_mut(event_id)
 			.expect("id must be initialized with PredMap::setup_id");
 		
-		for PredStateCase(new_times, pred_case) in input.into_vec().into_iter() {
+		for PredStateCase(new_times, pred_id) in input.into_vec().into_iter() {
 			// let a_time = Instant::now();
-			let mut pred_state = PredHasher::default();
-			pred_case.pred_hash(&mut pred_state);
-			let pred_id = pred_state.finish();
-			let key = (event_id, pred_id);
+			let mut pred_hasher = PredHasher::default();
+			pred_id.pred_hash(&mut pred_hasher);
+			let pred_hash = pred_hasher.finish();
+			let key = (event_id, pred_hash);
 			let event = events.entry(key.1).or_default();
 			event.times = new_times;
 			// let b_time = Instant::now();
 			
 			 // Store Receiver:
-			if !event.receivers.contains(&pred_id) {
-				event.receivers.push(pred_id);
+			if !event.receivers.contains(&pred_hash) {
+				event.receivers.push(pred_hash);
 				// !!! https://bevyengine.org/news/bevy-0-13/#more-flexible-one-shot-systems
+				let pred_input = PredInput {
+					inner: pred_id,
+				};
 				if let Some(sys) = begin_sys {
-					sys.add_to_schedule(&mut event.begin_schedule, pred_case);
+					sys.add_to_schedule(&mut event.begin_schedule, pred_input);
 				}
 				if let Some(sys) = end_sys {
-					sys.add_to_schedule(&mut event.end_schedule, pred_case);
+					sys.add_to_schedule(&mut event.end_schedule, pred_input);
 				}
 				if let Some(sys) = outlier_sys {
 					if event.outlier_schedule.is_none() {
@@ -551,7 +634,7 @@ impl ChimeEventMap {
 					}
 					sys.add_to_schedule(
 						event.outlier_schedule.as_mut().unwrap(),
-						pred_case
+						pred_input
 					);
 				}
 			}
