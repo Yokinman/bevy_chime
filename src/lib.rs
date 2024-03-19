@@ -984,8 +984,8 @@ where
 		b_param: &SystemParamItem<'w, 's, B::Param>,
 	) -> Self {
 		let a_iter = A::gimme_iter(a_param);
-		let a_vec = Vec::with_capacity(a_iter.size_hint().1
-			.expect("should always have an upper bound"));
+		let ((_, Some(size)) | (size, None)) = a_iter.size_hint();
+		let a_vec = Vec::with_capacity(size);
 		let b_slice = B::gimme_iter(b_param).map(|(x, _)| x).collect();
 		let b_iter = B::updated_iter(b_param);
 		Self::primary_next(a_iter, a_vec, b_slice, b_iter)
@@ -1103,16 +1103,20 @@ where
 		match self {
 			Self::Empty => (0, Some(0)),
 			Self::Primary { a_iter, a_vec, b_slice, b_index, .. } => {
-				let a_max = a_iter.size_hint().1
-					.expect("should always have an upper bound");
 				let min = b_slice.len() - b_index;
-				(min, Some(min + ((a_max + a_vec.len()) * b_slice.len())))
+				let a_max = a_iter.size_hint().1;
+				(
+					min,
+					a_max.map(|x| min + ((x + a_vec.len()) * b_slice.len()))
+				)
 			},
 			Self::Secondary { b_iter, a_slice, a_index, .. } => {
-				let b_max = b_iter.size_hint().1
-					.expect("should always have an upper bound");
 				let min = a_slice.len() - a_index;
-				(min, Some(min + (b_max * a_slice.len())))
+				let b_max = b_iter.size_hint().1;
+				(
+					min,
+					b_max.map(|x| min + (x * a_slice.len()))
+				)
 			},
 		}
 	}
