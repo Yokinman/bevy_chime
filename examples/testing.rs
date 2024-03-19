@@ -107,8 +107,8 @@ fn setup(world: &mut World) {
 		}
 	*/
 	
-	add_two_dogs(world);
-	// add_many_dogs(world);
+	// add_two_dogs(world);
+	add_many_dogs(world);
 }
 
 #[allow(dead_code)]

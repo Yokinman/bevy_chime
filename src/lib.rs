@@ -53,30 +53,20 @@ impl AddChimeEvent for App {
 			time: Res<Time>,
 			mut event_map: ResMut<ChimeEventMap>,
 		| {
-			// !!! Cache PredState::vec so it doesn't need to reallocate much.
-			let mut vec = Vec::new();
-			let mut len = 0;
-			
-			let state = PredState {
-				vec: &mut vec,
-				len: &mut len,
-				state: state.into_inner(),
+			// !!! Cache in a Local so it doesn't need to reallocate much:
+			let mut node = Node {
+				data: Vec::new(),
+				len: 0,
+				next: None,
 			};
 			
-			pred_sys(state);
-			
-			if len > vec.len() {
-				unsafe {
-					// SAFETY: `len` is only incremented when the capacity is
-					// initialized manually.
-					vec.set_len(len);
-				}
-			} else {
-				debug_assert_eq!(len, vec.len());
-			}
+			pred_sys(PredState {
+				state: state.into_inner(),
+				node: &mut node,
+			});
 			
 			event_map.sched(
-				vec,
+				node,
 				time.elapsed(),
 				id,
 				begin_sys.as_ref().map(|x| x.as_ref()),
@@ -391,9 +381,8 @@ impl<A: PredHash, B: PredHash, C: PredHash, D: PredHash> PredHash for (A, B, C, 
 
 /// Collects predictions from "when" systems for later compilation.
 pub struct PredState<'w, 's, 'p, P: PredParam> {
-	vec: &'p mut Vec<PredStateCase<P::Id>>,
-	len: &'p mut usize,
 	state: SystemParamItem<'w, 's, P::Param>,
+	node: &'p mut Node<PredStateCase<P::Id>>,
 }
 
 impl<'w, 's, 'p, P: PredParam> IntoIterator for PredState<'w, 's, 'p, P> {
@@ -401,13 +390,14 @@ impl<'w, 's, 'p, P: PredParam> IntoIterator for PredState<'w, 's, 'p, P> {
 	type IntoIter = PredCombinator<'w, 's, 'p, P>;
 	fn into_iter(self) -> Self::IntoIter {
 		let inner = P::updated_iter(&self.state);
-		let len = inner.size_hint().1
-			.expect("should always have an upper bound");
-		self.vec.reserve(len);
+		self.node.data.reserve(100); // !!! Need a column size
 		PredCombinator {
-			inner,
-			state: self.vec.spare_capacity_mut().iter_mut(),
-			len: self.len,
+			iter: inner,
+			node: NodeWriter {
+				data: self.node.data.spare_capacity_mut().iter_mut(),
+				len: &mut self.node.len,
+				next: &mut self.node.next,
+			},
 		}
 	}
 }
@@ -1254,9 +1244,8 @@ where
 /// Produces all case combinations in need of a new prediction, alongside a
 /// [`PredStateCase`] for scheduling.
 pub struct PredCombinator<'w, 's, 'p, P: PredParam> {
-	inner: P::UpdatedIterator<'w, 's>,
-	state: std::slice::IterMut<'p, MaybeUninit<PredStateCase<P::Id>>>,
-	len: &'p mut usize,
+	iter: P::UpdatedIterator<'w, 's>,
+	node: NodeWriter<'p, PredStateCase<P::Id>>,
 }
 
 impl<'w, 's, 'p, P: PredParam> Iterator for PredCombinator<'w, 's, 'p, P> {
@@ -1265,23 +1254,114 @@ impl<'w, 's, 'p, P: PredParam> Iterator for PredCombinator<'w, 's, 'p, P> {
 		<P::Item<'w> as PredItem<'w>>::Ref<'w>
 	);
 	fn next(&mut self) -> Option<Self::Item> {
-		if let (Some(case), Some((value, id))) = (self.state.next(), self.inner.next()) {
-			case.write(PredStateCase(Box::new(TimeRanges::empty()), id));
-			*self.len += 1;
+		if let Some((item, id)) = self.iter.next() {
 			Some((
-				unsafe {
-					// SAFETY: this memory was initialized directly above.
-					&mut *case.as_mut_ptr()
-				},
-				value
+				self.node.write(PredStateCase(Box::new(TimeRanges::empty()), id)),
+				item
 			))
 		} else {
 			None
 		}
 	}
 	fn size_hint(&self) -> (usize, Option<usize>) {
-		let len = self.state.len();
-		let (lower, upper) = self.inner.size_hint();
-		(lower.min(len), Some(upper.unwrap_or(len).min(len)))
+		self.iter.size_hint()
+	}
+}
+
+/// One-way node that stores an arbitrary amount of data.
+struct Node<T> {
+	data: Vec<T>,
+	len: usize,
+	next: Option<Box<Node<T>>>,
+}
+
+impl<T> IntoIterator for Node<T> {
+	type Item = T;
+	type IntoIter = NodeIter<T>;
+	fn into_iter(mut self) -> Self::IntoIter {
+		if self.len > self.data.len() {
+			unsafe {
+				// SAFETY: `len` is only incremented when the capacity is
+				// initialized manually.
+				self.data.set_len(self.len);
+			}
+		} else {
+			debug_assert_eq!(self.len, self.data.len());
+		}
+		NodeIter {
+			iter: self.data.into_iter(),
+			node: self.next.map(|x| *x),
+		}
+	}
+}
+
+/// A view into a [`Node`], used to initialize its data in-place.
+struct NodeWriter<'n, T> {
+	data: std::slice::IterMut<'n, MaybeUninit<T>>,
+	len: &'n mut usize,
+	next: &'n mut Option<Box<Node<T>>>,
+}
+
+impl<'n, T> NodeWriter<'n, T> {
+	fn write(&mut self, value: T) -> &'n mut T {
+		let case = if let Some(case) = self.data.next() {
+			case
+		}
+		
+		 // Allocate Another Node:
+		else {
+			*self.next = Some(Box::new(Node {
+				data: Vec::with_capacity(100), // !!! Need a column size
+				len: 0,
+				next: None,
+			}));
+			if let Some(node) = self.next.as_mut() {
+				*self = unsafe { NodeWriter {
+					// SAFETY: All previous nodes will remain in place until
+					// `self` is dropped. The current `self.node` reference is
+					// being replaced - all previous nodes are inaccessible.
+					data: std::mem::transmute(node.data.spare_capacity_mut().into_iter()),
+					len:  std::mem::transmute(&mut node.len),
+					next: std::mem::transmute(&mut node.next),
+				} };
+				if let Some(case) = self.data.next() {
+					case
+				} else {
+					unreachable!()
+				}
+			} else {
+				unreachable!()
+			}
+		};
+		
+		let value = case.write(value);
+		*self.len += 1;
+		
+		value
+	}
+}
+
+/// An iterator over the data of a [`Node`] and its sub-nodes.
+struct NodeIter<T> {
+	node: Option<Node<T>>,
+	iter: std::vec::IntoIter<T>,
+}
+
+impl<T> Iterator for NodeIter<T> {
+	type Item = T;
+	fn next(&mut self) -> Option<Self::Item> {
+		if let Some(next) = self.iter.next() {
+			Some(next)
+		} else if let Some(node) = self.node.take() {
+			*self = node.into_iter();
+			self.next()
+		} else {
+			None
+		}
+	}
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		let lower = self.iter.size_hint().0
+			+ self.node.as_ref().map(|n| n.len).unwrap_or(0);
+		(lower, None)
 	}
 }
