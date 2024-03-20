@@ -390,7 +390,7 @@ impl<'w, 's, 'p, P: PredParam> IntoIterator for PredState<'w, 's, 'p, P> {
 	type IntoIter = PredCombinator<'w, 's, 'p, P>;
 	fn into_iter(self) -> Self::IntoIter {
 		let inner = P::updated_iter(&self.state);
-		self.node.data.reserve(100); // !!! Need a column size
+		self.node.data.reserve(inner.size_hint().0.max(4));
 		PredCombinator {
 			iter: inner,
 			node: NodeWriter {
@@ -1127,6 +1127,7 @@ where
 pub struct PredArrayIter<'w, 's, T: PredParam, const N: usize> {
 	slice: Box<[<T::Iterator<'w, 's> as Iterator>::Item]>,
 	index: [usize; N],
+	is_first: bool,
 }
 
 impl<'w, 's, T: PredParam, const N: usize> PredArrayIter<'w, 's, T, N>
@@ -1139,6 +1140,7 @@ where
 		let mut iter = Self {
 			slice: vec.into_boxed_slice(),
 			index: [0; N],
+			is_first: true,
 		};
 		iter.step_main();
 		iter
@@ -1198,6 +1200,7 @@ where
 		//         yield all combinations of this item and the items after it
 		//       else:
 		//         yield item + f(slice[index+1..], layer+1)
+		self.is_first = false; // Temporary `size_hint` initial lower bound.
 		if self.slice.get(self.index[N-1]).is_none() {
 			return None
 		}
@@ -1237,11 +1240,15 @@ where
 		if self.slice.get(self.index[N-1]).is_none() {
 			(0, Some(0))
 		} else {
-			// N should generally be small.
-			let len = 1 + self.slice.len();
-			let upper = (len-N..len).product::<usize>()
-				/ (1..1+N).product::<usize>();
-			(1, Some(upper))
+			let len = self.slice.len();
+			let lower = (1+len-N..len).product::<usize>()
+				/ (1..N).product::<usize>(); // (len-1) choose (N-1)
+			let upper = lower * len / N; // len choose N
+			if self.is_first {
+				(lower, Some(upper))
+			} else {
+				(1, Some(upper)) // !!! Improve lower bound estimation later.
+			}
 		}
 	}
 }
@@ -1316,15 +1323,15 @@ impl<'n, T> NodeWriter<'n, T> {
 		 // Allocate Another Node:
 		else {
 			*self.next = Some(Box::new(Node {
-				data: Vec::with_capacity(100), // !!! Need a column size
+				data: Vec::with_capacity(*self.len * 2),
 				len: 0,
 				next: None,
 			}));
 			if let Some(node) = self.next.as_mut() {
 				*self = unsafe { NodeWriter {
-					// SAFETY: All previous nodes will remain in place until
-					// `self` is dropped. The current `self.node` reference is
-					// being replaced - all previous nodes are inaccessible.
+					// SAFETY: The current `self` is being replaced - all
+					// previous nodes are inaccessible and will remain in place
+					// until the lifetime 'n ends.
 					data: std::mem::transmute(node.data.spare_capacity_mut().into_iter()),
 					len:  std::mem::transmute(&mut node.len),
 					next: std::mem::transmute(&mut node.next),

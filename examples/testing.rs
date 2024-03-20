@@ -171,6 +171,7 @@ fn add_two_dogs(world: &mut World) {
 #[allow(dead_code)]
 fn add_many_dogs(world: &mut World) {
 	let radius = 3;
+	let mut n = 0;
 	for x in ((LEFT + radius + 1)..RIGHT).step_by(32) {
 	for y in ((BOTTOM + radius + 1)..TOP).step_by(32) {
 		world.spawn(
@@ -196,7 +197,9 @@ fn add_many_dogs(world: &mut World) {
 				},
 			}
 		);
+		n += 1;
 	}}
+	println!("COUNT: {n}");
 }
 
 fn when_func_a(pred: PredState<Query<(Ref<Pos>, Entity)>>) {
