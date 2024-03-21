@@ -438,7 +438,7 @@ impl<A: PredHash, B: PredHash, C: PredHash, D: PredHash> PredHash for (A, B, C, 
 }
 
 /// Collects predictions from "when" systems for later compilation.
-pub struct PredState<'w, 's, 'p, P: PredParam> {
+pub struct PredState<'w, 's, 'p, P: PredParam = ()> {
 	state: SystemParamItem<'w, 's, P::Param>,
 	node: &'p mut Node<PredStateCase<P::Id>>,
 }
@@ -846,6 +846,15 @@ impl<'w, R: Resource> PredItem<'w> for Res<'w, R> {
 	}
 }
 
+impl<'w> PredItem<'w> for () {
+	type Ref<'i> = ();
+	type Inner = ();
+	fn gimme_ref(self) -> Self::Ref<'w> {}
+	fn is_updated(&self) -> bool {
+		true
+	}
+}
+
 impl<'w, A, B> PredItem<'w> for (A, B)
 where
 	A: PredItem<'w>,
@@ -958,6 +967,24 @@ impl<R: Resource> PredParam for Res<'_, R> {
 		} else {
 			None
 		}.into_iter()
+	}
+}
+
+impl PredParam for () {
+	type Param = ();
+	type Item<'w> = ();
+	type Id = ();
+	type Iterator<'w, 's> = std::iter::Once<(((), ()), bool)>;
+	type UpdatedIterator<'w, 's> = std::iter::Once<((), ())>;
+	fn gimme_iter<'w, 's>(_param: &SystemParamItem<'w, 's, Self::Param>)
+		-> Self::Iterator<'w, 's>
+	{
+		std::iter::once((((), ()), true))
+	}
+	fn updated_iter<'w, 's>(_param: &SystemParamItem<'w, 's, Self::Param>)
+		-> Self::UpdatedIterator<'w, 's>
+	{
+		std::iter::once(((), ()))
 	}
 }
 
