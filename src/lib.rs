@@ -28,7 +28,7 @@ pub trait AddChimeEvent {
 	where
 		P: PredParam + 'static,
 		A: ReadOnlySystemParam + 'static,
-		F: PredFunction<P, A> + Send + Sync + 'static;
+		F: PredFn<P, A> + Send + Sync + 'static;
 }
 
 impl AddChimeEvent for App {
@@ -36,12 +36,12 @@ impl AddChimeEvent for App {
 	where
 		P: PredParam + 'static,
 		A: ReadOnlySystemParam + 'static,
-		F: PredFunction<P, A> + Send + Sync + 'static,
+		F: PredFn<P, A> + Send + Sync + 'static,
 	{
 		assert!(self.is_plugin_added::<ChimePlugin>());
 		
 		let ChimeEventBuilder {
-			mut pred_sys,
+			pred_sys,
 			begin_sys,
 			end_sys,
 			outlier_sys,
@@ -66,7 +66,7 @@ impl AddChimeEvent for App {
 				next: None,
 			};
 			
-			pred_sys.run(
+			pred_sys(
 				PredState {
 					state: state.into_inner(),
 					node: &mut node,
@@ -92,42 +92,57 @@ impl AddChimeEvent for App {
 	}
 }
 
-/// Specialized [`bevy::ecs::system::SystemParamFunction`] used for predicting
-/// and scheduling events.
-pub trait PredFunction<P: PredParam, A: ReadOnlySystemParam> {
-	fn run(
-		&mut self,
-		state: PredState<P>,
-		misc: SystemParamItem<A>,
-	);
+/// Specialized function used for predicting and scheduling events, functionally
+/// similar to a read-only [`bevy::ecs::system::SystemParamFunction`].
+pub trait PredFn<P: PredParam, A: ReadOnlySystemParam>:
+	/*Fn(PredState<P>, A) + */ Fn(PredState<P>, SystemParamItem<A>)
+{}
+
+impl<P, A, F> PredFn<P, A> for F
+where
+	P: PredParam,
+	A: ReadOnlySystemParam,
+	F: /*Fn(PredState<P>, A) + */ Fn(PredState<P>, SystemParamItem<A>),
+{}
+
+/// Types that can be converted into a [`PredFn`].
+pub trait IntoPredFn<P: PredParam, A: ReadOnlySystemParam>: Sized {
+	fn into_pred_fn(self) -> impl PredFn<P, A>;
+	fn into_events(self) -> ChimeEventBuilder<P, A, impl PredFn<P, A>> {
+		ChimeEventBuilder {
+			pred_sys: self.into_pred_fn(),
+			begin_sys: None,
+			end_sys: None,
+			outlier_sys: None,
+			_params: std::marker::PhantomData,
+		}
+	}
 }
 
-macro_rules! impl_pred_system_function {
+macro_rules! impl_into_pred_fn {
 	(@all $($param:ident $(, $rest:ident)*)?) => {
-		impl_pred_system_function!($($param $(, $rest)*)?);
-		$(impl_pred_system_function!(@all $($rest),*);)?
+		impl_into_pred_fn!($($param $(, $rest)*)?);
+		$(impl_into_pred_fn!(@all $($rest),*);)?
 	};
 	($($param:ident),*) => {
-		impl<F, P, $($param: ReadOnlySystemParam),*> PredFunction<P, ($($param,)*)> for F
+		impl<F, P, $($param: ReadOnlySystemParam),*> IntoPredFn<P, ($($param,)*)> for F
 		where
-			F: FnMut(PredState<'_, '_, '_, P>, $($param),*)
-				+ FnMut(PredState<'_, '_, '_, P>, $(SystemParamItem<$param>),*),
+			F: Sized
+				+ Fn(PredState<P>, $($param),*)
+				+ Fn(PredState<P>, $(SystemParamItem<$param>),*),
 			P: PredParam,
 		{
-			#[inline]
-			fn run(
-				&mut self,
-				state: PredState<P>,
-				misc: SystemParamItem<($($param,)*)>,
-			) {
-				let ($($param,)*) = misc;
-				self(state, $($param),*);
+			fn into_pred_fn(self) -> impl PredFn<P, ($($param,)*)> {
+				move |state, misc| {
+					let ($($param,)*) = misc;
+					self(state, $($param),*);
+				}
 			}
 		}
 	}
 }
 
-impl_pred_system_function!(@all
+impl_into_pred_fn!(@all
 	_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15
 );
 
@@ -153,7 +168,7 @@ pub struct ChimeEventBuilder<P, A, F>
 where
 	P: PredParam,
 	A: ReadOnlySystemParam,
-	F: PredFunction<P, A>,
+	F: PredFn<P, A>,
 {
 	pred_sys: F,
 	begin_sys: Option<Box<dyn ChimeEventSystem<In=PredInput<P::Id>, Out=()>>>,
@@ -166,18 +181,8 @@ impl<P, A, F> ChimeEventBuilder<P, A, F>
 where
 	P: PredParam,
 	A: ReadOnlySystemParam,
-	F: PredFunction<P, A>,
+	F: PredFn<P, A>,
 {
-	pub fn new(pred_sys: F) -> Self {
-		Self {
-			pred_sys,
-			begin_sys: None,
-			end_sys: None,
-			outlier_sys: None,
-			_params: std::marker::PhantomData,
-		}
-	}
-	
 	/// The system that runs when the event's prediction becomes active.
 	pub fn on_begin<T, M>(mut self, sys: T) -> Self
 	where
