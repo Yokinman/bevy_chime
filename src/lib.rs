@@ -147,17 +147,20 @@ impl_into_pred_fn!(@all
 );
 
 /// Begin/end-type system for a chime event (object-safe).
-trait ChimeEventSystem: System<Out=()> + Send + Sync {
-	fn add_to_schedule(&self, schedule: &mut Schedule, input: Self::In);
+trait ChimeEventSystem<I: PredHash>: System<In=PredInput<I>, Out=()> + Send + Sync {
+	fn add_to_schedule(&self, schedule: &mut Schedule, input: I);
 }
 
-impl<T: System<Out=()> + Send + Sync + Clone> ChimeEventSystem for T
+impl<I, T> ChimeEventSystem<I> for T
 where
-	<T as System>::In: Send + Sync + Copy
+	T: System<In=PredInput<I>, Out=()> + Send + Sync + Clone,
+	I: PredHash + Send + Sync + Copy + 'static
 {
-	fn add_to_schedule(&self, schedule: &mut Schedule, input: Self::In) {
+	fn add_to_schedule(&self, schedule: &mut Schedule, input: I) {
 		let input_sys = move || -> Self::In {
-			input
+			PredInput {
+				inner: input
+			}
 		};
 		schedule.add_systems(input_sys.pipe(self.clone()));
 	}
@@ -171,9 +174,9 @@ where
 	F: PredFn<P, A>,
 {
 	pred_sys: F,
-	begin_sys: Option<Box<dyn ChimeEventSystem<In=PredInput<P::Id>, Out=()>>>,
-	end_sys: Option<Box<dyn ChimeEventSystem<In=PredInput<P::Id>, Out=()>>>,
-	outlier_sys: Option<Box<dyn ChimeEventSystem<In=PredInput<P::Id>, Out=()>>>,
+	begin_sys: Option<Box<dyn ChimeEventSystem<P::Id>>>,
+	end_sys: Option<Box<dyn ChimeEventSystem<P::Id>>>,
+	outlier_sys: Option<Box<dyn ChimeEventSystem<P::Id>>>,
 	_params: std::marker::PhantomData<(P, A)>,
 }
 
@@ -660,9 +663,9 @@ impl ChimeEventMap {
 		input: impl IntoIterator<Item=PredStateCase<I>>,
 		pred_time: Duration,
 		event_id: usize,
-		begin_sys: Option<&dyn ChimeEventSystem<In=PredInput<I>, Out=()>>,
-		end_sys: Option<&dyn ChimeEventSystem<In=PredInput<I>, Out=()>>,
-		outlier_sys: Option<&dyn ChimeEventSystem<In=PredInput<I>, Out=()>>,
+		begin_sys: Option<&dyn ChimeEventSystem<I>>,
+		end_sys: Option<&dyn ChimeEventSystem<I>>,
+		outlier_sys: Option<&dyn ChimeEventSystem<I>>,
 	) {
 		// let n = input.0.len();
 		// let a_time = Instant::now();
@@ -684,14 +687,11 @@ impl ChimeEventMap {
 			if !event.receivers.contains(&pred_hash) {
 				event.receivers.push(pred_hash);
 				// !!! https://bevyengine.org/news/bevy-0-13/#more-flexible-one-shot-systems
-				let pred_input = PredInput {
-					inner: pred_id,
-				};
 				if let Some(sys) = begin_sys {
-					sys.add_to_schedule(&mut event.begin_schedule, pred_input);
+					sys.add_to_schedule(&mut event.begin_schedule, pred_id);
 				}
 				if let Some(sys) = end_sys {
-					sys.add_to_schedule(&mut event.end_schedule, pred_input);
+					sys.add_to_schedule(&mut event.end_schedule, pred_id);
 				}
 				if let Some(sys) = outlier_sys {
 					if event.outlier_schedule.is_none() {
@@ -699,7 +699,7 @@ impl ChimeEventMap {
 					}
 					sys.add_to_schedule(
 						event.outlier_schedule.as_mut().unwrap(),
-						pred_input
+						pred_id
 					);
 				}
 			}
