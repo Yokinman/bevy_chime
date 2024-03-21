@@ -53,7 +53,8 @@ impl AddChimeEvent for App {
 			time: Res<Time>,
 			mut event_map: ResMut<ChimeEventMap>,
 		| {
-			// !!! Cache in a Local so it doesn't need to reallocate much:
+			// !!! Cache this in a Local so it doesn't need to reallocate much.
+			// Maybe chop off nodes that go proportionally underused.
 			let mut node = Node {
 				data: Vec::new(),
 				len: 0,
@@ -390,7 +391,7 @@ impl<'w, 's, 'p, P: PredParam> IntoIterator for PredState<'w, 's, 'p, P> {
 	type IntoIter = PredCombinator<'w, 's, 'p, P>;
 	fn into_iter(self) -> Self::IntoIter {
 		let inner = P::updated_iter(&self.state);
-		self.node.data.reserve(inner.size_hint().0.max(4));
+		self.node.data.reserve(4 * inner.size_hint().0.max(1));
 		PredCombinator {
 			iter: inner,
 			node: NodeWriter {
