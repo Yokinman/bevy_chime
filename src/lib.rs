@@ -1046,7 +1046,7 @@ where
 	type Id = [T::Id; N];
 	type Iterator<'w, 's> = std::vec::IntoIter<((<Self::Item<'w> as PredItem<'w>>::Ref<'w>, Self::Id), bool)>;
 	type UpdatedIterator<'w, 's> = PredArrayIter<'w, 's, T, N>;
-	fn gimme_iter<'w, 's>(param: &SystemParamItem<'w, 's, Self::Param>)
+	fn gimme_iter<'w, 's>(_param: &SystemParamItem<'w, 's, Self::Param>)
 		-> Self::Iterator<'w, 's>
 	{
 		todo!()
