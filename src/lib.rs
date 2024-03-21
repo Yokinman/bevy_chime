@@ -127,8 +127,7 @@ macro_rules! impl_into_pred_fn {
 	($($param:ident),*) => {
 		impl<F, P, $($param: ReadOnlySystemParam),*> IntoPredFn<P, ($($param,)*)> for F
 		where
-			F: Sized
-				+ Fn(PredState<P>, $($param),*)
+			F: Fn(PredState<P>, $($param),*)
 				+ Fn(PredState<P>, $(SystemParamItem<$param>),*),
 			P: PredParam,
 		{
