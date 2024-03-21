@@ -24,20 +24,24 @@ use chime::time::TimeRanges;
 
 /// Builder entry point for adding chime events to a [`World`].
 pub trait AddChimeEvent {
-	fn add_chime_events<P>(&mut self, events: ChimeEventBuilder<P>) -> &mut Self
+	fn add_chime_events<P, A, F>(&mut self, events: ChimeEventBuilder<P, A, F>) -> &mut Self
 	where
-		P: PredParam + 'static;
+		P: PredParam + 'static,
+		A: ReadOnlySystemParam + 'static,
+		F: PredFunction<P, A> + Send + Sync + 'static;
 }
 
 impl AddChimeEvent for App {
-	fn add_chime_events<P>(&mut self, events: ChimeEventBuilder<P>) -> &mut Self
+	fn add_chime_events<P, A, F>(&mut self, events: ChimeEventBuilder<P, A, F>) -> &mut Self
 	where
-		P: PredParam + 'static
+		P: PredParam + 'static,
+		A: ReadOnlySystemParam + 'static,
+		F: PredFunction<P, A> + Send + Sync + 'static,
 	{
 		assert!(self.is_plugin_added::<ChimePlugin>());
 		
 		let ChimeEventBuilder {
-			pred_sys,
+			mut pred_sys,
 			begin_sys,
 			end_sys,
 			outlier_sys,
@@ -50,6 +54,7 @@ impl AddChimeEvent for App {
 		
 		let system = move |
 			state: StaticSystemParam<P::Param>,
+			misc: StaticSystemParam<A>,
 			time: Res<Time>,
 			mut event_map: ResMut<ChimeEventMap>,
 		| {
@@ -61,10 +66,13 @@ impl AddChimeEvent for App {
 				next: None,
 			};
 			
-			pred_sys(PredState {
-				state: state.into_inner(),
-				node: &mut node,
-			});
+			pred_sys.run(
+				PredState {
+					state: state.into_inner(),
+					node: &mut node,
+				},
+				misc.into_inner()
+			);
 			
 			event_map.sched(
 				node,
@@ -84,6 +92,45 @@ impl AddChimeEvent for App {
 	}
 }
 
+/// Specialized [`bevy::ecs::system::SystemParamFunction`] used for predicting
+/// and scheduling events.
+pub trait PredFunction<P: PredParam, A: ReadOnlySystemParam> {
+	fn run(
+		&mut self,
+		state: PredState<P>,
+		misc: SystemParamItem<A>,
+	);
+}
+
+macro_rules! impl_pred_system_function {
+	(@all $($param:ident $(, $rest:ident)*)?) => {
+		impl_pred_system_function!($($param $(, $rest)*)?);
+		$(impl_pred_system_function!(@all $($rest),*);)?
+	};
+	($($param:ident),*) => {
+		impl<F, P, $($param: ReadOnlySystemParam),*> PredFunction<P, ($($param,)*)> for F
+		where
+			F: FnMut(PredState<'_, '_, '_, P>, $($param),*)
+				+ FnMut(PredState<'_, '_, '_, P>, $(SystemParamItem<$param>),*),
+			P: PredParam,
+		{
+			#[inline]
+			fn run(
+				&mut self,
+				state: PredState<P>,
+				misc: SystemParamItem<($($param,)*)>,
+			) {
+				let ($($param,)*) = misc;
+				self(state, $($param),*);
+			}
+		}
+	}
+}
+
+impl_pred_system_function!(@all
+	_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15
+);
+
 /// Begin/end-type system for a chime event (object-safe).
 trait ChimeEventSystem: System<Out=()> + Send + Sync {
 	fn add_to_schedule(&self, schedule: &mut Schedule, input: Self::In);
@@ -102,22 +149,32 @@ where
 }
 
 /// Builder for inserting a chime event into a [`World`].  
-pub struct ChimeEventBuilder<P: PredParam> {
-	case: std::marker::PhantomData<P>,
-	pred_sys: for<'w, 's, 'p> fn(PredState<'w, 's, 'p, P>),
+pub struct ChimeEventBuilder<P, A, F>
+where
+	P: PredParam,
+	A: ReadOnlySystemParam,
+	F: PredFunction<P, A>,
+{
+	pred_sys: F,
 	begin_sys: Option<Box<dyn ChimeEventSystem<In=PredInput<P::Id>, Out=()>>>,
 	end_sys: Option<Box<dyn ChimeEventSystem<In=PredInput<P::Id>, Out=()>>>,
 	outlier_sys: Option<Box<dyn ChimeEventSystem<In=PredInput<P::Id>, Out=()>>>,
+	_params: std::marker::PhantomData<(P, A)>,
 }
 
-impl<P: PredParam> ChimeEventBuilder<P> {
-	pub fn new(pred_sys: for<'w, 's, 'p> fn(PredState<'w, 's, 'p, P>)) -> Self {
+impl<P, A, F> ChimeEventBuilder<P, A, F>
+where
+	P: PredParam,
+	A: ReadOnlySystemParam,
+	F: PredFunction<P, A>,
+{
+	pub fn new(pred_sys: F) -> Self {
 		Self {
-			case: std::marker::PhantomData,
 			pred_sys,
 			begin_sys: None,
 			end_sys: None,
 			outlier_sys: None,
+			_params: std::marker::PhantomData,
 		}
 	}
 	
