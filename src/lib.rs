@@ -443,6 +443,22 @@ pub struct PredState<'w, 's, 'p, P: PredParam = ()> {
 	node: &'p mut Node<PredStateCase<P::Id>>,
 }
 
+impl<P: PredParam> PredState<'_, '_, '_, P> {
+	/// Sets all updated cases to the given times.
+	pub fn set<I>(self, times: TimeRanges<I>)
+	where
+		TimeRanges<I>: Iterator<Item = (Duration, Duration)> + Clone + Send + Sync + 'static
+	{
+		let mut iter = self.into_iter();
+		if let Some((first, _)) = iter.next() {
+			for (case, _) in iter {
+				case.set(times.clone());
+			}
+			first.set(times);
+		}
+	}
+}
+
 impl<'w, 's, 'p, P: PredParam> IntoIterator for PredState<'w, 's, 'p, P> {
 	type Item = <Self::IntoIter as Iterator>::Item;
 	type IntoIter = PredCombinator<'w, 's, 'p, P>;
