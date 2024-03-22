@@ -114,7 +114,7 @@ pub trait IntoPredFn<P: PredParam, A: ReadOnlySystemParam>: Sized {
 			begin_sys: None,
 			end_sys: None,
 			outlier_sys: None,
-			_params: std::marker::PhantomData,
+			_param: std::marker::PhantomData,
 		}
 	}
 }
@@ -176,7 +176,7 @@ where
 	begin_sys: Option<Box<dyn ChimeEventSystem<P::Id>>>,
 	end_sys: Option<Box<dyn ChimeEventSystem<P::Id>>>,
 	outlier_sys: Option<Box<dyn ChimeEventSystem<P::Id>>>,
-	_params: std::marker::PhantomData<(P, A)>,
+	_param: std::marker::PhantomData<fn(A)>,
 }
 
 impl<P, A, F> ChimeEventBuilder<P, A, F>
