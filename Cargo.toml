@@ -4,7 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-bevy = { version = "0.13.0", default-features = false }
+bevy_app = { version = "0.13.1" }
+bevy_ecs = { version = "0.13.1" }
+bevy_time = { version = "0.13.1" }
 chime = "0.6"
 #chime = { path = "../chime" }
 
@@ -12,7 +14,7 @@ chime = "0.6"
 accurate = "0.3.1"
 
 [dev-dependencies.bevy]
-version = "0.13.0"
+version = "0.13.1"
 default-features = false
 features = [
     "bevy_winit",

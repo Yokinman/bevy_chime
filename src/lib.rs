@@ -9,16 +9,19 @@ use std::hash::Hash;
 use std::mem::MaybeUninit;
 use std::time::{Duration, Instant};
 
-use bevy::app::{App, Plugin, Update};
-use bevy::ecs::change_detection::DetectChanges;
-use bevy::ecs::component::Component;
-use bevy::ecs::entity::Entity;
-use bevy::ecs::query::{QueryData, QueryEntityError, QueryFilter, QueryItem, QueryIter, ROQueryItem};
-use bevy::ecs::schedule::{Schedule, Schedules, ScheduleLabel};
-use bevy::ecs::system::{IntoSystem, Query, Res, ResMut, Resource, System, ReadOnlySystemParam, SystemParamItem, StaticSystemParam};
-use bevy::ecs::world::{Mut, Ref, World};
-use bevy::input::{ButtonInput, keyboard::KeyCode};
-use bevy::time::Time;
+use bevy_app::{App, Plugin, Update};
+
+use bevy_ecs::{
+	change_detection::DetectChanges,
+	component::Component,
+	entity::Entity,
+	query::{QueryData, QueryEntityError, QueryFilter, QueryItem, QueryIter, ROQueryItem},
+	schedule::{Schedule, Schedules, ScheduleLabel},
+	system::{IntoSystem, Query, Res, ResMut, Resource, System, ReadOnlySystemParam, SystemParamItem, StaticSystemParam},
+	world::{Mut, Ref, World}
+};
+
+use bevy_time::Time;
 
 use chime::time::TimeRanges;
 
@@ -93,7 +96,7 @@ impl AddChimeEvent for App {
 }
 
 /// Specialized function used for predicting and scheduling events, functionally
-/// similar to a read-only [`bevy::ecs::system::SystemParamFunction`].
+/// similar to a read-only [`bevy_ecs::system::SystemParamFunction`].
 pub trait PredFn<P: PredParam, A: ReadOnlySystemParam>:
 	/*Fn(PredState<P>, A) + */ Fn(PredState<P>, SystemParamItem<A>)
 {}
@@ -262,7 +265,7 @@ fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule)
 	let mut num = 0;
 	let a_time = Instant::now();
 	
-	let can_can_print = world.resource::<ButtonInput<KeyCode>>().pressed(KeyCode::Space);
+	let can_can_print = false;
 	let mut can_print = can_can_print;
 	
 	pred_schedule.run(world);
@@ -906,7 +909,7 @@ where
 
 /// A set of [`PredItem`] values used to predict & schedule events.
 pub trait PredParam {
-	/// The equivalent [`bevy::ecs::system::SystemParam`].
+	/// The equivalent [`bevy_ecs::system::SystemParam`].
 	type Param: ReadOnlySystemParam;
 	
 	/// The item that `Param` iterates over.
