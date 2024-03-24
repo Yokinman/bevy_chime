@@ -4,7 +4,7 @@ use bevy_ecs::change_detection::{DetectChanges, Ref, Res};
 use bevy_ecs::component::{Component, Tick};
 use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::{Query, Resource, World};
-use bevy_ecs::query::{QueryData, QueryEntityError, QueryFilter, QueryItem, QueryIter, ROQueryItem};
+use bevy_ecs::query::QueryIter;
 use bevy_ecs::system::{ReadOnlySystemParam, SystemMeta, SystemParam, SystemParamItem};
 use bevy_ecs::world::{Mut, unsafe_world_cell::UnsafeWorldCell};
 use chime::time::TimeRanges;
