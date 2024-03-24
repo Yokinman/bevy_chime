@@ -300,19 +300,19 @@ impl<P: PredId> PredStateCase<P> {
 }
 
 /// Types that can be used to query for a specific entity.
-pub unsafe trait PredQuery {
+pub unsafe trait PredQueryData {
 	type Id: PredId;
 	type Output<'w>;
 	fn get_inner(world: UnsafeWorldCell, id: Self::Id) -> Self::Output<'_>;
 }
 
-unsafe impl PredQuery for () {
+unsafe impl PredQueryData for () {
 	type Id = ();
 	type Output<'w> = ();
 	fn get_inner(_world: UnsafeWorldCell, _id: Self::Id) -> Self::Output<'_> {}
 }
 
-unsafe impl<C: Component> PredQuery for &C {
+unsafe impl<C: Component> PredQueryData for &C {
 	type Id = Entity;
 	type Output<'w> = &'w C;
 	fn get_inner(world: UnsafeWorldCell, id: Self::Id) -> Self::Output<'_> {
@@ -326,7 +326,7 @@ unsafe impl<C: Component> PredQuery for &C {
 	}
 }
 
-unsafe impl<C: Component> PredQuery for &mut C {
+unsafe impl<C: Component> PredQueryData for &mut C {
 	type Id = Entity;
 	type Output<'w> = Mut<'w, C>;
 	fn get_inner(world: UnsafeWorldCell, id: Self::Id) -> Self::Output<'_> {
@@ -340,7 +340,7 @@ unsafe impl<C: Component> PredQuery for &mut C {
 	}
 }
 
-unsafe impl<C: Component, const N: usize> PredQuery for [&C; N] {
+unsafe impl<C: Component, const N: usize> PredQueryData for [&C; N] {
 	type Id = [Entity; N];
 	type Output<'w> = [&'w C; N];
 	fn get_inner(world: UnsafeWorldCell, id: Self::Id) -> Self::Output<'_> {
@@ -354,7 +354,7 @@ unsafe impl<C: Component, const N: usize> PredQuery for [&C; N] {
 	}
 }
 
-unsafe impl<C: Component, const N: usize> PredQuery for [&mut C; N] {
+unsafe impl<C: Component, const N: usize> PredQueryData for [&mut C; N] {
 	type Id = [Entity; N];
 	type Output<'w> = [Mut<'w, C>; N];
 	fn get_inner(world: UnsafeWorldCell, id: Self::Id) -> Self::Output<'_> {
@@ -368,7 +368,7 @@ unsafe impl<C: Component, const N: usize> PredQuery for [&mut C; N] {
 	}
 }
 
-unsafe impl<A: PredQuery, B: PredQuery> PredQuery for (A, B) {
+unsafe impl<A: PredQueryData, B: PredQueryData> PredQueryData for (A, B) {
 	type Id = (A::Id, B::Id);
 	type Output<'w> = (A::Output<'w>, B::Output<'w>);
 	fn get_inner(world: UnsafeWorldCell, (a, b): Self::Id) -> Self::Output<'_> {
@@ -377,18 +377,18 @@ unsafe impl<A: PredQuery, B: PredQuery> PredQuery for (A, B) {
 }
 
 /// Prediction data fed as a parameter to an event's systems.
-pub struct PredInput<'world, 'state, P: PredQuery> {
+pub struct PredInput<'world, 'state, P: PredQueryData> {
     world: UnsafeWorldCell<'world>,
     state: &'state P::Id,
 }
 
-impl<'w, 's, P: PredQuery> PredInput<'w, 's, P> {
+impl<'w, 's, P: PredQueryData> PredInput<'w, 's, P> {
 	pub fn get_inner(self) -> P::Output<'w> {
-		<P as PredQuery>::get_inner(self.world, *self.state)
+		<P as PredQueryData>::get_inner(self.world, *self.state)
 	}
 }
 
-unsafe impl<P: PredQuery> SystemParam for PredInput<'_, '_, P> {
+unsafe impl<P: PredQueryData> SystemParam for PredInput<'_, '_, P> {
 	type State = P::Id;
 	type Item<'world, 'state> = PredInput<'world, 'state, P>;
 	fn init_state(world: &mut World, system_meta: &mut SystemMeta) -> Self::State {
