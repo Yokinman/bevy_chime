@@ -304,6 +304,9 @@ pub unsafe trait PredQueryData {
 	type Id: PredId;
 	type Output<'w>;
 	fn get_inner(world: UnsafeWorldCell, id: Self::Id) -> Self::Output<'_>;
+	// !!! Could take a dynamically-dispatched ID and attempt downcasting
+	// manually. Return an `Option<Self::Output>` for whether it worked. This
+	// would allow for query types that accept multiple IDs; support `() -> ()`.
 }
 
 unsafe impl PredQueryData for () {
