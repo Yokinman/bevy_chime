@@ -147,16 +147,16 @@ impl_into_pred_fn!(@all
 );
 
 /// Begin/end-type system for a chime event (object-safe).
-trait ChimeEventSystem<I: PredId>: System<In=PredInput<I>, Out=()> + Send + Sync {
-	fn init_sys(&self, store: &mut Option<Box<dyn System<In=PredInput<I>, Out=()>>>, world: &mut World);
+trait ChimeEventSystem<I: PredId>: System<In=(), Out=()> + Send + Sync {
+	fn init_sys(&self, store: &mut Option<Box<dyn System<In=(), Out=()>>>, world: &mut World);
 }
 
 impl<I, T> ChimeEventSystem<I> for T
 where
 	I: PredId,
-	T: System<In=PredInput<I>, Out=()> + Send + Sync + Clone,
+	T: System<In=(), Out=()> + Send + Sync + Clone,
 {
-	fn init_sys(&self, store: &mut Option<Box<dyn System<In=PredInput<I>, Out=()>>>, world: &mut World) {
+	fn init_sys(&self, store: &mut Option<Box<dyn System<In=(), Out=()>>>, world: &mut World) {
 		let mut sys = self.clone();
 		sys.initialize(world);
 		*store = Some(Box::new(sys));
@@ -186,7 +186,7 @@ where
 	/// The system that runs when the event's prediction becomes active.
 	pub fn on_begin<T, M>(mut self, sys: T) -> Self
 	where
-		T: IntoSystem<PredInput<P::Id>, (), M>,
+		T: IntoSystem<(), (), M>,
 		T::System: Send + Sync + Clone,
 	{
 		assert!(self.begin_sys.is_none(), "can't have >1 begin systems");
@@ -197,7 +197,7 @@ where
 	/// The system that runs when the event's prediction becomes inactive.
 	pub fn on_end<T, M>(mut self, sys: T) -> Self
 	where
-		T: IntoSystem<PredInput<P::Id>, (), M>,
+		T: IntoSystem<(), (), M>,
 		T::System: Send + Sync + Clone,
 	{
 		assert!(self.end_sys.is_none(), "can't have >1 end systems");
@@ -208,7 +208,7 @@ where
 	/// The system that runs when the event's prediction repeats excessively.
 	pub fn on_repeat<T, M>(mut self, sys: T) -> Self
 	where
-		T: IntoSystem<PredInput<P::Id>, (), M>,
+		T: IntoSystem<(), (), M>,
 		T::System: Send + Sync + Clone,
 	{
 		assert!(self.outlier_sys.is_none(), "can't have >1 outlier systems");
@@ -300,21 +300,21 @@ fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule)
 }
 
 /// An individually scheduled event, generally owned by an `EventMap`.
-struct ChimeEvent<I> {
+struct ChimeEvent {
 	times: Box<dyn Iterator<Item = (Duration, Duration)> + Send + Sync>,
 	next_time: Option<Duration>,
 	next_end_time: Option<Duration>,
 	curr_time: Option<Duration>,
 	prev_time: Option<Duration>,
-	begin_sys: Option<Box<dyn System<In=PredInput<I>, Out=()>>>,
-	end_sys: Option<Box<dyn System<In=PredInput<I>, Out=()>>>,
-	outlier_sys: Option<Box<dyn System<In=PredInput<I>, Out=()>>>,
+	begin_sys: Option<Box<dyn System<In=(), Out=()>>>,
+	end_sys: Option<Box<dyn System<In=(), Out=()>>>,
+	outlier_sys: Option<Box<dyn System<In=(), Out=()>>>,
 	recent_times: BinaryHeap<Reverse<Duration>>,
 	older_times: BinaryHeap<Reverse<Duration>>,
 	is_active: bool,
 }
 
-impl<I> Default for ChimeEvent<I> {
+impl Default for ChimeEvent {
 	fn default() -> Self {
 		ChimeEvent {
 			times: Box::new(std::iter::empty()),
@@ -332,7 +332,7 @@ impl<I> Default for ChimeEvent<I> {
 	}
 }
 
-impl<I> ChimeEvent<I> {
+impl ChimeEvent {
 	fn next_time(&mut self) -> Option<Duration> {
 		let next_time = if self.is_active {
 			&mut self.next_end_time
@@ -405,6 +405,7 @@ impl ChimeEventMap {
 				let mut event = ChimeEvent::default();
 				
 				 // Initialize Systems:
+				world.insert_resource(PredSystemId(Box::new(pred_id)));
 				if let Some(sys) = begin_sys {
 					sys.init_sys(&mut event.begin_sys, world);
 				}
@@ -414,6 +415,7 @@ impl ChimeEventMap {
 				if let Some(sys) = outlier_sys {
 					sys.init_sys(&mut event.outlier_sys, world);
 				}
+				world.remove_resource::<PredSystemId>();
 				
 				event
 			});
@@ -521,7 +523,7 @@ impl ChimeEventMap {
 
 /// A set of events related to a common method of scheduling.
 struct EventMap<K> {
-	events: HashMap<K, ChimeEvent<K>>,
+	events: HashMap<K, ChimeEvent>,
 	
 	/// Reverse time-to-event map for quickly rescheduling events.
 	times: BTreeMap<Duration, Vec<K>>,
@@ -590,12 +592,10 @@ impl<K: PredId> EventMap<K> {
 		}
 		event.recent_times.push(Reverse(time + RECENT_TIME));
 		
-		let input = PredInput::new(key);
-		
 		 // End Event:
 		if !event.is_active {
 			if let Some(sys) = &mut event.end_sys {
-				sys.run(input, world);
+				sys.run((), world);
 			}
 			return
 		}
@@ -615,7 +615,7 @@ impl<K: PredId> EventMap<K> {
 		let is_outlier = new_avg > (old_avg * LIMIT).max(min_avg);
 		if is_outlier {
 			if let Some(sys) = &mut event.outlier_sys {
-				sys.run(input, world);
+				sys.run((), world);
 			} else {
 				// ??? Ignore, crash, warning, etc.
 				// ??? If ignored, clear the recent average?
@@ -630,14 +630,14 @@ impl<K: PredId> EventMap<K> {
 					new_avg,
 				);
 				if let Some(sys) = &mut event.begin_sys {
-					sys.run(input, world);
+					sys.run((), world);
 				}
 			}
 		}
 		
 		 // Begin Event:
 		else if let Some(sys) = &mut event.begin_sys {
-			sys.run(input, world);
+			sys.run((), world);
 		}
 	}
 }

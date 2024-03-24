@@ -1,13 +1,18 @@
 use std::hash::Hash;
 use std::time::Duration;
 use bevy_ecs::change_detection::{DetectChanges, Ref, Res};
-use bevy_ecs::component::Component;
+use bevy_ecs::component::{Component, Tick};
 use bevy_ecs::entity::Entity;
-use bevy_ecs::prelude::{Query, Resource};
+use bevy_ecs::prelude::{Query, Resource, World};
 use bevy_ecs::query::{QueryData, QueryEntityError, QueryFilter, QueryItem, QueryIter, ROQueryItem};
-use bevy_ecs::system::{ReadOnlySystemParam, SystemParamItem};
+use bevy_ecs::system::{ReadOnlySystemParam, SystemMeta, SystemParam, SystemParamItem};
+use bevy_ecs::world::{Mut, unsafe_world_cell::UnsafeWorldCell};
 use chime::time::TimeRanges;
 use crate::node::*;
+
+/// Resource for passing an event's unique ID to its system parameters. 
+#[derive(Resource)]
+pub(crate) struct PredSystemId(pub Box<dyn std::any::Any + Send + Sync>);
 
 /// A hashable unique identifier for a case of prediction.
 pub trait PredId:
@@ -294,88 +299,115 @@ impl<P: PredId> PredStateCase<P> {
 	}
 }
 
-/// Types that can be used to query for a specific entity.  
-pub trait PredQuery<I> {
-	type Output;
-	fn get(self, id: I) -> Self::Output;
+/// Types that can be used to query for a specific entity.
+pub unsafe trait PredQuery {
+	type Id: PredId;
+	type Output<'w>;
+	fn get_inner(world: UnsafeWorldCell, id: Self::Id) -> Self::Output<'_>;
 }
 
-impl<I> PredQuery<I> for () {
-	type Output = ();
-	fn get(self, _id: I) -> Self::Output {}
+unsafe impl PredQuery for () {
+	type Id = ();
+	type Output<'w> = ();
+	fn get_inner(_world: UnsafeWorldCell, _id: Self::Id) -> Self::Output<'_> {}
 }
 
-impl<'a, D, F> PredQuery<Entity> for &'a Query<'_, '_, D, F>
-where
-	D: QueryData,
-	F: QueryFilter,
-{
-	type Output = Result<ROQueryItem<'a, D>, QueryEntityError>;
-	fn get(self, id: Entity) -> Self::Output {
-		self.get(id)
+unsafe impl<C: Component> PredQuery for &C {
+	type Id = Entity;
+	type Output<'w> = &'w C;
+	fn get_inner(world: UnsafeWorldCell, id: Self::Id) -> Self::Output<'_> {
+		unsafe {
+			// SAFETY: !!!
+			world.get_entity(id)
+				.expect("entity should exist")
+				.get::<C>()
+				.expect("component should exist")
+		}
 	}
 }
 
-impl<'a, D, F> PredQuery<Entity> for &'a mut Query<'_, '_, D, F>
-where
-	D: QueryData,
-	F: QueryFilter,
-{
-	type Output = Result<QueryItem<'a, D>, QueryEntityError>;
-	fn get(self, id: Entity) -> Self::Output {
-		self.get_mut(id)
+unsafe impl<C: Component> PredQuery for &mut C {
+	type Id = Entity;
+	type Output<'w> = Mut<'w, C>;
+	fn get_inner(world: UnsafeWorldCell, id: Self::Id) -> Self::Output<'_> {
+		unsafe {
+			// SAFETY: !!!
+			world.get_entity(id)
+				.expect("entity should exist")
+				.get_mut::<C>()
+				.expect("component should exist")
+		}
 	}
 }
 
-impl<'a, D, F, const N: usize> PredQuery<[Entity; N]> for &'a Query<'_, '_, D, F>
-where
-	D: QueryData,
-	F: QueryFilter,
-{
-	type Output = Result<[ROQueryItem<'a, D>; N], QueryEntityError>;
-	fn get(self, id: [Entity; N]) -> Self::Output {
-		self.get_many(id)
+unsafe impl<C: Component, const N: usize> PredQuery for [&C; N] {
+	type Id = [Entity; N];
+	type Output<'w> = [&'w C; N];
+	fn get_inner(world: UnsafeWorldCell, id: Self::Id) -> Self::Output<'_> {
+		std::array::from_fn(|i| unsafe {
+			// SAFETY: !!! Not really safe yet.
+			world.get_entity(id[i])
+				.expect("entity should exist")
+				.get::<C>()
+				.expect("component should exist")
+		})
 	}
 }
 
-impl<'a, D, F, const N: usize> PredQuery<[Entity; N]> for &'a mut Query<'_, '_, D, F>
-where
-	D: QueryData,
-	F: QueryFilter,
-{
-	type Output = Result<[QueryItem<'a, D>; N], QueryEntityError>;
-	fn get(self, id: [Entity; N]) -> Self::Output {
-		self.get_many_mut(id)
+unsafe impl<C: Component, const N: usize> PredQuery for [&mut C; N] {
+	type Id = [Entity; N];
+	type Output<'w> = [Mut<'w, C>; N];
+	fn get_inner(world: UnsafeWorldCell, id: Self::Id) -> Self::Output<'_> {
+		std::array::from_fn(|i| unsafe {
+			// SAFETY: !!! Not really safe yet.
+			world.get_entity(id[i])
+				.expect("entity should exist")
+				.get_mut::<C>()
+				.expect("component should exist")
+		})
 	}
 }
 
-impl<A, B, X, Y> PredQuery<(X, Y)> for (A, B)
-where
-	A: PredQuery<X>,
-	B: PredQuery<Y>,
-{
-	type Output = (A::Output, B::Output);
-	fn get(self, (x, y): (X, Y)) -> Self::Output {
-		(self.0.get(x), self.1.get(y))
+unsafe impl<A: PredQuery, B: PredQuery> PredQuery for (A, B) {
+	type Id = (A::Id, B::Id);
+	type Output<'w> = (A::Output<'w>, B::Output<'w>);
+	fn get_inner(world: UnsafeWorldCell, (a, b): Self::Id) -> Self::Output<'_> {
+		(A::get_inner(world, a), B::get_inner(world, b))
 	}
 }
 
-/// Prediction data fed as input to an event's systems.
-#[derive(Copy, Clone)]
-pub struct PredInput<T> {
-	inner: T,
+/// Prediction data fed as a parameter to an event's systems.
+pub struct PredInput<'world, 'state, P: PredQuery> {
+    world: UnsafeWorldCell<'world>,
+    state: &'state P::Id,
 }
 
-impl<T: PredId> PredInput<T> {
-	pub(crate) fn new(inner: T) -> Self {
-		Self { inner }
+impl<'w, 's, P: PredQuery> PredInput<'w, 's, P> {
+	pub fn get_inner(self) -> P::Output<'w> {
+		<P as PredQuery>::get_inner(self.world, *self.state)
 	}
-	
-	pub fn get<P>(self, param: P) -> P::Output
-	where
-		P: PredQuery<T>
-	{
-		param.get(self.inner)
+}
+
+unsafe impl<P: PredQuery> SystemParam for PredInput<'_, '_, P> {
+	type State = P::Id;
+	type Item<'world, 'state> = PredInput<'world, 'state, P>;
+	fn init_state(world: &mut World, system_meta: &mut SystemMeta) -> Self::State {
+		// !!! Check for component access overlap.
+		if let Some(PredSystemId(id)) = world.get_resource::<PredSystemId>() {
+			if let Some(id) = id.downcast_ref::<P::Id>() {
+				*id
+			} else {
+				panic!("!!! parameter is for wrong ID type");
+			}
+		} else {
+			panic!("!!! {:?} is not a Chime event system, it can't use this parameter type", system_meta.name());
+		}
+	}
+	// fn new_archetype(_state: &mut Self::State, _archetype: &Archetype, _system_meta: &mut SystemMeta) {
+	// 	todo!()
+	// }
+	unsafe fn get_param<'world, 'state>(state: &'state mut Self::State, system_meta: &SystemMeta, world: UnsafeWorldCell<'world>, change_tick: Tick) -> Self::Item<'world, 'state> {
+		PredInput { world, state }
 	}
 }
 
