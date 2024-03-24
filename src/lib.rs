@@ -18,10 +18,8 @@ use std::time::{Duration, Instant};
 
 use bevy_app::{App, Plugin, Update};
 use bevy_ecs::schedule::{Schedule, Schedules, ScheduleLabel};
-use bevy_ecs::system::{Res, ResMut, Resource};
-use bevy_ecs::system::{
-	IntoSystem, ReadOnlySystemParam, System, SystemParamItem, StaticSystemParam
-};
+use bevy_ecs::system;
+use bevy_ecs::system::{IntoSystem, ReadOnlySystemParam, System, SystemParamItem};
 use bevy_ecs::world::{Mut, World};
 use bevy_time::Time;
 
@@ -58,32 +56,33 @@ impl AddChimeEvent for App {
 		let id = self.world.resource_mut::<ChimeEventMap>()
 			.setup_id::<P::Id>();
 		
-		let system = move |
-			state: StaticSystemParam<P::Param>,
-			misc: StaticSystemParam<A>,
-			time: Res<Time>,
-			mut event_map: ResMut<ChimeEventMap>,
-		| {
+		let mut state = system::SystemState::<(P::Param, A)>::new(
+			&mut self.world
+		);
+		
+		let system = move |world: &mut World| {
 			// !!! Cache this in a Local so it doesn't need to reallocate much.
 			// Maybe chop off nodes that go proportionally underused.
 			let mut node = Node::default();
 			
+			let (state, misc) = state.get(world);
 			pred_sys(
-				PredState {
-					state: state.into_inner(),
-					node: &mut node,
-				},
-				misc.into_inner()
+				PredState { state, node: &mut node },
+				misc
 			);
 			
-			event_map.sched(
-				node,
-				time.elapsed(),
-				id,
-				begin_sys.as_ref().map(|x| x.as_ref()),
-				end_sys.as_ref().map(|x| x.as_ref()),
-				outlier_sys.as_ref().map(|x| x.as_ref()),
-			);
+			let time = world.resource::<Time>().elapsed();
+			world.resource_scope::<ChimeEventMap, ()>(|world, mut event_map| {
+				event_map.sched(
+					node,
+					time,
+					id,
+					begin_sys.as_ref().map(|x| x.as_ref()),
+					end_sys.as_ref().map(|x| x.as_ref()),
+					outlier_sys.as_ref().map(|x| x.as_ref()),
+					world,
+				);
+			});
 		};
 		
 		self.world.resource_mut::<Schedules>()
@@ -149,7 +148,7 @@ impl_into_pred_fn!(@all
 
 /// Begin/end-type system for a chime event (object-safe).
 trait ChimeEventSystem<I: PredId>: System<In=PredInput<I>, Out=()> + Send + Sync {
-	fn add_to_schedule(&self, schedule: &mut Schedule, input: I);
+	fn init_sys(&self, store: &mut Option<Box<dyn System<In=PredInput<I>, Out=()>>>, world: &mut World);
 }
 
 impl<I, T> ChimeEventSystem<I> for T
@@ -157,11 +156,10 @@ where
 	I: PredId,
 	T: System<In=PredInput<I>, Out=()> + Send + Sync + Clone,
 {
-	fn add_to_schedule(&self, schedule: &mut Schedule, input: I) {
-		let input_sys = move || -> Self::In {
-			PredInput::new(input)
-		};
-		schedule.add_systems(input_sys.pipe(self.clone()));
+	fn init_sys(&self, store: &mut Option<Box<dyn System<In=PredInput<I>, Out=()>>>, world: &mut World) {
+		let mut sys = self.clone();
+		sys.initialize(world);
+		*store = Some(Box::new(sys));
 	}
 }
 
@@ -308,10 +306,9 @@ struct ChimeEvent<I> {
 	next_end_time: Option<Duration>,
 	curr_time: Option<Duration>,
 	prev_time: Option<Duration>,
-	receivers: Vec<I>,
-	begin_schedule: Schedule,
-	end_schedule: Schedule,
-	outlier_schedule: Option<Schedule>,
+	begin_sys: Option<Box<dyn System<In=PredInput<I>, Out=()>>>,
+	end_sys: Option<Box<dyn System<In=PredInput<I>, Out=()>>>,
+	outlier_sys: Option<Box<dyn System<In=PredInput<I>, Out=()>>>,
 	recent_times: BinaryHeap<Reverse<Duration>>,
 	older_times: BinaryHeap<Reverse<Duration>>,
 	is_active: bool,
@@ -325,10 +322,9 @@ impl<I> Default for ChimeEvent<I> {
 			next_end_time: None,
 			curr_time: None,
 			prev_time: None,
-			receivers: Vec::new(),
-			begin_schedule: Schedule::default(),
-			end_schedule: Schedule::default(),
-			outlier_schedule: None,
+			begin_sys: None,
+			end_sys: None,
+			outlier_sys: None,
 			recent_times: BinaryHeap::new(),
 			older_times: BinaryHeap::new(),
 			is_active: false,
@@ -357,7 +353,7 @@ impl<I> ChimeEvent<I> {
 }
 
 /// A set of independent `EventMap` values.
-#[derive(Resource, Default)]
+#[derive(system::Resource, Default)]
 struct ChimeEventMap {
 	table: Vec<Box<dyn AnyEventMap + Send + Sync>>
 }
@@ -393,6 +389,7 @@ impl ChimeEventMap {
 		begin_sys: Option<&dyn ChimeEventSystem<I>>,
 		end_sys: Option<&dyn ChimeEventSystem<I>>,
 		outlier_sys: Option<&dyn ChimeEventSystem<I>>,
+		world: &mut World,
 	) {
 		// let n = input.0.len();
 		// let a_time = Instant::now();
@@ -404,31 +401,25 @@ impl ChimeEventMap {
 		
 		for PredStateCase(new_times, pred_id) in input {
 			// let a_time = Instant::now();
-			let event = event_map.events.entry(pred_id).or_default();
+			let event = event_map.events.entry(pred_id).or_insert_with(|| {
+				let mut event = ChimeEvent::default();
+				
+				 // Initialize Systems:
+				if let Some(sys) = begin_sys {
+					sys.init_sys(&mut event.begin_sys, world);
+				}
+				if let Some(sys) = end_sys {
+					sys.init_sys(&mut event.end_sys, world);
+				}
+				if let Some(sys) = outlier_sys {
+					sys.init_sys(&mut event.outlier_sys, world);
+				}
+				
+				event
+			});
 			event.times = new_times
 				.unwrap_or_else(|| Box::new(TimeRanges::empty()));
 			// let b_time = Instant::now();
-			
-			 // Store Receiver:
-			if !event.receivers.contains(&pred_id) {
-				event.receivers.push(pred_id);
-				// !!! https://bevyengine.org/news/bevy-0-13/#more-flexible-one-shot-systems
-				if let Some(sys) = begin_sys {
-					sys.add_to_schedule(&mut event.begin_schedule, pred_id);
-				}
-				if let Some(sys) = end_sys {
-					sys.add_to_schedule(&mut event.end_schedule, pred_id);
-				}
-				if let Some(sys) = outlier_sys {
-					if event.outlier_schedule.is_none() {
-						event.outlier_schedule = Some(Schedule::default());
-					}
-					sys.add_to_schedule(
-						event.outlier_schedule.as_mut().unwrap(),
-						pred_id
-					);
-				}
-			}
 			// let c_time = Instant::now();
 			
 			 // Fetch Next Time:
@@ -599,9 +590,13 @@ impl<K: PredId> EventMap<K> {
 		}
 		event.recent_times.push(Reverse(time + RECENT_TIME));
 		
+		let input = PredInput::new(key);
+		
 		 // End Event:
 		if !event.is_active {
-			event.end_schedule.run(world);
+			if let Some(sys) = &mut event.end_sys {
+				sys.run(input, world);
+			}
 			return
 		}
 		
@@ -619,8 +614,8 @@ impl<K: PredId> EventMap<K> {
 		let min_avg = (500 >> event.older_times.len().min(16)) as f32;
 		let is_outlier = new_avg > (old_avg * LIMIT).max(min_avg);
 		if is_outlier {
-			if let Some(outlier_schedule) = &mut event.outlier_schedule {
-				outlier_schedule.run(world);
+			if let Some(sys) = &mut event.outlier_sys {
+				sys.run(input, world);
 			} else {
 				// ??? Ignore, crash, warning, etc.
 				// ??? If ignored, clear the recent average?
@@ -634,13 +629,15 @@ impl<K: PredId> EventMap<K> {
 					old_avg,
 					new_avg,
 				);
-				event.begin_schedule.run(world);
+				if let Some(sys) = &mut event.begin_sys {
+					sys.run(input, world);
+				}
 			}
 		}
 		
 		 // Begin Event:
-		else {
-			event.begin_schedule.run(world);
+		else if let Some(sys) = &mut event.begin_sys {
+			sys.run(input, world);
 		}
 	}
 }
