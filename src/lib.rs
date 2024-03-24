@@ -504,6 +504,9 @@ impl ChimeEventMap {
 	
 	/// Runs the first upcoming event among all `EventMap`s - it's legit.
 	fn run_first(&mut self, world: &mut World) {
+		// If an event A's system doesn't overlap with an event B's system, and
+		// as long as either event doesn't overlap with a scheduler that might
+		// reschedule the other event, it doesn't matter which runs first. 
 		let mut next = None;
 		let mut time = None;
 		for (index, event_map) in self.table.iter().enumerate() {
