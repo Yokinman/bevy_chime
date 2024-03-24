@@ -9,7 +9,7 @@ mod node;
 use pred::*;
 use node::*;
 
-pub use pred::{PredState, PredInput};
+pub use pred::{PredState, PredQuery};
 
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, btree_map, BTreeMap, HashMap};

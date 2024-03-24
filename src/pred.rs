@@ -377,20 +377,20 @@ unsafe impl<A: PredQueryData, B: PredQueryData> PredQueryData for (A, B) {
 }
 
 /// Prediction data fed as a parameter to an event's systems.
-pub struct PredInput<'world, 'state, P: PredQueryData> {
+pub struct PredQuery<'world, 'state, P: PredQueryData> {
     world: UnsafeWorldCell<'world>,
     state: &'state P::Id,
 }
 
-impl<'w, 's, P: PredQueryData> PredInput<'w, 's, P> {
+impl<'w, 's, P: PredQueryData> PredQuery<'w, 's, P> {
 	pub fn get_inner(self) -> P::Output<'w> {
 		<P as PredQueryData>::get_inner(self.world, *self.state)
 	}
 }
 
-unsafe impl<P: PredQueryData> SystemParam for PredInput<'_, '_, P> {
+unsafe impl<P: PredQueryData> SystemParam for PredQuery<'_, '_, P> {
 	type State = P::Id;
-	type Item<'world, 'state> = PredInput<'world, 'state, P>;
+	type Item<'world, 'state> = PredQuery<'world, 'state, P>;
 	fn init_state(world: &mut World, system_meta: &mut SystemMeta) -> Self::State {
 		// !!! Check for component access overlap.
 		if let Some(PredSystemId(id)) = world.get_resource::<PredSystemId>() {
@@ -407,7 +407,7 @@ unsafe impl<P: PredQueryData> SystemParam for PredInput<'_, '_, P> {
 	// 	todo!()
 	// }
 	unsafe fn get_param<'world, 'state>(state: &'state mut Self::State, system_meta: &SystemMeta, world: UnsafeWorldCell<'world>, change_tick: Tick) -> Self::Item<'world, 'state> {
-		PredInput { world, state }
+		PredQuery { world, state }
 	}
 }
 
