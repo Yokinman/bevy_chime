@@ -55,7 +55,8 @@ impl AddChimeEvent for App {
 		
 		assert!(begin_sys.is_some() || end_sys.is_some() || outlier_sys.is_some());
 		
-		let id = self.world.resource_mut::<ChimeEventMap>().setup_id();
+		let id = self.world.resource_mut::<ChimeEventMap>()
+			.setup_id::<P::Id>();
 		
 		let system = move |
 			state: StaticSystemParam<P::Param>,
@@ -147,14 +148,14 @@ impl_into_pred_fn!(@all
 );
 
 /// Begin/end-type system for a chime event (object-safe).
-trait ChimeEventSystem<I: PredHash>: System<In=PredInput<I>, Out=()> + Send + Sync {
+trait ChimeEventSystem<I: PredId>: System<In=PredInput<I>, Out=()> + Send + Sync {
 	fn add_to_schedule(&self, schedule: &mut Schedule, input: I);
 }
 
 impl<I, T> ChimeEventSystem<I> for T
 where
+	I: PredId,
 	T: System<In=PredInput<I>, Out=()> + Send + Sync + Clone,
-	I: PredHash + Send + Sync + Copy + 'static
 {
 	fn add_to_schedule(&self, schedule: &mut Schedule, input: I) {
 		let input_sys = move || -> Self::In {
@@ -276,57 +277,8 @@ fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule)
 			}
 			
 			let a_time = Instant::now();
-			world.resource_scope(|world, mut pred: Mut<ChimeEventMap>| {
-				let key = pred.pop();
-				let event = pred.table
-					.get_mut(key.0).unwrap()
-					.get_mut(&key.1).unwrap();
-				
-				if !event.is_active {
-					event.end_schedule.run(world);
-					return
-				}
-				// let last_time = std::mem::replace(&mut event.last_time, Some(duration));
-				
-				 // Ignore Rapidly Repeating Events:
-				let new_avg = (event.recent_times.len() as f32) / RECENT_TIME.as_secs_f32();
-				let old_avg = (event.older_times.len() as f32) / OLDER_TIME.as_secs_f32();
-				if can_can_print {
-					println!(
-						"> {:?} at {:?} (avg: {:?}/sec, recent: {:?}/sec)",
-						key,
-						duration,
-						(old_avg * 100.).round() / 100.,
-						(new_avg * 100.).round() / 100.,
-					);
-				}
-				const LIMIT: f32 = 100.;
-				let min_avg = (500 >> event.older_times.len().min(16)) as f32;
-				let is_outlier = new_avg > (old_avg * LIMIT).max(min_avg);
-				if is_outlier {
-					if let Some(outlier_schedule) = &mut event.outlier_schedule {
-						outlier_schedule.run(world);
-					} else {
-						// ??? Ignore, crash, warning, etc.
-						// ??? If ignored, clear the recent average?
-						println!(
-							"event {:?} is repeating >{}x more than normal at time {:?}\n\
-							old avg: {:?}/s\n\
-							new avg: {:?}/s",
-							key,
-							LIMIT,
-							duration,
-							old_avg,
-							new_avg,
-						);
-						event.begin_schedule.run(world);
-					}
-				}
-				
-				 // Call Event:
-				else {
-					event.begin_schedule.run(world);
-				}
+			world.resource_scope(|world, mut event_maps: Mut<ChimeEventMap>| {
+				event_maps.run_first(world)
 			});
 			tot_a += Instant::now().duration_since(a_time);
 			
@@ -349,14 +301,14 @@ fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule)
 	}
 }
 
-/// ...
-struct ChimeEvent {
+/// An individually scheduled event, generally owned by an `EventMap`.
+struct ChimeEvent<I> {
 	times: Box<dyn Iterator<Item = (Duration, Duration)> + Send + Sync>,
 	next_time: Option<Duration>,
 	next_end_time: Option<Duration>,
 	curr_time: Option<Duration>,
 	prev_time: Option<Duration>,
-	receivers: Vec<PredId>,
+	receivers: Vec<I>,
 	begin_schedule: Schedule,
 	end_schedule: Schedule,
 	outlier_schedule: Option<Schedule>,
@@ -365,7 +317,7 @@ struct ChimeEvent {
 	is_active: bool,
 }
 
-impl Default for ChimeEvent {
+impl<I> Default for ChimeEvent<I> {
 	fn default() -> Self {
 		ChimeEvent {
 			times: Box::new(std::iter::empty()),
@@ -384,7 +336,7 @@ impl Default for ChimeEvent {
 	}
 }
 
-impl ChimeEvent {
+impl<I> ChimeEvent<I> {
 	fn next_time(&mut self) -> Option<Duration> {
 		let next_time = if self.is_active {
 			&mut self.next_end_time
@@ -404,33 +356,36 @@ impl ChimeEvent {
 	}
 }
 
-/// Event handler.
+/// A set of independent `EventMap` values.
 #[derive(Resource, Default)]
 struct ChimeEventMap {
-	/// All events, distinguished per prediction system and the system's cases.
-	table: Vec<HashMap<PredId, ChimeEvent>>,
-	
-	/// Reverse time-to-events map for quickly rescheduling events.
-	time_event_map: BTreeMap<Duration, Vec<ChimeEventKey>>,
+	table: Vec<Box<dyn AnyEventMap + Send + Sync>>
 }
-
-type ChimeEventKey = (usize, PredId);
 
 impl ChimeEventMap {
 	fn first_time(&self) -> Option<Duration> {
-		if let Some((&duration, _)) = self.time_event_map.first_key_value() {
-			Some(duration)
-		} else {
-			None
+		let mut time = None;
+		for event_map in &self.table {
+			if let Some(t) = event_map.first_time() {
+				if let Some(min) = time {
+					if t < min {
+						time = Some(t);
+					}
+				} else {
+					time = Some(t);
+				}
+			}
 		}
+		time
 	}
 	
-	fn setup_id(&mut self) -> usize {
-		self.table.push(Default::default());
+	/// Initializes an `EventMap` and returns its stored index.
+	fn setup_id<I: PredId>(&mut self) -> usize {
+		self.table.push(Box::<EventMap<I>>::default());
 		self.table.len() - 1
 	}
 	
-	fn sched<I: PredHash + Send + Sync + 'static>(
+	fn sched<I: PredId>(
 		&mut self,
 		input: impl IntoIterator<Item=PredStateCase<I>>,
 		pred_time: Duration,
@@ -441,23 +396,22 @@ impl ChimeEventMap {
 	) {
 		// let n = input.0.len();
 		// let a_time = Instant::now();
-		let events = self.table.get_mut(event_id)
-			.expect("id must be initialized with PredMap::setup_id");
+		let event_map = self.table.get_mut(event_id)
+			.expect("id must be initialized with ChimeEventMap::setup_id")
+			.as_any_mut()
+			.downcast_mut::<EventMap<I>>()
+			.expect("should always work");
 		
 		for PredStateCase(new_times, pred_id) in input {
 			// let a_time = Instant::now();
-			let mut pred_hasher = PredHasher::default();
-			pred_id.pred_hash(&mut pred_hasher);
-			let pred_hash = pred_hasher.finish();
-			let key = (event_id, pred_hash);
-			let event = events.entry(key.1).or_default();
-			event.times = new_times.unwrap_or_else(||
-				Box::new(TimeRanges::empty()));
+			let event = event_map.events.entry(pred_id).or_default();
+			event.times = new_times
+				.unwrap_or_else(|| Box::new(TimeRanges::empty()));
 			// let b_time = Instant::now();
 			
 			 // Store Receiver:
-			if !event.receivers.contains(&pred_hash) {
-				event.receivers.push(pred_hash);
+			if !event.receivers.contains(&pred_id) {
+				event.receivers.push(pred_id);
 				// !!! https://bevyengine.org/news/bevy-0-13/#more-flexible-one-shot-systems
 				if let Some(sys) = begin_sys {
 					sys.add_to_schedule(&mut event.begin_schedule, pred_id);
@@ -509,16 +463,16 @@ impl ChimeEventMap {
 			if next_time != event.curr_time {
 				 // Remove Old Prediction:
 				if let Some(time) = event.curr_time {
-					if let btree_map::Entry::Occupied(mut e)
-						= self.time_event_map.entry(time)
+					if let btree_map::Entry::Occupied(mut entry)
+						= event_map.times.entry(time)
 					{
-						let list = e.get_mut();
+						let list = entry.get_mut();
 						let pos = list.iter()
-							.position(|k| *k == key)
+							.position(|id| *id == pred_id)
 							.expect("this should always work");
 						list.swap_remove(pos);
 						if list.is_empty() {
-							e.remove();
+							entry.remove();
 						}
 					} else {
 						unreachable!()
@@ -528,13 +482,13 @@ impl ChimeEventMap {
 				 // Insert New Prediction:
 				event.curr_time = next_time;
 				if let Some(time) = next_time {
-					let list = self.time_event_map.entry(time)
+					let list = event_map.times.entry(time)
 						.or_default();
 					
 					if is_active {
-						list.push(key); // End events (run first)
+						list.push(pred_id); // End events (run first)
 					} else {
-						list.insert(0, key); // Begin events (run last)
+						list.insert(0, pred_id); // Begin events (run last)
 					}
 				}
 			}
@@ -548,8 +502,58 @@ impl ChimeEventMap {
 		// println!("  compile: {:?} // {:?}", Instant::now().duration_since(a_time), n);
 	}
 	
-	fn pop(&mut self) -> ChimeEventKey {
-		let mut entry = self.time_event_map.first_entry()
+	/// Runs the first upcoming event among all `EventMap`s - it's legit.
+	fn run_first(&mut self, world: &mut World) {
+		let mut next = None;
+		let mut time = None;
+		for (index, event_map) in self.table.iter().enumerate() {
+			if let Some(t) = event_map.first_time() {
+				if let Some(min) = time {
+					if t < min {
+						time = Some(t);
+						next = Some(index);
+					}
+				} else {
+					time = Some(t);
+					next = Some(index);
+				}
+			}
+		}
+		if let Some(next) = next {
+			self.table[next].run_first(world);
+		}
+	}
+}
+
+/// A set of events related to a common method of scheduling.
+struct EventMap<K> {
+	events: HashMap<K, ChimeEvent<K>>,
+	
+	/// Reverse time-to-event map for quickly rescheduling events.
+	times: BTreeMap<Duration, Vec<K>>,
+}
+
+impl<K> Default for EventMap<K> {
+	fn default() -> Self {
+		EventMap {
+			events: HashMap::new(),
+			times: BTreeMap::new(),
+		}
+	}
+}
+
+impl<K: PredId> EventMap<K> {
+	fn first_time(&self) -> Option<Duration> {
+		if let Some((&duration, _)) = self.times.first_key_value() {
+			Some(duration)
+		} else {
+			None
+		}
+	}
+	
+	/// Runs the first upcoming event.
+	fn run_first(&mut self, world: &mut World) {
+		let mut entry = self.times.first_entry()
 			.expect("this should always work");
 		
 		let time = *entry.key();
@@ -561,9 +565,8 @@ impl ChimeEventMap {
 			entry.remove();
 		}
 		
-		let event = self.table
-			.get_mut(key.0).expect("this should always work")
-			.get_mut(&key.1).expect("this should always work");
+		let event = self.events.get_mut(&key)
+			.expect("this should always work");
 		
 		debug_assert_eq!(event.curr_time, Some(time));
 		event.prev_time = Some(time);
@@ -572,7 +575,7 @@ impl ChimeEventMap {
 		event.is_active = !event.is_active;
 		event.curr_time = event.next_time();
 		if let Some(t) = event.curr_time {
-			self.time_event_map.entry(t)
+			self.times.entry(t)
 				.or_default()
 				.push(key);
 		}
@@ -593,7 +596,68 @@ impl ChimeEventMap {
 		}
 		event.recent_times.push(Reverse(time + RECENT_TIME));
 		
-		key
+		 // End Event:
+		if !event.is_active {
+			event.end_schedule.run(world);
+			return
+		}
+		
+		 // Ignore Rapidly Repeating Events:
+		let new_avg = (event.recent_times.len() as f32) / RECENT_TIME.as_secs_f32();
+		let old_avg = (event.older_times.len() as f32) / OLDER_TIME.as_secs_f32();
+		// println!(
+		// 	"> {:?} at {:?} (avg: {:?}/sec, recent: {:?}/sec)",
+		// 	key,
+		// 	time,
+		// 	(old_avg * 100.).round() / 100.,
+		// 	(new_avg * 100.).round() / 100.,
+		// );
+		const LIMIT: f32 = 100.;
+		let min_avg = (500 >> event.older_times.len().min(16)) as f32;
+		let is_outlier = new_avg > (old_avg * LIMIT).max(min_avg);
+		if is_outlier {
+			if let Some(outlier_schedule) = &mut event.outlier_schedule {
+				outlier_schedule.run(world);
+			} else {
+				// ??? Ignore, crash, warning, etc.
+				// ??? If ignored, clear the recent average?
+				println!(
+					"event {:?} is repeating >{}x more than normal at time {:?}\n\
+					old avg: {:?}/s\n\
+					new avg: {:?}/s",
+					key,
+					LIMIT,
+					time,
+					old_avg,
+					new_avg,
+				);
+				event.begin_schedule.run(world);
+			}
+		}
+		
+		 // Begin Event:
+		else {
+			event.begin_schedule.run(world);
+		}
+	}
+}
+
+/// Trait object of `EventMap` for use in `ChimeEventMap`.
+trait AnyEventMap {
+	fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
+	fn first_time(&self) -> Option<Duration>;
+	fn run_first(&mut self, world: &mut World);
+}
+
+impl<K: PredId> AnyEventMap for EventMap<K> {
+	fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+		self
+	}
+	fn first_time(&self) -> Option<Duration> {
+		EventMap::first_time(self)
+	}
+	fn run_first(&mut self, world: &mut World) {
+		EventMap::run_first(self, world);
 	}
 }
 

@@ -1,3 +1,4 @@
+use std::hash::Hash;
 use std::time::Duration;
 use bevy_ecs::change_detection::{DetectChanges, Ref, Res};
 use bevy_ecs::component::Component;
@@ -9,99 +10,14 @@ use chime::time::TimeRanges;
 use crate::node::*;
 
 /// A hashable unique identifier for a case of prediction.
-pub trait PredHash: Copy + Clone {
-	fn pred_hash(self, state: &mut PredHasher);
-}
+pub trait PredId:
+	Copy + Clone + Eq + Hash + std::fmt::Debug + Send + Sync + 'static
+{}
 
-impl PredHash for () {
-	fn pred_hash(self, state: &mut PredHasher) {
-		state.write(&[]);
-	}
-}
-
-impl PredHash for Entity {
-	fn pred_hash(self, state: &mut PredHasher) {
-		self.to_bits().pred_hash(state);
-	}
-}
-
-impl<T: PredHash, const N: usize> PredHash for [T; N] {
-	fn pred_hash(self, state: &mut PredHasher) {
-		for id in self {
-			id.pred_hash(state);
-		}
-	}
-}
-
-macro_rules! impl_pred_case_for_ints {
-	($($int:ty),+) => {
-		$(
-			impl PredHash for $int {
-				fn pred_hash(self, state: &mut PredHasher) {
-					state.write(&self.to_ne_bytes());
-				}
-			}
-		)+
-	};
-}
-impl_pred_case_for_ints!(
-	u8, u16, u32, u64, u128, usize,
-	i8, i16, i32, i64, i128, isize
-);
-
-impl<A: PredHash> PredHash for (A,) {
-	fn pred_hash(self, state: &mut PredHasher) {
-		self.0.pred_hash(state);
-	}
-}
-
-impl<A: PredHash, B: PredHash> PredHash for (A, B) {
-	fn pred_hash(self, state: &mut PredHasher) {
-		self.0.pred_hash(state);
-		self.1.pred_hash(state);
-	}
-}
-
-impl<A: PredHash, B: PredHash, C: PredHash> PredHash for (A, B, C) {
-	fn pred_hash(self, state: &mut PredHasher) {
-		self.0.pred_hash(state);
-		self.1.pred_hash(state);
-		self.2.pred_hash(state);
-	}
-}
-
-impl<A: PredHash, B: PredHash, C: PredHash, D: PredHash> PredHash for (A, B, C, D) {
-	fn pred_hash(self, state: &mut PredHasher) {
-		self.0.pred_hash(state);
-		self.1.pred_hash(state);
-		self.2.pred_hash(state);
-		self.3.pred_hash(state);
-	}
-}
-
-/// ...
-#[derive(Default)]
-pub struct PredHasher {
-	bytes: [u8; std::mem::size_of::<PredId>()],
-	index: usize,
-}
-
-impl PredHasher {
-	pub fn write(&mut self, bytes: &[u8]) {
-		let next_index = self.index + bytes.len();
-		assert!(next_index <= self.bytes.len(), "overflowed maximum id size");
-		self.bytes[self.index..next_index]
-			.copy_from_slice(bytes);
-		self.index = next_index;
-	}
-	pub fn finish(&self) -> PredId {
-		PredId(self.bytes)
-	}
-}
-
-/// Unique identifier for a case of prediction.
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
-pub struct PredId([u8; 32]);
+impl<T> PredId for T
+where
+	T: Copy + Clone + Eq + Hash + std::fmt::Debug + Send + Sync + 'static
+{}
 
 /// A set of [`PredItem`] values used to predict & schedule events.
 pub trait PredParam {
@@ -112,7 +28,7 @@ pub trait PredParam {
 	type Item<'w>: PredItem<'w>;
 	
 	/// Unique identifier of each `Item`.
-	type Id: PredHash + Send + Sync + 'static;
+	type Id: PredId;
 	
 	/// Iterator over `Param`'s items alongside their `is_updated` state.
 	type Iterator<'w, 's>:
@@ -369,7 +285,7 @@ pub struct PredStateCase<P>(
 	pub(crate) P,
 );
 
-impl<P: PredHash> PredStateCase<P> {
+impl<P: PredId> PredStateCase<P> {
 	pub fn set<I>(&mut self, times: TimeRanges<I>)
 	where
 		TimeRanges<I>: Iterator<Item = (Duration, Duration)> + Send + Sync + 'static
@@ -450,7 +366,7 @@ pub struct PredInput<T> {
 	inner: T,
 }
 
-impl<T: PredHash> PredInput<T> {
+impl<T: PredId> PredInput<T> {
 	pub(crate) fn new(inner: T) -> Self {
 		Self { inner }
 	}
