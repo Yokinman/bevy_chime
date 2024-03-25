@@ -1,4 +1,5 @@
 use std::hash::Hash;
+use std::marker::PhantomData;
 use std::time::Duration;
 use bevy_ecs::change_detection::{DetectChanges, Ref, Res};
 use bevy_ecs::component::{Component, Tick};
@@ -24,6 +25,79 @@ where
 	T: Copy + Clone + Eq + Hash + std::fmt::Debug + Send + Sync + 'static
 {}
 
+/// Unit types that define what `PredParam::gimme_iter` iterates over.
+pub trait FetchKind {
+	fn wrap<P: PredParam>(item: (P::Item<'_>, P::Id)) -> Option<PredCase<P>>;
+	fn is_all() -> bool;
+}
+
+/// Returns all items.
+pub struct AllKind;
+
+impl FetchKind for AllKind {
+	fn wrap<P: PredParam>((item, id): (P::Item<'_>, P::Id)) -> Option<PredCase<P>> {
+		Some(if item.is_updated() {
+			PredCase::Diff(item.gimme_ref(), id)
+		} else {
+			PredCase::Same(item.gimme_ref(), id)
+		})
+	}
+	fn is_all() -> bool {
+		true
+	}
+}
+
+/// Returns only updated items.
+pub struct UpdatedKind;
+
+impl FetchKind for UpdatedKind {
+	fn wrap<P: PredParam>((item, id): (P::Item<'_>, P::Id)) -> Option<PredCase<P>> {
+		if item.is_updated() {
+			Some(PredCase::Diff(item.gimme_ref(), id))
+		} else {
+			None
+		}
+	}
+	fn is_all() -> bool {
+		false
+	}
+}
+
+/// An item & ID pair of a `PredParam`, with their updated state.
+pub enum PredCase<'w, P: PredParam + ?Sized> {
+	Diff(<P::Item<'w> as PredItem<'w>>::Ref<'w>, P::Id),
+	Same(<P::Item<'w> as PredItem<'w>>::Ref<'w>, P::Id),
+}
+
+impl<P: PredParam> Copy for PredCase<'_, P> {}
+
+impl<P: PredParam> Clone for PredCase<'_, P> {
+	fn clone(&self) -> Self {
+		*self
+	}
+}
+
+impl<'w, P: PredParam> PredCase<'w, P> {
+	fn id(&self) -> P::Id {
+		let (Self::Diff(_, id) | Self::Same(_, id)) = self;
+		*id
+	}
+	fn item(&self) -> <P::Item<'w> as PredItem<'w>>::Ref<'w> {
+		let (Self::Diff(item, _) | Self::Same(item, _)) = self;
+		*item
+	}
+	fn into_inner(self) -> (<P::Item<'w> as PredItem<'w>>::Ref<'w>, P::Id) {
+		let (Self::Diff(item, id) | Self::Same(item, id)) = self;
+		(item, id)
+	}
+	fn is_diff(&self) -> bool {
+		match self {
+			Self::Diff(..) => true,
+			Self::Same(..) => false,
+		}
+	}
+}
+
 /// A set of [`PredItem`] values used to predict & schedule events.
 pub trait PredParam {
 	/// The equivalent [`bevy_ecs::system::SystemParam`].
@@ -35,53 +109,26 @@ pub trait PredParam {
 	/// Unique identifier of each `Item`.
 	type Id: PredId;
 	
-	/// Iterator over `Param`'s items alongside their `is_updated` state.
-	type Iterator<'w, 's>:
-		Iterator<Item = ((<Self::Item<'w> as PredItem<'w>>::Ref<'w>, Self::Id), bool)>;
-	
-	/// Iterator over `Param`'s updated items.
-	type UpdatedIterator<'w, 's>:
-		Iterator<Item = (<Self::Item<'w> as PredItem<'w>>::Ref<'w>, Self::Id)>;
+	/// Iterator over `Param`'s items & IDs, wrapped by their updated state.
+	type Iterator<'w, 's, K: FetchKind>: Iterator<Item = PredCase<'w, Self>>;
 	
 	/// Produces `Self::Iterator`.
-	fn gimme_iter<'w, 's>(param: &SystemParamItem<'w, 's, Self::Param>)
-		-> Self::Iterator<'w, 's>;
-	
-	/// Produces `Self::UpdatedIterator`.
-	fn updated_iter<'w, 's>(param: &SystemParamItem<'w, 's, Self::Param>)
-		-> Self::UpdatedIterator<'w, 's>;
+	fn gimme_iter<'w, 's, K: FetchKind>(param: &SystemParamItem<'w, 's, Self::Param>)
+		-> Self::Iterator<'w, 's, K>;
 }
 
 impl<T: Component, F: QueryFilter + 'static> PredParam for Query<'_, '_, &T, F> {
 	type Param = Query<'static, 'static, (Ref<'static, T>, Entity), F>;
 	type Item<'w> = Ref<'w, T>;
 	type Id = Entity;
-	type Iterator<'w, 's> = std::iter::Map<
+	type Iterator<'w, 's, K: FetchKind> = std::iter::FilterMap<
 		QueryIter<'w, 's, (Ref<'static, T>, Entity), F>,
-		fn((Ref<'w, T>, Entity)) -> ((&'w T, Entity), bool)
+		fn((Ref<'w, T>, Entity)) -> Option<PredCase<'w, Self>>
 	>;
-	type UpdatedIterator<'w, 's> = std::iter::FilterMap<
-		QueryIter<'w, 's, (Ref<'static, T>, Entity), F>,
-		fn((Ref<'w, T>, Entity)) -> Option<(&'w T, Entity)>
-	>;
-	fn gimme_iter<'w, 's>(param: &SystemParamItem<'w, 's, Self::Param>)
-		-> Self::Iterator<'w, 's>
+	fn gimme_iter<'w, 's, K: FetchKind>(param: &SystemParamItem<'w, 's, Self::Param>)
+		-> Self::Iterator<'w, 's, K>
 	{
-		param.iter_inner().map(|(item, id)| {
-			let is_updated = item.is_updated();
-			((item.gimme_ref(), id), is_updated)
-		})
-	}
-	fn updated_iter<'w, 's>(param: &SystemParamItem<'w, 's, Self::Param>)
-		-> Self::UpdatedIterator<'w, 's>
-	{
-		param.iter_inner().filter_map(|(item, id)| {
-			if item.is_updated() {
-				Some((item.gimme_ref(), id))
-			} else {
-				None
-			}
-		})
+		param.iter_inner().filter_map(K::wrap)
 	}
 }
 
@@ -89,24 +136,11 @@ impl<R: Resource> PredParam for Res<'_, R> {
 	type Param = Res<'static, R>;
 	type Item<'w> = Res<'w, R>;
 	type Id = ();
-	type Iterator<'w, 's> = std::iter::Once<((<Self::Item<'w> as PredItem<'w>>::Ref<'w>, Self::Id), bool)>;
-	type UpdatedIterator<'w, 's> = std::option::IntoIter<(<Self::Item<'w> as PredItem<'w>>::Ref<'w>, Self::Id)>;
-	fn gimme_iter<'w, 's>(param: &SystemParamItem<'w, 's, Self::Param>)
-		-> Self::Iterator<'w, 's>
+	type Iterator<'w, 's, K: FetchKind> = std::option::IntoIter<PredCase<'w, Self>>;
+	fn gimme_iter<'w, 's, K: FetchKind>(param: &SystemParamItem<'w, 's, Self::Param>)
+		-> Self::Iterator<'w, 's, K>
 	{
-		std::iter::once((
-			(Res::clone(param).gimme_ref(), ()),
-			param.is_updated()
-		))
-	}
-	fn updated_iter<'w, 's>(param: &SystemParamItem<'w, 's, Self::Param>)
-		-> Self::UpdatedIterator<'w, 's>
-	{
-		if param.is_updated() {
-			Some((Res::clone(param).gimme_ref(), ()))
-		} else {
-			None
-		}.into_iter()
+		K::wrap((Res::clone(param), ())).into_iter()
 	}
 }
 
@@ -114,17 +148,11 @@ impl PredParam for () {
 	type Param = ();
 	type Item<'w> = ();
 	type Id = ();
-	type Iterator<'w, 's> = std::iter::Once<(((), ()), bool)>;
-	type UpdatedIterator<'w, 's> = std::iter::Once<((), ())>;
-	fn gimme_iter<'w, 's>(_param: &SystemParamItem<'w, 's, Self::Param>)
-		-> Self::Iterator<'w, 's>
+	type Iterator<'w, 's, K: FetchKind> = std::option::IntoIter<PredCase<'w, Self>>;
+	fn gimme_iter<'w, 's, K: FetchKind>(param: &SystemParamItem<'w, 's, Self::Param>)
+		-> Self::Iterator<'w, 's, K>
 	{
-		std::iter::once((((), ()), true))
-	}
-	fn updated_iter<'w, 's>(_param: &SystemParamItem<'w, 's, Self::Param>)
-		-> Self::UpdatedIterator<'w, 's>
-	{
-		std::iter::once(((), ()))
+		K::wrap((*param, ())).into_iter()
 	}
 }
 
@@ -132,25 +160,9 @@ impl<A: PredParam, B: PredParam> PredParam for (A, B) {
 	type Param = (A::Param, B::Param);
 	type Item<'w> = (A::Item<'w>, B::Item<'w>);
 	type Id = (A::Id, B::Id);
-	type Iterator<'w, 's> = std::vec::IntoIter<((<Self::Item<'w> as PredItem<'w>>::Ref<'w>, Self::Id), bool)>;
-	type UpdatedIterator<'w, 's> = PredGroupIter<'w, 's, A, B>;
-	fn gimme_iter<'w, 's>(param: &SystemParamItem<'w, 's, Self::Param>)
-		-> Self::Iterator<'w, 's> 
-	{
-		// !!! Change this later.
-		let mut vec = Vec::new();
-		for ((a, a_id), a_is_updated) in A::gimme_iter(&param.0) {
-			for ((b, b_id), b_is_updated) in B::gimme_iter(&param.1) {
-				vec.push((
-					((a, b), (a_id, b_id)),
-					a_is_updated || b_is_updated,
-				));
-			}
-		}
-		vec.into_iter()
-	}
-	fn updated_iter<'w, 's>(param: &SystemParamItem<'w, 's, Self::Param>)
-		-> Self::UpdatedIterator<'w, 's>
+	type Iterator<'w, 's, K: FetchKind> = PredGroupIter<'w, 's, K, A, B>;
+	fn gimme_iter<'w, 's, K: FetchKind>(param: &SystemParamItem<'w, 's, Self::Param>)
+		-> Self::Iterator<'w, 's, K>
 	{
 		PredGroupIter::new(&param.0, &param.1)
 	}
@@ -163,15 +175,9 @@ where
 	type Param = T::Param;
 	type Item<'w> = [T::Item<'w>; N];
 	type Id = [T::Id; N];
-	type Iterator<'w, 's> = std::vec::IntoIter<((<Self::Item<'w> as PredItem<'w>>::Ref<'w>, Self::Id), bool)>;
-	type UpdatedIterator<'w, 's> = PredArrayIter<'w, 's, T, N>;
-	fn gimme_iter<'w, 's>(_param: &SystemParamItem<'w, 's, Self::Param>)
-		-> Self::Iterator<'w, 's>
-	{
-		todo!()
-	}
-	fn updated_iter<'w, 's>(param: &SystemParamItem<'w, 's, Self::Param>)
-		-> Self::UpdatedIterator<'w, 's>
+	type Iterator<'w, 's, K: FetchKind> = PredArrayIter<'w, 's, K, T, N>;
+	fn gimme_iter<'w, 's, K: FetchKind>(param: &SystemParamItem<'w, 's, Self::Param>)
+		-> Self::Iterator<'w, 's, K>
 	{
 		PredArrayIter::new(param)
 	}
@@ -282,7 +288,7 @@ impl<'w, 's, 'p, P: PredParam> IntoIterator for PredState<'w, 's, 'p, P> {
 	type Item = <Self::IntoIter as Iterator>::Item;
 	type IntoIter = PredCombinator<'w, 's, 'p, P>;
 	fn into_iter(self) -> Self::IntoIter {
-		let inner = P::updated_iter(&self.state);
+		let inner = P::gimme_iter::<UpdatedKind>(&self.state);
 		self.node.reserve(4 * inner.size_hint().0.max(1));
 		PredCombinator {
 			iter: inner,
@@ -435,53 +441,55 @@ unsafe impl<P: PredQueryData> SystemParam for PredQuery<'_, '_, P> {
 }
 
 /// Iterator for 2-tuple [`PredParam`] types.
-pub enum PredGroupIter<'w, 's, A, B>
+pub enum PredGroupIter<'w, 's, K, A, B>
 where
+	K: FetchKind,
 	A: PredParam,
 	B: PredParam,
 {
 	Empty,
 	Primary {
-		a_iter: A::Iterator<'w, 's>,
-		a_curr: <A::UpdatedIterator<'w, 's> as Iterator>::Item,
-		a_vec: Vec<<A::UpdatedIterator<'w, 's> as Iterator>::Item>,
-		b_slice: Box<[<B::UpdatedIterator<'w, 's> as Iterator>::Item]>,
+		a_iter: A::Iterator<'w, 's, AllKind>,
+		a_curr: <A::Iterator<'w, 's, UpdatedKind> as Iterator>::Item,
+		a_vec: Vec<<A::Iterator<'w, 's, UpdatedKind> as Iterator>::Item>,
+		b_slice: Box<[<B::Iterator<'w, 's, UpdatedKind> as Iterator>::Item]>,
 		b_index: usize,
-		b_iter: B::UpdatedIterator<'w, 's>,
+		b_iter: B::Iterator<'w, 's, K>,
 	},
 	Secondary {
-		b_iter: B::UpdatedIterator<'w, 's>,
-		b_curr: <B::UpdatedIterator<'w, 's> as Iterator>::Item,
-		a_slice: Box<[<A::UpdatedIterator<'w, 's> as Iterator>::Item]>,
+		b_iter: B::Iterator<'w, 's, K>,
+		b_curr: <B::Iterator<'w, 's, UpdatedKind> as Iterator>::Item,
+		a_slice: Box<[<A::Iterator<'w, 's, UpdatedKind> as Iterator>::Item]>,
 		a_index: usize,
 	},
 }
 
-impl<'w, 's, A, B> PredGroupIter<'w, 's, A, B>
+impl<'w, 's, A, B, K> PredGroupIter<'w, 's, K, A, B>
 where
+	K: FetchKind,
 	A: PredParam,
 	B: PredParam,
 {
-	pub(crate) fn new(
+	fn new(
 		a_param: &SystemParamItem<'w, 's, A::Param>,
 		b_param: &SystemParamItem<'w, 's, B::Param>,
 	) -> Self {
-		let a_iter = A::gimme_iter(a_param);
-		let ((_, Some(size)) | (size, None)) = a_iter.size_hint();
+		let a_iter = A::gimme_iter::<AllKind>(a_param);
+		let ((_, Some(size)) | (size, None)) = a_iter.size_hint(); // !!! Maybe don't use upper bound
 		let a_vec = Vec::with_capacity(size);
-		let b_slice = B::gimme_iter(b_param).map(|(x, _)| x).collect();
-		let b_iter = B::updated_iter(b_param);
+		let b_slice = B::gimme_iter::<AllKind>(b_param).collect();
+		let b_iter = B::gimme_iter::<K>(b_param);
 		Self::primary_next(a_iter, a_vec, b_slice, b_iter)
 	}
 	
 	fn primary_next(
-		mut a_iter: A::Iterator<'w, 's>,
-		mut a_vec: Vec<<A::UpdatedIterator<'w, 's> as Iterator>::Item>,
-		b_slice: Box<[<B::UpdatedIterator<'w, 's> as Iterator>::Item]>,
-		mut b_iter: B::UpdatedIterator<'w, 's>,
+		mut a_iter: A::Iterator<'w, 's, AllKind>,
+		mut a_vec: Vec<<A::Iterator<'w, 's, UpdatedKind> as Iterator>::Item>,
+		b_slice: Box<[<B::Iterator<'w, 's, UpdatedKind> as Iterator>::Item]>,
+		mut b_iter: B::Iterator<'w, 's, K>,
 	) -> Self {
-		while let Some((a_curr, a_is_updated)) = a_iter.next() {
-			if a_is_updated {
+		while let Some(a_curr) = a_iter.next() {
+			if a_curr.is_diff() {
 				return Self::Primary {
 					a_iter,
 					a_curr,
@@ -508,8 +516,8 @@ where
 	}
 	
 	fn secondary_next(
-		mut b_iter: B::UpdatedIterator<'w, 's>,
-		a_slice: Box<[<A::UpdatedIterator<'w, 's> as Iterator>::Item]>,
+		mut b_iter: B::Iterator<'w, 's, K>,
+		a_slice: Box<[<A::Iterator<'w, 's, UpdatedKind> as Iterator>::Item]>,
 	) -> Self {
 		if let Some(b_curr) = b_iter.next() {
 			return Self::Secondary {
@@ -523,15 +531,13 @@ where
 	}
 }
 
-impl<'w, 's, A, B> Iterator for PredGroupIter<'w, 's, A, B>
+impl<'w, 's, K, A, B> Iterator for PredGroupIter<'w, 's, K, A, B>
 where
+	K: FetchKind,
 	A: PredParam,
 	B: PredParam,
 {
-	type Item = (
-		<<(A, B) as PredParam>::Item<'w> as PredItem<'w>>::Ref<'w>,
-		<(A, B) as PredParam>::Id
-	);
+	type Item = PredCase<'w, (A, B)>;
 	fn next(&mut self) -> Option<Self::Item> {
 		// !!! Put A/B in order of ascending size to reduce redundancy.
 		match std::mem::replace(self, Self::Empty) {
@@ -540,13 +546,13 @@ where
 			 // (Updated A, All B): 
 			Self::Primary {
 				a_iter,
-				a_curr: a_curr @ (a, a_id),
+				a_curr,
 				a_vec,
 				b_slice,
 				b_index,
 				b_iter,
 			} => {
-				if let Some((b, b_id)) = b_slice.get(b_index).copied() {
+				if let Some(b_curr) = b_slice.get(b_index).copied() {
 					*self = Self::Primary {
 						a_iter,
 						a_curr,
@@ -555,7 +561,13 @@ where
 						b_index: b_index + 1,
 						b_iter,
 					};
-					return Some(((a, b), (a_id, b_id)))
+					let (a, a_id) = a_curr.into_inner();
+					let (b, b_id) = b_curr.into_inner();
+					return Some(if a_curr.is_diff() || b_curr.is_diff() {
+						PredCase::Diff((a, b), (a_id, b_id))
+					} else {
+						PredCase::Same((a, b), (a_id, b_id))
+					})
 				}
 				*self = Self::primary_next(a_iter, a_vec, b_slice, b_iter);
 				self.next()
@@ -564,18 +576,24 @@ where
 			 // (Updated B, Non-updated A):
 			Self::Secondary {
 				b_iter,
-				b_curr: b_curr @ (b, b_id),
+				b_curr,
 				a_slice,
 				a_index,
 			} => {
-				if let Some((a, a_id)) = a_slice.get(a_index).copied() {
+				if let Some(a_curr) = a_slice.get(a_index).copied() {
 					*self = Self::Secondary {
 						b_iter,
 						b_curr,
 						a_slice,
 						a_index: a_index + 1,
 					};
-					return Some(((a, b), (a_id, b_id)))
+					let (a, a_id) = a_curr.into_inner();
+					let (b, b_id) = b_curr.into_inner();
+					return Some(if a_curr.is_diff() || b_curr.is_diff() {
+						PredCase::Diff((a, b), (a_id, b_id))
+					} else {
+						PredCase::Same((a, b), (a_id, b_id))
+					})
 				}
 				*self = Self::secondary_next(b_iter, a_slice);
 				self.next()
@@ -606,23 +624,27 @@ where
 }
 
 /// Iterator for array of [`PredParam`] type.
-pub struct PredArrayIter<'w, 's, T: PredParam, const N: usize> {
-	slice: Box<[<T::Iterator<'w, 's> as Iterator>::Item]>,
+pub struct PredArrayIter<'w, 's, K: FetchKind, T: PredParam, const N: usize> {
+	slice: Box<[<T::Iterator<'w, 's, AllKind> as Iterator>::Item]>,
 	index: [usize; N],
 	is_first: bool,
+	kind: PhantomData<K>,
 }
 
-impl<'w, 's, T: PredParam, const N: usize> PredArrayIter<'w, 's, T, N>
+impl<'w, 's, K, T, const N: usize> PredArrayIter<'w, 's, K, T, N>
 where
+	K: FetchKind,
+	T: PredParam,
 	T::Id: Ord,
 {
-	pub(crate) fn new(param: &SystemParamItem<'w, 's, T::Param>) -> Self {
-		let mut vec = T::gimme_iter(param).collect::<Vec<_>>();
-		vec.sort_unstable_by_key(|((_, id), _)| *id);
+	fn new(param: &SystemParamItem<'w, 's, T::Param>) -> Self {
+		let mut vec = T::gimme_iter::<AllKind>(param).collect::<Vec<_>>();
+		vec.sort_unstable_by_key(|x| x.id());
 		let mut iter = Self {
 			slice: vec.into_boxed_slice(),
 			index: [0; N],
 			is_first: true,
+			kind: PhantomData,
 		};
 		iter.step_main();
 		iter
@@ -630,8 +652,8 @@ where
 	
 	fn step_main(&mut self) {
 		//! Moves the main index to the next updated item.
-		while let Some(&(_, is_updated)) = self.slice.get(self.index[N-1]) {
-			if is_updated && self.step_sub(N-1) {
+		while let Some(x) = self.slice.get(self.index[N-1]) {
+			if x.is_diff() && self.step_sub(N-1) {
 				break
 			}
 			self.index[N-1] += 1;
@@ -647,7 +669,7 @@ where
 			self.index[start] + 1
 		};
 		for i in (0..start).rev() {
-			while index <= self.index[N-1] && self.slice[index].1 {
+			while index <= self.index[N-1] && (K::is_all() || self.slice[index].is_diff()) {
 				index += 1;
 			}
 			if index >= self.slice.len() {
@@ -660,15 +682,13 @@ where
 	}
 }
 
-impl<'w, 's, T, const N: usize> Iterator for PredArrayIter<'w, 's, T, N>
+impl<'w, 's, K, T, const N: usize> Iterator for PredArrayIter<'w, 's, K, T, N>
 where
+	K: FetchKind,
 	T: PredParam,
 	T::Id: Ord,
 {
-	type Item = (
-		<<[T; N] as PredParam>::Item<'w> as PredItem<'w>>::Ref<'w>,
-		<[T; N] as PredParam>::Id
-	);
+	type Item = PredCase<'w, [T; N]>;
 	fn next(&mut self) -> Option<Self::Item> {
 		// !!! Might be faster:
 		// f(slice, layer):
@@ -688,7 +708,7 @@ where
 		}
 		for i in 0..N-1 {
 			let mut index = self.index[i];
-			while index <= self.index[N-1] && self.slice[index].1 {
+			while index <= self.index[N-1] && (K::is_all() || self.slice[index].is_diff()) {
 				index += 1;
 			}
 			if index >= self.slice.len() {
@@ -699,8 +719,8 @@ where
 			
 			if self.step_sub(i) {
 				let (mut refs, mut ids) = (
-					self.index.map(|i| self.slice[i].0.0), // Item::Ref
-					self.index.map(|i| self.slice[i].0.1), // Id
+					self.index.map(|i| self.slice[i].item()),
+					self.index.map(|i| self.slice[i].id()),
 				);
 				let mut last = N-1;
 				while last != 0 && ids[last] > ids[last - 1] {
@@ -709,7 +729,11 @@ where
 					last -= 1;
 				}
 				self.index[0] += 1;
-				return Some((refs, ids))
+				return Some(if self.slice.iter().any(PredCase::is_diff) {
+					PredCase::Diff(refs, ids)
+				} else {
+					PredCase::Same(refs, ids)
+				})
 			}
 			
 			self.index[N-1] += 1;
@@ -738,7 +762,7 @@ where
 /// Produces all case combinations in need of a new prediction, alongside a
 /// [`PredStateCase`] for scheduling.
 pub struct PredCombinator<'w, 's, 'p, P: PredParam> {
-	iter: P::UpdatedIterator<'w, 's>,
+	iter: P::Iterator<'w, 's, UpdatedKind>,
 	node: NodeWriter<'p, PredStateCase<P::Id>>,
 }
 
@@ -748,7 +772,8 @@ impl<'w, 's, 'p, P: PredParam> Iterator for PredCombinator<'w, 's, 'p, P> {
 		<P::Item<'w> as PredItem<'w>>::Ref<'w>
 	);
 	fn next(&mut self) -> Option<Self::Item> {
-		if let Some((item, id)) = self.iter.next() {
+		if let Some(case) = self.iter.next() {
+			let (item, id) = case.into_inner();
 			Some((
 				self.node.write(PredStateCase::new(id)),
 				item
