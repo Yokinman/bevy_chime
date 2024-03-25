@@ -4,7 +4,7 @@ use bevy_ecs::change_detection::{DetectChanges, Ref, Res};
 use bevy_ecs::component::{Component, Tick};
 use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::{Query, Resource, World};
-use bevy_ecs::query::QueryIter;
+use bevy_ecs::query::{QueryFilter, QueryIter};
 use bevy_ecs::system::{ReadOnlySystemParam, SystemMeta, SystemParam, SystemParamItem};
 use bevy_ecs::world::{Mut, unsafe_world_cell::UnsafeWorldCell};
 use chime::time::TimeRanges;
@@ -52,16 +52,16 @@ pub trait PredParam {
 		-> Self::UpdatedIterator<'w, 's>;
 }
 
-impl<T: Component> PredParam for Query<'_, '_, (Ref<'_, T>, Entity)> {
-	type Param = Query<'static, 'static, (Ref<'static, T>, Entity)>;
+impl<T: Component, F: QueryFilter + 'static> PredParam for Query<'_, '_, &T, F> {
+	type Param = Query<'static, 'static, (Ref<'static, T>, Entity), F>;
 	type Item<'w> = Ref<'w, T>;
 	type Id = Entity;
 	type Iterator<'w, 's> = std::iter::Map<
-		QueryIter<'w, 's, (Ref<'static, T>, Entity), ()>,
+		QueryIter<'w, 's, (Ref<'static, T>, Entity), F>,
 		fn((Ref<'w, T>, Entity)) -> ((&'w T, Entity), bool)
 	>;
 	type UpdatedIterator<'w, 's> = std::iter::FilterMap<
-		QueryIter<'w, 's, (Ref<'static, T>, Entity), ()>,
+		QueryIter<'w, 's, (Ref<'static, T>, Entity), F>,
 		fn((Ref<'w, T>, Entity)) -> Option<(&'w T, Entity)>
 	>;
 	fn gimme_iter<'w, 's>(param: &SystemParamItem<'w, 's, Self::Param>)
