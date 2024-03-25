@@ -391,8 +391,6 @@ impl ChimeEventMap {
 		outlier_sys: Option<&dyn ChimeEventSystem<I>>,
 		world: &mut World,
 	) {
-		// let n = input.0.len();
-		// let a_time = Instant::now();
 		let event_map = self.table.get_mut(event_id)
 			.expect("id must be initialized with ChimeEventMap::setup_id")
 			.as_any_mut()
@@ -402,7 +400,7 @@ impl ChimeEventMap {
 		for case in input {
 			let (case_id, case_times) = case.into_parts();
 			
-			// let a_time = Instant::now();
+			 // Fetch/Initialize Event:
 			let event = event_map.events.entry(case_id).or_insert_with(|| {
 				let mut event = ChimeEvent::default();
 				
@@ -423,8 +421,6 @@ impl ChimeEventMap {
 			});
 			event.times = case_times
 				.unwrap_or_else(|| Box::new(TimeRanges::empty()));
-			// let b_time = Instant::now();
-			// let c_time = Instant::now();
 			
 			 // Fetch Next Time:
 			event.next_time = None;
@@ -454,7 +450,6 @@ impl ChimeEventMap {
 			}
 			
 			 // Update Prediction:
-			// let d_time = Instant::now();
 			if next_time != event.curr_time {
 				 // Remove Old Prediction:
 				if let Some(time) = event.curr_time {
@@ -487,14 +482,7 @@ impl ChimeEventMap {
 					}
 				}
 			}
-			// let e_time = Instant::now();
-			
-			// println!(">>A {:?}", b_time.duration_since(a_time));
-			// println!(">>B {:?}", c_time.duration_since(b_time));
-			// println!(">>C {:?}", d_time.duration_since(c_time));
-			// println!(">>D {:?}", e_time.duration_since(d_time));
 		}
-		// println!("  compile: {:?} // {:?}", Instant::now().duration_since(a_time), n);
 	}
 	
 	/// Runs the first upcoming event among all `EventMap`s - it's legit.
