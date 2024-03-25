@@ -251,11 +251,18 @@ where
 
 /// Collects predictions from "when" systems for later compilation.
 pub struct PredState<'w, 's, 'p, P: PredParam = ()> {
-	pub(crate) state: SystemParamItem<'w, 's, P::Param>,
-	pub(crate) node: &'p mut Node<PredStateCase<P::Id>>,
+	state: SystemParamItem<'w, 's, P::Param>,
+	node: &'p mut Node<PredStateCase<P::Id>>,
 }
 
-impl<P: PredParam> PredState<'_, '_, '_, P> {
+impl<'w, 's, 'p, P: PredParam> PredState<'w, 's, 'p, P> {
+	pub(crate) fn new(
+		state: SystemParamItem<'w, 's, P::Param>,
+		node: &'p mut Node<PredStateCase<P::Id>>,
+	) -> Self {
+		Self { state, node }
+	}
+	
 	/// Sets all updated cases to the given times.
 	pub fn set<I>(self, times: TimeRanges<I>)
 	where

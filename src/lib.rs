@@ -67,7 +67,7 @@ impl AddChimeEvent for App {
 			
 			let (state, misc) = state.get(world);
 			pred_sys(
-				PredState { state, node: &mut node },
+				PredState::new(state, &mut node),
 				misc
 			);
 			
