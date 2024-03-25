@@ -285,13 +285,13 @@ impl<'w, 's, 'p, P: PredParam> IntoIterator for PredState<'w, 's, 'p, P> {
 }
 
 /// A scheduled case of prediction, used in [`crate::PredState`].
-pub struct PredStateCase<P> {
-	id: P,
+pub struct PredStateCase<I> {
+	id: I,
 	times: Option<Box<dyn Iterator<Item = (Duration, Duration)> + Send + Sync>>,
 }
 
-impl<P: PredId> PredStateCase<P> {
-	fn new(id: P) -> Self {
+impl<I: PredId> PredStateCase<I> {
+	fn new(id: I) -> Self {
 		Self {
 			id,
 			times: None,
@@ -299,14 +299,14 @@ impl<P: PredId> PredStateCase<P> {
 	}
 	
 	pub(crate) fn into_parts(self)
-		-> (P, Option<Box<dyn Iterator<Item = (Duration, Duration)> + Send + Sync>>)
+		-> (I, Option<Box<dyn Iterator<Item = (Duration, Duration)> + Send + Sync>>)
 	{
 		(self.id, self.times)
 	}
 	
-	pub fn set<I>(&mut self, times: TimeRanges<I>)
+	pub fn set<T>(&mut self, times: TimeRanges<T>)
 	where
-		TimeRanges<I>: Iterator<Item = (Duration, Duration)> + Send + Sync + 'static
+		TimeRanges<T>: Iterator<Item = (Duration, Duration)> + Send + Sync + 'static
 	{
 		self.times = Some(Box::new(times));
 	}
