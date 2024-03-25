@@ -300,81 +300,77 @@ impl<P: PredId> PredStateCase<P> {
 }
 
 /// Types that can be used to query for a specific entity.
-pub unsafe trait PredQueryData {
+pub trait PredQueryData {
 	type Id: PredId;
 	type Output<'w>;
-	fn get_inner(world: UnsafeWorldCell, id: Self::Id) -> Self::Output<'_>;
+	unsafe fn get_inner(world: UnsafeWorldCell, id: Self::Id) -> Self::Output<'_>;
 	// !!! Could take a dynamically-dispatched ID and attempt downcasting
 	// manually. Return an `Option<Self::Output>` for whether it worked. This
 	// would allow for query types that accept multiple IDs; support `() -> ()`.
 }
 
-unsafe impl PredQueryData for () {
+impl PredQueryData for () {
 	type Id = ();
 	type Output<'w> = ();
-	fn get_inner(_world: UnsafeWorldCell, _id: Self::Id) -> Self::Output<'_> {}
+	unsafe fn get_inner(_world: UnsafeWorldCell, _id: Self::Id) -> Self::Output<'_> {}
 }
 
-unsafe impl<C: Component> PredQueryData for &C {
+impl<C: Component> PredQueryData for &C {
 	type Id = Entity;
 	type Output<'w> = &'w C;
-	fn get_inner(world: UnsafeWorldCell, id: Self::Id) -> Self::Output<'_> {
-		unsafe {
-			// SAFETY: !!!
-			world.get_entity(id)
-				.expect("entity should exist")
-				.get::<C>()
-				.expect("component should exist")
-		}
+	unsafe fn get_inner(world: UnsafeWorldCell, id: Self::Id) -> Self::Output<'_> {
+		// SAFETY: The caller should ensure that there isn't conflicting access
+		// to the given entity's component.
+		world.get_entity(id)
+			.expect("entity should exist")
+			.get::<C>()
+			.expect("component should exist")
 	}
 }
 
-unsafe impl<C: Component> PredQueryData for &mut C {
+impl<C: Component> PredQueryData for &mut C {
 	type Id = Entity;
 	type Output<'w> = Mut<'w, C>;
-	fn get_inner(world: UnsafeWorldCell, id: Self::Id) -> Self::Output<'_> {
-		unsafe {
-			// SAFETY: !!!
-			world.get_entity(id)
-				.expect("entity should exist")
-				.get_mut::<C>()
-				.expect("component should exist")
-		}
+	unsafe fn get_inner(world: UnsafeWorldCell, id: Self::Id) -> Self::Output<'_> {
+		// SAFETY: The caller should ensure that there isn't conflicting access
+		// to the given entity's component.
+		world.get_entity(id)
+			.expect("entity should exist")
+			.get_mut::<C>()
+			.expect("component should exist")
 	}
 }
 
-unsafe impl<C: Component, const N: usize> PredQueryData for [&C; N] {
+impl<C: Component, const N: usize> PredQueryData for [&C; N] {
 	type Id = [Entity; N];
 	type Output<'w> = [&'w C; N];
-	fn get_inner(world: UnsafeWorldCell, id: Self::Id) -> Self::Output<'_> {
-		std::array::from_fn(|i| unsafe {
-			// SAFETY: !!! Not really safe yet.
-			world.get_entity(id[i])
-				.expect("entity should exist")
-				.get::<C>()
-				.expect("component should exist")
-		})
+	unsafe fn get_inner(world: UnsafeWorldCell, id: Self::Id) -> Self::Output<'_> {
+		// SAFETY: The caller should ensure that there isn't conflicting access
+		// to the given entity's components.
+		std::array::from_fn(|i| world.get_entity(id[i])
+			.expect("entity should exist")
+			.get::<C>()
+			.expect("component should exist"))
 	}
 }
 
-unsafe impl<C: Component, const N: usize> PredQueryData for [&mut C; N] {
+impl<C: Component, const N: usize> PredQueryData for [&mut C; N] {
 	type Id = [Entity; N];
 	type Output<'w> = [Mut<'w, C>; N];
-	fn get_inner(world: UnsafeWorldCell, id: Self::Id) -> Self::Output<'_> {
-		std::array::from_fn(|i| unsafe {
-			// SAFETY: !!! Not really safe yet.
-			world.get_entity(id[i])
-				.expect("entity should exist")
-				.get_mut::<C>()
-				.expect("component should exist")
-		})
+	unsafe fn get_inner(world: UnsafeWorldCell, id: Self::Id) -> Self::Output<'_> {
+		// SAFETY: The caller should ensure that there isn't conflicting access
+		// to the given entity's components.
+		std::array::from_fn(|i| world.get_entity(id[i])
+			.expect("entity should exist")
+			.get_mut::<C>()
+			.expect("component should exist"))
 	}
 }
 
-unsafe impl<A: PredQueryData, B: PredQueryData> PredQueryData for (A, B) {
+impl<A: PredQueryData, B: PredQueryData> PredQueryData for (A, B) {
 	type Id = (A::Id, B::Id);
 	type Output<'w> = (A::Output<'w>, B::Output<'w>);
-	fn get_inner(world: UnsafeWorldCell, (a, b): Self::Id) -> Self::Output<'_> {
+	unsafe fn get_inner(world: UnsafeWorldCell, (a, b): Self::Id) -> Self::Output<'_> {
 		(A::get_inner(world, a), B::get_inner(world, b))
 	}
 }
@@ -387,7 +383,11 @@ pub struct PredQuery<'world, 'state, P: PredQueryData> {
 
 impl<'w, 's, P: PredQueryData> PredQuery<'w, 's, P> {
 	pub fn get_inner(self) -> P::Output<'w> {
-		<P as PredQueryData>::get_inner(self.world, *self.state)
+		unsafe {
+			// SAFETY: Right now this method consumes `self`. If it could be
+			// called multiple times, the returned values would overlap.
+			<P as PredQueryData>::get_inner(self.world, *self.state)
+		}
 	}
 }
 
@@ -395,7 +395,7 @@ unsafe impl<P: PredQueryData> SystemParam for PredQuery<'_, '_, P> {
 	type State = P::Id;
 	type Item<'world, 'state> = PredQuery<'world, 'state, P>;
 	fn init_state(world: &mut World, system_meta: &mut SystemMeta) -> Self::State {
-		// !!! Check for component access overlap.
+		// !!! Check for component access overlap. This isn't safe right now.
 		if let Some(PredSystemId(id)) = world.get_resource::<PredSystemId>() {
 			if let Some(id) = id.downcast_ref::<P::Id>() {
 				*id
