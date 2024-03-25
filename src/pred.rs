@@ -26,15 +26,15 @@ where
 {}
 
 /// Unit types that define what `PredParam::combinator` iterates over.
-pub trait FetchKind {
+pub trait CombKind {
 	fn wrap<P: PredParam>(item: (P::Item<'_>, P::Id)) -> Option<PredCase<P>>;
 	fn is_all() -> bool;
 }
 
 /// Returns all items.
-pub struct AllKind;
+pub struct CombAll;
 
-impl FetchKind for AllKind {
+impl CombKind for CombAll {
 	fn wrap<P: PredParam>((item, id): (P::Item<'_>, P::Id)) -> Option<PredCase<P>> {
 		Some(if item.is_updated() {
 			PredCase::Diff(item.gimme_ref(), id)
@@ -48,9 +48,9 @@ impl FetchKind for AllKind {
 }
 
 /// Returns only updated items.
-pub struct UpdatedKind;
+pub struct CombUpdated;
 
-impl FetchKind for UpdatedKind {
+impl CombKind for CombUpdated {
 	fn wrap<P: PredParam>((item, id): (P::Item<'_>, P::Id)) -> Option<PredCase<P>> {
 		if item.is_updated() {
 			Some(PredCase::Diff(item.gimme_ref(), id))
@@ -110,10 +110,10 @@ pub trait PredParam {
 	type Id: PredId;
 	
 	/// Iterator over `Param`'s items & IDs, wrapped by their updated state.
-	type Combinator<'w, 's, K: FetchKind>: IntoIterator<Item = PredCase<'w, Self>>;
+	type Combinator<'w, 's, K: CombKind>: IntoIterator<Item = PredCase<'w, Self>>;
 	
 	/// Produces `Self::Combinator`.
-	fn combinator<'w, 's, K: FetchKind>(param: &SystemParamItem<'w, 's, Self::Param>)
+	fn combinator<'w, 's, K: CombKind>(param: &SystemParamItem<'w, 's, Self::Param>)
 		-> Self::Combinator<'w, 's, K>;
 }
 
@@ -121,11 +121,11 @@ impl<T: Component, F: QueryFilter + 'static> PredParam for Query<'_, '_, &T, F> 
 	type Param = Query<'static, 'static, (Ref<'static, T>, Entity), F>;
 	type Item<'w> = Ref<'w, T>;
 	type Id = Entity;
-	type Combinator<'w, 's, K: FetchKind> = std::iter::FilterMap<
+	type Combinator<'w, 's, K: CombKind> = std::iter::FilterMap<
 		QueryIter<'w, 's, (Ref<'static, T>, Entity), F>,
 		fn((Ref<'w, T>, Entity)) -> Option<PredCase<'w, Self>>
 	>;
-	fn combinator<'w, 's, K: FetchKind>(param: &SystemParamItem<'w, 's, Self::Param>)
+	fn combinator<'w, 's, K: CombKind>(param: &SystemParamItem<'w, 's, Self::Param>)
 		-> Self::Combinator<'w, 's, K>
 	{
 		param.iter_inner().filter_map(K::wrap)
@@ -136,8 +136,8 @@ impl<R: Resource> PredParam for Res<'_, R> {
 	type Param = Res<'static, R>;
 	type Item<'w> = Res<'w, R>;
 	type Id = ();
-	type Combinator<'w, 's, K: FetchKind> = Option<PredCase<'w, Self>>;
-	fn combinator<'w, 's, K: FetchKind>(param: &SystemParamItem<'w, 's, Self::Param>)
+	type Combinator<'w, 's, K: CombKind> = Option<PredCase<'w, Self>>;
+	fn combinator<'w, 's, K: CombKind>(param: &SystemParamItem<'w, 's, Self::Param>)
 		-> Self::Combinator<'w, 's, K>
 	{
 		K::wrap((Res::clone(param), ()))
@@ -148,8 +148,8 @@ impl PredParam for () {
 	type Param = ();
 	type Item<'w> = ();
 	type Id = ();
-	type Combinator<'w, 's, K: FetchKind> = Option<PredCase<'w, Self>>;
-	fn combinator<'w, 's, K: FetchKind>(param: &SystemParamItem<'w, 's, Self::Param>)
+	type Combinator<'w, 's, K: CombKind> = Option<PredCase<'w, Self>>;
+	fn combinator<'w, 's, K: CombKind>(param: &SystemParamItem<'w, 's, Self::Param>)
 		-> Self::Combinator<'w, 's, K>
 	{
 		K::wrap((*param, ()))
@@ -160,8 +160,8 @@ impl<A: PredParam, B: PredParam> PredParam for (A, B) {
 	type Param = (A::Param, B::Param);
 	type Item<'w> = (A::Item<'w>, B::Item<'w>);
 	type Id = (A::Id, B::Id);
-	type Combinator<'w, 's, K: FetchKind> = PredGroupCombinator<'w, 's, K, A, B>;
-	fn combinator<'w, 's, K: FetchKind>(param: &SystemParamItem<'w, 's, Self::Param>)
+	type Combinator<'w, 's, K: CombKind> = PredGroupCombinator<'w, 's, K, A, B>;
+	fn combinator<'w, 's, K: CombKind>(param: &SystemParamItem<'w, 's, Self::Param>)
 		-> Self::Combinator<'w, 's, K>
 	{
 		PredGroupCombinator::new(&param.0, &param.1)
@@ -175,8 +175,8 @@ where
 	type Param = T::Param;
 	type Item<'w> = [T::Item<'w>; N];
 	type Id = [T::Id; N];
-	type Combinator<'w, 's, K: FetchKind> = PredArrayCombinator<'w, 's, K, T, N>;
-	fn combinator<'w, 's, K: FetchKind>(param: &SystemParamItem<'w, 's, Self::Param>)
+	type Combinator<'w, 's, K: CombKind> = PredArrayCombinator<'w, 's, K, T, N>;
+	fn combinator<'w, 's, K: CombKind>(param: &SystemParamItem<'w, 's, Self::Param>)
 		-> Self::Combinator<'w, 's, K>
 	{
 		PredArrayCombinator::new(param)
@@ -288,7 +288,7 @@ impl<'w, 's, 'p, P: PredParam> IntoIterator for PredState<'w, 's, 'p, P> {
 	type Item = <Self::IntoIter as IntoIterator>::Item;
 	type IntoIter = PredCombinator<'w, 's, 'p, P>;
 	fn into_iter(self) -> Self::IntoIter {
-		let iter = P::combinator::<UpdatedKind>(&self.state).into_iter();
+		let iter = P::combinator::<CombUpdated>(&self.state).into_iter();
 		self.node.reserve(4 * iter.size_hint().0.max(1));
 		PredCombinator {
 			iter,
@@ -443,18 +443,18 @@ unsafe impl<P: PredQueryData> SystemParam for PredQuery<'_, '_, P> {
 /// Combinator for `PredParam` tuple implementation.
 pub struct PredGroupCombinator<'w, 's, K, A, B>
 where
-	K: FetchKind,
+	K: CombKind,
 	A: PredParam,
 	B: PredParam,
 {
-	a_iter: <A::Combinator<'w, 's, AllKind> as IntoIterator>::IntoIter,
-	b_slice: Box<[<B::Combinator<'w, 's, AllKind> as IntoIterator>::Item]>,
+	a_iter: <A::Combinator<'w, 's, CombAll> as IntoIterator>::IntoIter,
+	b_slice: Box<[<B::Combinator<'w, 's, CombAll> as IntoIterator>::Item]>,
 	b_iter: <B::Combinator<'w, 's, K> as IntoIterator>::IntoIter,
 }
 
 impl<'w, 's, K, A, B> PredGroupCombinator<'w, 's, K, A, B>
 where
-	K: FetchKind,
+	K: CombKind,
 	A: PredParam,
 	B: PredParam,
 {
@@ -463,8 +463,8 @@ where
 		b_param: &SystemParamItem<'w, 's, B::Param>,
 	) -> Self {
 		Self {
-			a_iter: A::combinator::<AllKind>(a_param).into_iter(),
-			b_slice: B::combinator::<AllKind>(b_param).into_iter().collect(),
+			a_iter: A::combinator::<CombAll>(a_param).into_iter(),
+			b_slice: B::combinator::<CombAll>(b_param).into_iter().collect(),
 			b_iter: B::combinator::<K>(b_param).into_iter(),
 		}
 	}
@@ -472,7 +472,7 @@ where
 
 impl<'w, 's, K, A, B> IntoIterator for PredGroupCombinator<'w, 's, K, A, B>
 where
-	K: FetchKind,
+	K: CombKind,
 	A: PredParam,
 	B: PredParam,
 {
@@ -489,37 +489,37 @@ where
 /// Iterator for 2-tuple [`PredParam`] types.
 pub enum PredGroupIter<'w, 's, K, A, B>
 where
-	K: FetchKind,
+	K: CombKind,
 	A: PredParam,
 	B: PredParam,
 {
 	Empty,
 	Primary {
-		a_iter: <A::Combinator<'w, 's, AllKind> as IntoIterator>::IntoIter,
-		a_curr: <A::Combinator<'w, 's, UpdatedKind> as IntoIterator>::Item,
-		a_vec: Vec<<A::Combinator<'w, 's, UpdatedKind> as IntoIterator>::Item>,
-		b_slice: Box<[<B::Combinator<'w, 's, UpdatedKind> as IntoIterator>::Item]>,
+		a_iter: <A::Combinator<'w, 's, CombAll> as IntoIterator>::IntoIter,
+		a_curr: <A::Combinator<'w, 's, CombUpdated> as IntoIterator>::Item,
+		a_vec: Vec<<A::Combinator<'w, 's, CombUpdated> as IntoIterator>::Item>,
+		b_slice: Box<[<B::Combinator<'w, 's, CombUpdated> as IntoIterator>::Item]>,
 		b_index: usize,
 		b_iter: <B::Combinator<'w, 's, K> as IntoIterator>::IntoIter,
 	},
 	Secondary {
 		b_iter: <B::Combinator<'w, 's, K> as IntoIterator>::IntoIter,
-		b_curr: <B::Combinator<'w, 's, UpdatedKind> as IntoIterator>::Item,
-		a_slice: Box<[<A::Combinator<'w, 's, UpdatedKind> as IntoIterator>::Item]>,
+		b_curr: <B::Combinator<'w, 's, CombUpdated> as IntoIterator>::Item,
+		a_slice: Box<[<A::Combinator<'w, 's, CombUpdated> as IntoIterator>::Item]>,
 		a_index: usize,
 	},
 }
 
 impl<'w, 's, A, B, K> PredGroupIter<'w, 's, K, A, B>
 where
-	K: FetchKind,
+	K: CombKind,
 	A: PredParam,
 	B: PredParam,
 {
 	fn primary_next(
-		mut a_iter: <A::Combinator<'w, 's, AllKind> as IntoIterator>::IntoIter,
-		mut a_vec: Vec<<A::Combinator<'w, 's, UpdatedKind> as IntoIterator>::Item>,
-		b_slice: Box<[<B::Combinator<'w, 's, UpdatedKind> as IntoIterator>::Item]>,
+		mut a_iter: <A::Combinator<'w, 's, CombAll> as IntoIterator>::IntoIter,
+		mut a_vec: Vec<<A::Combinator<'w, 's, CombUpdated> as IntoIterator>::Item>,
+		b_slice: Box<[<B::Combinator<'w, 's, CombUpdated> as IntoIterator>::Item]>,
 		mut b_iter: <B::Combinator<'w, 's, K> as IntoIterator>::IntoIter,
 	) -> Self {
 		while let Some(a_curr) = a_iter.next() {
@@ -551,7 +551,7 @@ where
 	
 	fn secondary_next(
 		mut b_iter: <B::Combinator<'w, 's, K> as IntoIterator>::IntoIter,
-		a_slice: Box<[<A::Combinator<'w, 's, UpdatedKind> as IntoIterator>::Item]>,
+		a_slice: Box<[<A::Combinator<'w, 's, CombUpdated> as IntoIterator>::Item]>,
 	) -> Self {
 		if let Some(b_curr) = b_iter.next() {
 			return Self::Secondary {
@@ -567,7 +567,7 @@ where
 
 impl<'w, 's, K, A, B> Iterator for PredGroupIter<'w, 's, K, A, B>
 where
-	K: FetchKind,
+	K: CombKind,
 	A: PredParam,
 	B: PredParam,
 {
@@ -660,7 +660,7 @@ where
 /// Combinator for `PredParam` array implementation.
 pub struct PredArrayCombinator<'w, 's, K, P, const N: usize>
 where
-	K: FetchKind,
+	K: CombKind,
 	P: PredParam,
 {
 	slice: Box<[<P::Combinator<'w, 's, K> as IntoIterator>::Item]>,
@@ -668,12 +668,12 @@ where
 
 impl<'w, 's, K, P, const N: usize> PredArrayCombinator<'w, 's, K, P, N>
 where
-	K: FetchKind,
+	K: CombKind,
 	P: PredParam,
 	P::Id: Ord,
 {
 	fn new(param: &SystemParamItem<'w, 's, P::Param>) -> Self {
-		let mut vec = P::combinator::<AllKind>(param).into_iter().collect::<Vec<_>>();
+		let mut vec = P::combinator::<CombAll>(param).into_iter().collect::<Vec<_>>();
 		vec.sort_unstable_by_key(|x| x.id());
 		Self {
 			slice: vec.into_boxed_slice()
@@ -683,7 +683,7 @@ where
 
 impl<'w, 's, K, P, const N: usize> IntoIterator for PredArrayCombinator<'w, 's, K, P, N>
 where
-	K: FetchKind,
+	K: CombKind,
 	P: PredParam,
 	P::Id: Ord,
 {
@@ -704,10 +704,10 @@ where
 /// Iterator for array of [`PredParam`] type.
 pub struct PredArrayIter<'w, 's, K, T, const N: usize>
 where
-	K: FetchKind,
+	K: CombKind,
 	T: PredParam,
 {
-	slice: Box<[<T::Combinator<'w, 's, AllKind> as IntoIterator>::Item]>,
+	slice: Box<[<T::Combinator<'w, 's, CombAll> as IntoIterator>::Item]>,
 	index: [usize; N],
 	is_first: bool,
 	kind: PhantomData<K>,
@@ -715,7 +715,7 @@ where
 
 impl<'w, 's, K, T, const N: usize> PredArrayIter<'w, 's, K, T, N>
 where
-	K: FetchKind,
+	K: CombKind,
 	T: PredParam,
 	T::Id: Ord,
 {
@@ -753,7 +753,7 @@ where
 
 impl<'w, 's, K, T, const N: usize> Iterator for PredArrayIter<'w, 's, K, T, N>
 where
-	K: FetchKind,
+	K: CombKind,
 	T: PredParam,
 	T::Id: Ord,
 {
@@ -831,7 +831,7 @@ where
 /// Produces all case combinations in need of a new prediction, alongside a
 /// [`PredStateCase`] for scheduling.
 pub struct PredCombinator<'w, 's, 'p, P: PredParam> {
-	iter: <P::Combinator<'w, 's, UpdatedKind> as IntoIterator>::IntoIter,
+	iter: <P::Combinator<'w, 's, CombUpdated> as IntoIterator>::IntoIter,
 	node: NodeWriter<'p, PredStateCase<P::Id>>,
 }
 
