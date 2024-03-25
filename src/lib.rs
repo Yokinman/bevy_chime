@@ -399,13 +399,15 @@ impl ChimeEventMap {
 			.downcast_mut::<EventMap<I>>()
 			.expect("should always work");
 		
-		for PredStateCase(new_times, pred_id) in input {
+		for case in input {
+			let (case_id, case_times) = case.into_parts();
+			
 			// let a_time = Instant::now();
-			let event = event_map.events.entry(pred_id).or_insert_with(|| {
+			let event = event_map.events.entry(case_id).or_insert_with(|| {
 				let mut event = ChimeEvent::default();
 				
 				 // Initialize Systems:
-				world.insert_resource(PredSystemId(Box::new(pred_id)));
+				world.insert_resource(PredSystemId(Box::new(case_id)));
 				if let Some(sys) = begin_sys {
 					sys.init_sys(&mut event.begin_sys, world);
 				}
@@ -419,7 +421,7 @@ impl ChimeEventMap {
 				
 				event
 			});
-			event.times = new_times
+			event.times = case_times
 				.unwrap_or_else(|| Box::new(TimeRanges::empty()));
 			// let b_time = Instant::now();
 			// let c_time = Instant::now();
@@ -461,7 +463,7 @@ impl ChimeEventMap {
 					{
 						let list = entry.get_mut();
 						let pos = list.iter()
-							.position(|id| *id == pred_id)
+							.position(|id| *id == case_id)
 							.expect("this should always work");
 						list.swap_remove(pos);
 						if list.is_empty() {
@@ -479,9 +481,9 @@ impl ChimeEventMap {
 						.or_default();
 					
 					if is_active {
-						list.push(pred_id); // End events (run first)
+						list.push(case_id); // End events (run first)
 					} else {
-						list.insert(0, pred_id); // Begin events (run last)
+						list.insert(0, case_id); // Begin events (run last)
 					}
 				}
 			}
