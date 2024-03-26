@@ -26,15 +26,41 @@ where
 {}
 
 /// Unit types that define what `PredParam::comb` iterates over.
+/// 
+/// ```text
+///         | ::Pal  | ::Inv   | ::Inv::Pal::Inv
+///    None | None   | All     | None
+///     All | All    | None    | All
+/// Updated | All    | Static  | Updated
+///  Static | Static | Updated | None
+/// ```
 pub trait CombKind {
+	type Pal: CombKind;
+	type Inv: CombKind;
 	fn wrap<P: PredParam>(item: (P::Item<'_>, P::Id)) -> Option<CombCase<P>>;
 	fn is_all() -> bool;
 }
 
-/// Returns all items.
+/// No combinations.
+pub struct CombNone;
+
+impl CombKind for CombNone {
+	type Pal = CombNone;
+	type Inv = CombAll;
+	fn wrap<P: PredParam>(_item: (P::Item<'_>, P::Id)) -> Option<CombCase<P>> {
+		None
+	}
+	fn is_all() -> bool {
+		false
+	}
+}
+
+/// All combinations.
 pub struct CombAll;
 
 impl CombKind for CombAll {
+	type Pal = CombAll;
+	type Inv = CombNone;
 	fn wrap<P: PredParam>((item, id): (P::Item<'_>, P::Id)) -> Option<CombCase<P>> {
 		Some(if P::Item::is_updated(&item) {
 			CombCase::Diff(P::Item::into_ref(item), id)
@@ -47,15 +73,35 @@ impl CombKind for CombAll {
 	}
 }
 
-/// Returns only updated items.
+/// Combinations where either item updated.
 pub struct CombUpdated;
 
 impl CombKind for CombUpdated {
+	type Pal = CombAll;
+	type Inv = CombStatic;
 	fn wrap<P: PredParam>((item, id): (P::Item<'_>, P::Id)) -> Option<CombCase<P>> {
 		if P::Item::is_updated(&item) {
 			Some(CombCase::Diff(P::Item::into_ref(item), id))
 		} else {
 			None
+		}
+	}
+	fn is_all() -> bool {
+		false
+	}
+}
+
+/// Combinations where neither item updated.
+pub struct CombStatic;
+
+impl CombKind for CombStatic {
+	type Pal = CombStatic;
+	type Inv = CombUpdated;
+	fn wrap<P: PredParam>((item, id): (P::Item<'_>, P::Id)) -> Option<CombCase<P>> {
+		if P::Item::is_updated(&item) {
+			None
+		} else {
+			Some(CombCase::Same(P::Item::into_ref(item), id))
 		}
 	}
 	fn is_all() -> bool {
@@ -449,9 +495,10 @@ where
 	A: PredParam,
 	B: PredParam,
 {
-	a_iter: <A::Comb<'w, 's, CombAll> as IntoIterator>::IntoIter,
-	b_slice: Box<[<B::Comb<'w, 's, CombAll> as IntoIterator>::Item]>,
-	b_comb: B::Comb<'w, 's, K>,
+	a_comb: A::Comb<'w, 's, K>,
+	b_comb: B::Comb<'w, 's, K::Pal>,
+	a_inv_comb: A::Comb<'w, 's, K::Inv>,
+	b_inv_comb: B::Comb<'w, 's, <<K::Inv as CombKind>::Pal as CombKind>::Inv>,
 }
 
 impl<'w, 's, K, A, B> PredPairComb<'w, 's, K, A, B>
@@ -465,9 +512,10 @@ where
 		b_param: &SystemParamItem<'w, 's, B::Param>,
 	) -> Self {
 		Self {
-			a_iter: A::comb::<CombAll>(a_param).into_iter(),
-			b_slice: B::comb::<CombAll>(b_param).into_iter().collect(),
-			b_comb: B::comb::<K>(b_param),
+			a_comb: A::comb(a_param),
+			b_comb: B::comb(b_param),
+			a_inv_comb: A::comb(a_param),
+			b_inv_comb: B::comb(b_param),
 		}
 	}
 }
@@ -481,9 +529,18 @@ where
 	type Item = CombCase<'w, (A, B)>;
 	type IntoIter = PredPairCombIter<'w, 's, K, A, B>;
 	fn into_iter(self) -> Self::IntoIter {
-		let Self { a_iter, b_slice, b_comb } = self;
-		let a_vec = Vec::with_capacity(a_iter.size_hint().0);
-		PredPairCombIter::primary_next(a_iter, a_vec, b_slice, b_comb)
+		let Self {
+			a_comb,
+			b_comb,
+			a_inv_comb,
+			b_inv_comb,
+		} = self;
+		PredPairCombIter::primary_next(
+			a_comb.into_iter(),
+			b_comb.into_iter().collect(),
+			a_inv_comb.into_iter().collect(),
+			b_inv_comb,
+		)
 	}
 }
 
@@ -496,17 +553,17 @@ where
 {
 	Empty,
 	Primary {
-		a_iter: <A::Comb<'w, 's, CombAll> as IntoIterator>::IntoIter,
-		a_curr: <A::Comb<'w, 's, CombAll> as IntoIterator>::Item,
-		a_vec: Vec<<A::Comb<'w, 's, CombAll> as IntoIterator>::Item>,
-		b_slice: Box<[<B::Comb<'w, 's, CombAll> as IntoIterator>::Item]>,
+		a_iter: <A::Comb<'w, 's, K> as IntoIterator>::IntoIter,
+		a_curr: <A::Comb<'w, 's, K> as IntoIterator>::Item,
+		b_slice: Box<[<B::Comb<'w, 's, K::Pal> as IntoIterator>::Item]>,
 		b_index: usize,
-		b_comb: B::Comb<'w, 's, K>,
+		a_inv_comb: Box<[<A::Comb<'w, 's, K::Inv> as IntoIterator>::Item]>, // A::Comb<'w, 's, K::Inv>,
+		b_inv_comb: B::Comb<'w, 's, <<K::Inv as CombKind>::Pal as CombKind>::Inv>,
 	},
 	Secondary {
-		b_iter: <B::Comb<'w, 's, K> as IntoIterator>::IntoIter,
-		b_curr: <B::Comb<'w, 's, K> as IntoIterator>::Item,
-		a_slice: Box<[<A::Comb<'w, 's, CombAll> as IntoIterator>::Item]>,
+		b_iter: <B::Comb<'w, 's, <<K::Inv as CombKind>::Pal as CombKind>::Inv> as IntoIterator>::IntoIter,
+		b_curr: <B::Comb<'w, 's, <<K::Inv as CombKind>::Pal as CombKind>::Inv> as IntoIterator>::Item,
+		a_slice: Box<[<A::Comb<'w, 's, K::Inv> as IntoIterator>::Item]>,
 		a_index: usize,
 	},
 }
@@ -518,35 +575,33 @@ where
 	B: PredParam,
 {
 	fn primary_next(
-		mut a_iter: <A::Comb<'w, 's, CombAll> as IntoIterator>::IntoIter,
-		mut a_vec: Vec<<A::Comb<'w, 's, CombAll> as IntoIterator>::Item>,
-		b_slice: Box<[<B::Comb<'w, 's, CombAll> as IntoIterator>::Item]>,
-		b_comb: B::Comb<'w, 's, K>,
+		mut a_iter: <A::Comb<'w, 's, K> as IntoIterator>::IntoIter,
+		b_slice: Box<[<B::Comb<'w, 's, K::Pal> as IntoIterator>::Item]>,
+		a_inv_comb: Box<[<A::Comb<'w, 's, K::Inv> as IntoIterator>::Item]>,
+		b_inv_comb: B::Comb<'w, 's, <<K::Inv as CombKind>::Pal as CombKind>::Inv>,
 	) -> Self {
-		while let Some(a_curr) = a_iter.next() {
-			if K::is_all() || a_curr.is_diff() {
-				return Self::Primary {
-					a_iter,
-					a_curr,
-					a_vec,
-					b_slice,
-					b_index: 0,
-					b_comb,
-				}
+		if let Some(a_curr) = a_iter.next() {
+			return Self::Primary {
+				a_iter,
+				a_curr,
+				b_slice,
+				b_index: 0,
+				a_inv_comb,
+				b_inv_comb,
 			}
-			a_vec.push(a_curr);
 		}
 		
 		 // Switch to Secondary Iteration:
-		if a_vec.is_empty() {
-			return Self::Empty
-		}
-		let mut b_iter = b_comb.into_iter();
+		let mut b_iter = b_inv_comb.into_iter();
 		if let Some(b_curr) = b_iter.next() {
+			let a_slice = a_inv_comb; // .into_iter().collect::<Box<[_]>>();
+			if a_slice.is_empty() {
+				return Self::Empty
+			}
 			return Self::Secondary {
 				b_iter,
 				b_curr,
-				a_slice: a_vec.into_boxed_slice(),
+				a_slice,
 				a_index: 0,
 			}
 		}
@@ -555,8 +610,8 @@ where
 	}
 	
 	fn secondary_next(
-		mut b_iter: <B::Comb<'w, 's, K> as IntoIterator>::IntoIter,
-		a_slice: Box<[<A::Comb<'w, 's, CombAll> as IntoIterator>::Item]>,
+		mut b_iter: <B::Comb<'w, 's, <<K::Inv as CombKind>::Pal as CombKind>::Inv> as IntoIterator>::IntoIter,
+		a_slice: Box<[<A::Comb<'w, 's, K::Inv> as IntoIterator>::Item]>,
 	) -> Self {
 		if let Some(b_curr) = b_iter.next() {
 			return Self::Secondary {
@@ -586,19 +641,19 @@ where
 			Self::Primary {
 				a_iter,
 				a_curr,
-				a_vec,
 				b_slice,
 				b_index,
-				b_comb,
+				a_inv_comb,
+				b_inv_comb,
 			} => {
 				if let Some(b_curr) = b_slice.get(b_index).copied() {
 					*self = Self::Primary {
 						a_iter,
 						a_curr,
-						a_vec,
 						b_slice,
 						b_index: b_index + 1,
-						b_comb,
+						a_inv_comb,
+						b_inv_comb,
 					};
 					let (a, a_id) = a_curr.into_inner();
 					let (b, b_id) = b_curr.into_inner();
@@ -608,9 +663,9 @@ where
 						CombCase::Same((a, b), (a_id, b_id))
 					})
 				}
-				*self = Self::primary_next(a_iter, a_vec, b_slice, b_comb);
+				*self = Self::primary_next(a_iter, b_slice, a_inv_comb, b_inv_comb);
 				self.next()
-			},
+			}
 			
 			 // (Updated B, Non-updated A):
 			Self::Secondary {
@@ -642,20 +697,25 @@ where
 	fn size_hint(&self) -> (usize, Option<usize>) {
 		match self {
 			Self::Empty => (0, Some(0)),
-			Self::Primary { a_iter, a_vec, b_slice, b_index, .. } => {
+			Self::Primary { a_iter, b_slice, b_index, a_inv_comb, .. } => {
 				let min = b_slice.len() - b_index;
 				let a_max = a_iter.size_hint().1;
 				(
 					min,
-					a_max.map(|x| min + ((x + a_vec.len()) * b_slice.len()))
+					a_max.and_then(|a_max| a_max
+						.checked_add(a_inv_comb.len()/*.size_hint().1?*/)?
+						.checked_mul(b_slice.len())?
+						.checked_add(min))
 				)
-			},
+			}
 			Self::Secondary { b_iter, a_slice, a_index, .. } => {
 				let min = a_slice.len() - a_index;
 				let b_max = b_iter.size_hint().1;
 				(
 					min,
-					b_max.map(|x| min + (x * a_slice.len()))
+					b_max.and_then(|b_max| b_max
+						.checked_mul(a_slice.len())?
+						.checked_add(min))
 				)
 			},
 		}
