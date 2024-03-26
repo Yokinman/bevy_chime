@@ -168,14 +168,14 @@ impl<A: PredParam, B: PredParam> PredParam for (A, B) {
 	}
 }
 
-impl<T: PredParam, const N: usize> PredParam for [T; N]
+impl<P: PredParam, const N: usize> PredParam for [P; N]
 where
-	T::Id: Ord
+	P::Id: Ord
 {
-	type Param = T::Param;
-	type Item<'w> = [T::Item<'w>; N];
-	type Id = [T::Id; N];
-	type Comb<'w, 's, K: CombKind> = PredArrayComb<'w, 's, K, T, N>;
+	type Param = P::Param;
+	type Item<'w> = [P::Item<'w>; N];
+	type Id = [P::Id; N];
+	type Comb<'w, 's, K: CombKind> = PredArrayComb<'w, 's, K, P, N>;
 	fn comb<'w, 's, K: CombKind>(param: &SystemParamItem<'w, 's, Self::Param>)
         -> Self::Comb<'w, 's, K>
 	{
