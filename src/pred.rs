@@ -451,7 +451,7 @@ where
 {
 	a_iter: <A::Comb<'w, 's, CombAll> as IntoIterator>::IntoIter,
 	b_slice: Box<[<B::Comb<'w, 's, CombAll> as IntoIterator>::Item]>,
-	b_iter: <B::Comb<'w, 's, K> as IntoIterator>::IntoIter,
+	b_comb: B::Comb<'w, 's, K>,
 }
 
 impl<'w, 's, K, A, B> PredPairComb<'w, 's, K, A, B>
@@ -467,7 +467,7 @@ where
 		Self {
 			a_iter: A::comb::<CombAll>(a_param).into_iter(),
 			b_slice: B::comb::<CombAll>(b_param).into_iter().collect(),
-			b_iter: B::comb::<K>(b_param).into_iter(),
+			b_comb: B::comb::<K>(b_param),
 		}
 	}
 }
@@ -481,9 +481,9 @@ where
 	type Item = CombCase<'w, (A, B)>;
 	type IntoIter = PredPairCombIter<'w, 's, K, A, B>;
 	fn into_iter(self) -> Self::IntoIter {
-		let Self { a_iter, b_slice, b_iter } = self;
-		let a_vec = Vec::with_capacity(b_slice.len());
-		PredPairCombIter::primary_next(a_iter, a_vec, b_slice, b_iter)
+		let Self { a_iter, b_slice, b_comb } = self;
+		let a_vec = Vec::with_capacity(a_iter.size_hint().0);
+		PredPairCombIter::primary_next(a_iter, a_vec, b_slice, b_comb)
 	}
 }
 
@@ -497,16 +497,16 @@ where
 	Empty,
 	Primary {
 		a_iter: <A::Comb<'w, 's, CombAll> as IntoIterator>::IntoIter,
-		a_curr: <A::Comb<'w, 's, CombUpdated> as IntoIterator>::Item,
-		a_vec: Vec<<A::Comb<'w, 's, CombUpdated> as IntoIterator>::Item>,
-		b_slice: Box<[<B::Comb<'w, 's, CombUpdated> as IntoIterator>::Item]>,
+		a_curr: <A::Comb<'w, 's, CombAll> as IntoIterator>::Item,
+		a_vec: Vec<<A::Comb<'w, 's, CombAll> as IntoIterator>::Item>,
+		b_slice: Box<[<B::Comb<'w, 's, CombAll> as IntoIterator>::Item]>,
 		b_index: usize,
-		b_iter: <B::Comb<'w, 's, K> as IntoIterator>::IntoIter,
+		b_comb: B::Comb<'w, 's, K>,
 	},
 	Secondary {
 		b_iter: <B::Comb<'w, 's, K> as IntoIterator>::IntoIter,
-		b_curr: <B::Comb<'w, 's, CombUpdated> as IntoIterator>::Item,
-		a_slice: Box<[<A::Comb<'w, 's, CombUpdated> as IntoIterator>::Item]>,
+		b_curr: <B::Comb<'w, 's, K> as IntoIterator>::Item,
+		a_slice: Box<[<A::Comb<'w, 's, CombAll> as IntoIterator>::Item]>,
 		a_index: usize,
 	},
 }
@@ -519,25 +519,29 @@ where
 {
 	fn primary_next(
 		mut a_iter: <A::Comb<'w, 's, CombAll> as IntoIterator>::IntoIter,
-		mut a_vec: Vec<<A::Comb<'w, 's, CombUpdated> as IntoIterator>::Item>,
-		b_slice: Box<[<B::Comb<'w, 's, CombUpdated> as IntoIterator>::Item]>,
-		mut b_iter: <B::Comb<'w, 's, K> as IntoIterator>::IntoIter,
+		mut a_vec: Vec<<A::Comb<'w, 's, CombAll> as IntoIterator>::Item>,
+		b_slice: Box<[<B::Comb<'w, 's, CombAll> as IntoIterator>::Item]>,
+		b_comb: B::Comb<'w, 's, K>,
 	) -> Self {
 		while let Some(a_curr) = a_iter.next() {
-			if a_curr.is_diff() {
+			if K::is_all() || a_curr.is_diff() {
 				return Self::Primary {
 					a_iter,
 					a_curr,
 					a_vec,
 					b_slice,
 					b_index: 0,
-					b_iter,
+					b_comb,
 				}
 			}
 			a_vec.push(a_curr);
 		}
 		
 		 // Switch to Secondary Iteration:
+		if a_vec.is_empty() {
+			return Self::Empty
+		}
+		let mut b_iter = b_comb.into_iter();
 		if let Some(b_curr) = b_iter.next() {
 			return Self::Secondary {
 				b_iter,
@@ -552,7 +556,7 @@ where
 	
 	fn secondary_next(
 		mut b_iter: <B::Comb<'w, 's, K> as IntoIterator>::IntoIter,
-		a_slice: Box<[<A::Comb<'w, 's, CombUpdated> as IntoIterator>::Item]>,
+		a_slice: Box<[<A::Comb<'w, 's, CombAll> as IntoIterator>::Item]>,
 	) -> Self {
 		if let Some(b_curr) = b_iter.next() {
 			return Self::Secondary {
@@ -585,7 +589,7 @@ where
 				a_vec,
 				b_slice,
 				b_index,
-				b_iter,
+				b_comb,
 			} => {
 				if let Some(b_curr) = b_slice.get(b_index).copied() {
 					*self = Self::Primary {
@@ -594,7 +598,7 @@ where
 						a_vec,
 						b_slice,
 						b_index: b_index + 1,
-						b_iter,
+						b_comb,
 					};
 					let (a, a_id) = a_curr.into_inner();
 					let (b, b_id) = b_curr.into_inner();
@@ -604,7 +608,7 @@ where
 						CombCase::Same((a, b), (a_id, b_id))
 					})
 				}
-				*self = Self::primary_next(a_iter, a_vec, b_slice, b_iter);
+				*self = Self::primary_next(a_iter, a_vec, b_slice, b_comb);
 				self.next()
 			},
 			
