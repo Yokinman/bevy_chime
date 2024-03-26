@@ -455,7 +455,7 @@ pub struct PredQuery<'world, 'state, D: PredQueryData> {
     state: &'state D::Id,
 }
 
-impl<'w, 's: 'w, D: PredQueryData> PredQuery<'w, 's, D> {
+impl<'w, D: PredQueryData> PredQuery<'w, '_, D> {
 	pub fn get_inner(self) -> D::Output<'w> {
 		unsafe {
 			// SAFETY: Right now this method consumes `self`. If it could be
