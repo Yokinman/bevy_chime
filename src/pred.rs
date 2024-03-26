@@ -27,7 +27,7 @@ where
 
 /// Unit types that define what `PredParam::comb` iterates over.
 pub trait CombKind {
-	fn wrap<P: PredParam>(item: (P::Item<'_>, P::Id)) -> Option<PredCase<P>>;
+	fn wrap<P: PredParam>(item: (P::Item<'_>, P::Id)) -> Option<CombCase<P>>;
 	fn is_all() -> bool;
 }
 
@@ -35,11 +35,11 @@ pub trait CombKind {
 pub struct CombAll;
 
 impl CombKind for CombAll {
-	fn wrap<P: PredParam>((item, id): (P::Item<'_>, P::Id)) -> Option<PredCase<P>> {
+	fn wrap<P: PredParam>((item, id): (P::Item<'_>, P::Id)) -> Option<CombCase<P>> {
 		Some(if item.is_updated() {
-			PredCase::Diff(item.gimme_ref(), id)
+			CombCase::Diff(item.gimme_ref(), id)
 		} else {
-			PredCase::Same(item.gimme_ref(), id)
+			CombCase::Same(item.gimme_ref(), id)
 		})
 	}
 	fn is_all() -> bool {
@@ -51,9 +51,9 @@ impl CombKind for CombAll {
 pub struct CombUpdated;
 
 impl CombKind for CombUpdated {
-	fn wrap<P: PredParam>((item, id): (P::Item<'_>, P::Id)) -> Option<PredCase<P>> {
+	fn wrap<P: PredParam>((item, id): (P::Item<'_>, P::Id)) -> Option<CombCase<P>> {
 		if item.is_updated() {
-			Some(PredCase::Diff(item.gimme_ref(), id))
+			Some(CombCase::Diff(item.gimme_ref(), id))
 		} else {
 			None
 		}
@@ -64,20 +64,20 @@ impl CombKind for CombUpdated {
 }
 
 /// An item & ID pair of a `PredParam`, with their updated state.
-pub enum PredCase<'w, P: PredParam + ?Sized> {
+pub enum CombCase<'w, P: PredParam + ?Sized> {
 	Diff(<P::Item<'w> as PredItem<'w>>::Ref<'w>, P::Id),
 	Same(<P::Item<'w> as PredItem<'w>>::Ref<'w>, P::Id),
 }
 
-impl<P: PredParam> Copy for PredCase<'_, P> {}
+impl<P: PredParam> Copy for CombCase<'_, P> {}
 
-impl<P: PredParam> Clone for PredCase<'_, P> {
+impl<P: PredParam> Clone for CombCase<'_, P> {
 	fn clone(&self) -> Self {
 		*self
 	}
 }
 
-impl<'w, P: PredParam> PredCase<'w, P> {
+impl<'w, P: PredParam> CombCase<'w, P> {
 	fn id(&self) -> P::Id {
 		let (Self::Diff(_, id) | Self::Same(_, id)) = self;
 		*id
@@ -110,7 +110,7 @@ pub trait PredParam {
 	type Id: PredId;
 	
 	/// Creates iterators over `Param`'s items with their IDs and updated state.
-	type Comb<'w, 's, K: CombKind>: IntoIterator<Item = PredCase<'w, Self>>;
+	type Comb<'w, 's, K: CombKind>: IntoIterator<Item = CombCase<'w, Self>>;
 	
 	/// Produces `Self::Comb`.
 	fn comb<'w, 's, K: CombKind>(param: &SystemParamItem<'w, 's, Self::Param>)
@@ -123,7 +123,7 @@ impl<T: Component, F: QueryFilter + 'static> PredParam for Query<'_, '_, &T, F> 
 	type Id = Entity;
 	type Comb<'w, 's, K: CombKind> = std::iter::FilterMap<
 		QueryIter<'w, 's, (Ref<'static, T>, Entity), F>,
-		fn((Ref<'w, T>, Entity)) -> Option<PredCase<'w, Self>>
+		fn((Ref<'w, T>, Entity)) -> Option<CombCase<'w, Self>>
 	>;
 	fn comb<'w, 's, K: CombKind>(param: &SystemParamItem<'w, 's, Self::Param>)
 		-> Self::Comb<'w, 's, K>
@@ -136,7 +136,7 @@ impl<R: Resource> PredParam for Res<'_, R> {
 	type Param = Res<'static, R>;
 	type Item<'w> = Res<'w, R>;
 	type Id = ();
-	type Comb<'w, 's, K: CombKind> = Option<PredCase<'w, Self>>;
+	type Comb<'w, 's, K: CombKind> = Option<CombCase<'w, Self>>;
 	fn comb<'w, 's, K: CombKind>(param: &SystemParamItem<'w, 's, Self::Param>)
         -> Self::Comb<'w, 's, K>
 	{
@@ -148,7 +148,7 @@ impl PredParam for () {
 	type Param = ();
 	type Item<'w> = ();
 	type Id = ();
-	type Comb<'w, 's, K: CombKind> = Option<PredCase<'w, Self>>;
+	type Comb<'w, 's, K: CombKind> = Option<CombCase<'w, Self>>;
 	fn comb<'w, 's, K: CombKind>(param: &SystemParamItem<'w, 's, Self::Param>)
         -> Self::Comb<'w, 's, K>
 	{
@@ -476,7 +476,7 @@ where
 	A: PredParam,
 	B: PredParam,
 {
-	type Item = PredCase<'w, (A, B)>;
+	type Item = CombCase<'w, (A, B)>;
 	type IntoIter = PredPairIter<'w, 's, K, A, B>;
 	fn into_iter(self) -> Self::IntoIter {
 		let Self { a_iter, b_slice, b_iter } = self;
@@ -571,7 +571,7 @@ where
 	A: PredParam,
 	B: PredParam,
 {
-	type Item = PredCase<'w, (A, B)>;
+	type Item = CombCase<'w, (A, B)>;
 	fn next(&mut self) -> Option<Self::Item> {
 		// !!! Put A/B in order of ascending size to reduce redundancy.
 		match std::mem::replace(self, Self::Empty) {
@@ -598,9 +598,9 @@ where
 					let (a, a_id) = a_curr.into_inner();
 					let (b, b_id) = b_curr.into_inner();
 					return Some(if a_curr.is_diff() || b_curr.is_diff() {
-						PredCase::Diff((a, b), (a_id, b_id))
+						CombCase::Diff((a, b), (a_id, b_id))
 					} else {
-						PredCase::Same((a, b), (a_id, b_id))
+						CombCase::Same((a, b), (a_id, b_id))
 					})
 				}
 				*self = Self::primary_next(a_iter, a_vec, b_slice, b_iter);
@@ -624,9 +624,9 @@ where
 					let (a, a_id) = a_curr.into_inner();
 					let (b, b_id) = b_curr.into_inner();
 					return Some(if a_curr.is_diff() || b_curr.is_diff() {
-						PredCase::Diff((a, b), (a_id, b_id))
+						CombCase::Diff((a, b), (a_id, b_id))
 					} else {
-						PredCase::Same((a, b), (a_id, b_id))
+						CombCase::Same((a, b), (a_id, b_id))
 					})
 				}
 				*self = Self::secondary_next(b_iter, a_slice);
@@ -687,7 +687,7 @@ where
 	P: PredParam,
 	P::Id: Ord,
 {
-	type Item = PredCase<'w, [P; N]>;
+	type Item = CombCase<'w, [P; N]>;
 	type IntoIter = PredArrayIter<'w, 's, K, P, N>;
 	fn into_iter(self) -> Self::IntoIter {
 		let mut iter = PredArrayIter {
@@ -757,7 +757,7 @@ where
 	T: PredParam,
 	T::Id: Ord,
 {
-	type Item = PredCase<'w, [T; N]>;
+	type Item = CombCase<'w, [T; N]>;
 	fn next(&mut self) -> Option<Self::Item> {
 		// !!! Might be faster:
 		// f(slice, layer):
@@ -798,10 +798,10 @@ where
 					last -= 1;
 				}
 				self.index[0] += 1;
-				return Some(if self.slice.iter().any(PredCase::is_diff) {
-					PredCase::Diff(refs, ids)
+				return Some(if self.slice.iter().any(CombCase::is_diff) {
+					CombCase::Diff(refs, ids)
 				} else {
-					PredCase::Same(refs, ids)
+					CombCase::Same(refs, ids)
 				})
 			}
 			
