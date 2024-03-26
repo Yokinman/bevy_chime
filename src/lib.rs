@@ -64,13 +64,13 @@ impl AddChimeEvent for App {
 			// !!! Cache this in a Local so it doesn't need to reallocate much.
 			// Maybe chop off nodes that go proportionally underused.
 			let mut node = Node::default();
-			
-			let (state, misc) = state.get(world);
-			pred_sys(
-				PredState::new(state, &mut node),
-				misc
-			);
-			
+			{
+				let (state, misc) = state.get(world);
+				pred_sys(
+					PredState::new(&state, &mut node),
+					misc
+				);
+			}
 			let time = world.resource::<Time>().elapsed();
 			world.resource_scope::<ChimeEventMap, ()>(|world, mut event_map| {
 				event_map.sched(
