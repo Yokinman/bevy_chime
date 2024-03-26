@@ -37,9 +37,9 @@ pub struct CombAll;
 impl CombKind for CombAll {
 	fn wrap<P: PredParam>((item, id): (P::Item<'_>, P::Id)) -> Option<CombCase<P>> {
 		Some(if item.is_updated() {
-			CombCase::Diff(item.into_ref(), id)
+			CombCase::Diff(P::Item::into_ref(item), id)
 		} else {
-			CombCase::Same(item.into_ref(), id)
+			CombCase::Same(P::Item::into_ref(item), id)
 		})
 	}
 	fn is_all() -> bool {
@@ -53,7 +53,7 @@ pub struct CombUpdated;
 impl CombKind for CombUpdated {
 	fn wrap<P: PredParam>((item, id): (P::Item<'_>, P::Id)) -> Option<CombCase<P>> {
 		if item.is_updated() {
-			Some(CombCase::Diff(item.into_ref(), id))
+			Some(CombCase::Diff(P::Item::into_ref(item), id))
 		} else {
 			None
 		}
@@ -189,7 +189,7 @@ pub trait PredItem<'w> {
 	type Inner: 'w;
 	
 	/// Needed because `bevy_ecs::world::Ref` can't be cloned/copied.
-	fn into_ref(self) -> Self::Ref<'w>;
+	fn into_ref(item: Self) -> Self::Ref<'w>;
 	
 	/// Whether this item is in need of a prediction update.
 	fn is_updated(&self) -> bool;
@@ -198,8 +198,8 @@ pub trait PredItem<'w> {
 impl<'w, T: 'static> PredItem<'w> for Ref<'w, T> {
 	type Ref<'i> = &'i Self::Inner;
 	type Inner = T;
-	fn into_ref(self) -> Self::Ref<'w> {
-		Ref::into_inner(self)
+	fn into_ref(item: Self) -> Self::Ref<'w> {
+		Ref::into_inner(item)
 	}
 	fn is_updated(&self) -> bool {
 		DetectChanges::is_changed(self)
@@ -209,8 +209,8 @@ impl<'w, T: 'static> PredItem<'w> for Ref<'w, T> {
 impl<'w, R: Resource> PredItem<'w> for Res<'w, R> {
 	type Ref<'i> = &'i Self::Inner;
 	type Inner = R;
-	fn into_ref(self) -> Self::Ref<'w> {
-		Res::into_inner(self)
+	fn into_ref(item: Self) -> Self::Ref<'w> {
+		Res::into_inner(item)
 	}
 	fn is_updated(&self) -> bool {
 		DetectChanges::is_changed(self)
@@ -220,7 +220,9 @@ impl<'w, R: Resource> PredItem<'w> for Res<'w, R> {
 impl<'w> PredItem<'w> for () {
 	type Ref<'i> = ();
 	type Inner = ();
-	fn into_ref(self) -> Self::Ref<'w> {}
+	fn into_ref(item: Self) -> Self::Ref<'w> {
+		item
+	}
 	fn is_updated(&self) -> bool {
 		true
 	}
@@ -233,8 +235,8 @@ where
 {
 	type Ref<'i> = (A::Ref<'i>, B::Ref<'i>);
 	type Inner = (A::Inner, B::Inner);
-	fn into_ref(self) -> Self::Ref<'w> {
-		(self.0.into_ref(), self.1.into_ref())
+	fn into_ref((a, b): Self) -> Self::Ref<'w> {
+		(A::into_ref(a), B::into_ref(b))
 	}
 	fn is_updated(&self) -> bool {
 		self.0.is_updated() || self.1.is_updated()
@@ -247,8 +249,8 @@ where
 {
 	type Ref<'i> = [T::Ref<'i>; N];
 	type Inner = [T::Inner; N];
-	fn into_ref(self) -> Self::Ref<'w> {
-		self.map(|x| x.into_ref())
+	fn into_ref(item: Self) -> Self::Ref<'w> {
+		item.map(T::into_ref)
 	}
 	fn is_updated(&self) -> bool {
 		self.iter().any(T::is_updated)
