@@ -482,8 +482,7 @@ where
 	type IntoIter = PredPairCombIter<'w, 's, K, A, B>;
 	fn into_iter(self) -> Self::IntoIter {
 		let Self { a_iter, b_slice, b_iter } = self;
-		let ((_, Some(size)) | (size, None)) = a_iter.size_hint(); // !!! Maybe don't use upper bound
-		let a_vec = Vec::with_capacity(size);
+		let a_vec = Vec::with_capacity(b_slice.len());
 		PredPairCombIter::primary_next(a_iter, a_vec, b_slice, b_iter)
 	}
 }
