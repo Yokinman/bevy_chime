@@ -160,11 +160,11 @@ impl<A: PredParam, B: PredParam> PredParam for (A, B) {
 	type Param = (A::Param, B::Param);
 	type Item<'w> = (A::Item<'w>, B::Item<'w>);
 	type Id = (A::Id, B::Id);
-	type Comb<'w, 's, K: CombKind> = PredGroupComb<'w, 's, K, A, B>;
+	type Comb<'w, 's, K: CombKind> = PredPairComb<'w, 's, K, A, B>;
 	fn comb<'w, 's, K: CombKind>(param: &SystemParamItem<'w, 's, Self::Param>)
         -> Self::Comb<'w, 's, K>
 	{
-		PredGroupComb::new(&param.0, &param.1)
+		PredPairComb::new(&param.0, &param.1)
 	}
 }
 
@@ -441,7 +441,7 @@ unsafe impl<P: PredQueryData> SystemParam for PredQuery<'_, '_, P> {
 }
 
 /// Combinator for `PredParam` tuple implementation.
-pub struct PredGroupComb<'w, 's, K, A, B>
+pub struct PredPairComb<'w, 's, K, A, B>
 where
 	K: CombKind,
 	A: PredParam,
@@ -452,7 +452,7 @@ where
 	b_iter: <B::Comb<'w, 's, K> as IntoIterator>::IntoIter,
 }
 
-impl<'w, 's, K, A, B> PredGroupComb<'w, 's, K, A, B>
+impl<'w, 's, K, A, B> PredPairComb<'w, 's, K, A, B>
 where
 	K: CombKind,
 	A: PredParam,
@@ -470,24 +470,24 @@ where
 	}
 }
 
-impl<'w, 's, K, A, B> IntoIterator for PredGroupComb<'w, 's, K, A, B>
+impl<'w, 's, K, A, B> IntoIterator for PredPairComb<'w, 's, K, A, B>
 where
 	K: CombKind,
 	A: PredParam,
 	B: PredParam,
 {
 	type Item = PredCase<'w, (A, B)>;
-	type IntoIter = PredGroupIter<'w, 's, K, A, B>;
+	type IntoIter = PredPairIter<'w, 's, K, A, B>;
 	fn into_iter(self) -> Self::IntoIter {
 		let Self { a_iter, b_slice, b_iter } = self;
 		let ((_, Some(size)) | (size, None)) = a_iter.size_hint(); // !!! Maybe don't use upper bound
 		let a_vec = Vec::with_capacity(size);
-		PredGroupIter::primary_next(a_iter, a_vec, b_slice, b_iter)
+		PredPairIter::primary_next(a_iter, a_vec, b_slice, b_iter)
 	}
 }
 
 /// Iterator for 2-tuple [`PredParam`] types.
-pub enum PredGroupIter<'w, 's, K, A, B>
+pub enum PredPairIter<'w, 's, K, A, B>
 where
 	K: CombKind,
 	A: PredParam,
@@ -510,7 +510,7 @@ where
 	},
 }
 
-impl<'w, 's, A, B, K> PredGroupIter<'w, 's, K, A, B>
+impl<'w, 's, A, B, K> PredPairIter<'w, 's, K, A, B>
 where
 	K: CombKind,
 	A: PredParam,
@@ -565,7 +565,7 @@ where
 	}
 }
 
-impl<'w, 's, K, A, B> Iterator for PredGroupIter<'w, 's, K, A, B>
+impl<'w, 's, K, A, B> Iterator for PredPairIter<'w, 's, K, A, B>
 where
 	K: CombKind,
 	A: PredParam,
