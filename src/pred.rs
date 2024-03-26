@@ -36,7 +36,7 @@ pub struct CombAll;
 
 impl CombKind for CombAll {
 	fn wrap<P: PredParam>((item, id): (P::Item<'_>, P::Id)) -> Option<CombCase<P>> {
-		Some(if item.is_updated() {
+		Some(if P::Item::is_updated(&item) {
 			CombCase::Diff(P::Item::into_ref(item), id)
 		} else {
 			CombCase::Same(P::Item::into_ref(item), id)
@@ -52,7 +52,7 @@ pub struct CombUpdated;
 
 impl CombKind for CombUpdated {
 	fn wrap<P: PredParam>((item, id): (P::Item<'_>, P::Id)) -> Option<CombCase<P>> {
-		if item.is_updated() {
+		if P::Item::is_updated(&item) {
 			Some(CombCase::Diff(P::Item::into_ref(item), id))
 		} else {
 			None
@@ -192,7 +192,7 @@ pub trait PredItem<'w> {
 	fn into_ref(item: Self) -> Self::Ref<'w>;
 	
 	/// Whether this item is in need of a prediction update.
-	fn is_updated(&self) -> bool;
+	fn is_updated(item: &Self) -> bool;
 }
 
 impl<'w, T: 'static> PredItem<'w> for Ref<'w, T> {
@@ -201,8 +201,8 @@ impl<'w, T: 'static> PredItem<'w> for Ref<'w, T> {
 	fn into_ref(item: Self) -> Self::Ref<'w> {
 		Ref::into_inner(item)
 	}
-	fn is_updated(&self) -> bool {
-		DetectChanges::is_changed(self)
+	fn is_updated(item: &Self) -> bool {
+		DetectChanges::is_changed(item)
 	}
 }
 
@@ -212,8 +212,8 @@ impl<'w, R: Resource> PredItem<'w> for Res<'w, R> {
 	fn into_ref(item: Self) -> Self::Ref<'w> {
 		Res::into_inner(item)
 	}
-	fn is_updated(&self) -> bool {
-		DetectChanges::is_changed(self)
+	fn is_updated(item: &Self) -> bool {
+		DetectChanges::is_changed(item)
 	}
 }
 
@@ -223,7 +223,7 @@ impl<'w> PredItem<'w> for () {
 	fn into_ref(item: Self) -> Self::Ref<'w> {
 		item
 	}
-	fn is_updated(&self) -> bool {
+	fn is_updated(_item: &Self) -> bool {
 		true
 	}
 }
@@ -238,8 +238,8 @@ where
 	fn into_ref((a, b): Self) -> Self::Ref<'w> {
 		(A::into_ref(a), B::into_ref(b))
 	}
-	fn is_updated(&self) -> bool {
-		self.0.is_updated() || self.1.is_updated()
+	fn is_updated((a, b): &Self) -> bool {
+		A::is_updated(a) || B::is_updated(b)
 	}
 }
 
@@ -252,8 +252,8 @@ where
 	fn into_ref(item: Self) -> Self::Ref<'w> {
 		item.map(T::into_ref)
 	}
-	fn is_updated(&self) -> bool {
-		self.iter().any(T::is_updated)
+	fn is_updated(item: &Self) -> bool {
+		item.iter().any(T::is_updated)
 	}
 }
 
