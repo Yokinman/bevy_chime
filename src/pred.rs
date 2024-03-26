@@ -404,28 +404,28 @@ impl<A: PredQueryData, B: PredQueryData> PredQueryData for (A, B) {
 }
 
 /// Prediction data fed as a parameter to an event's systems.
-pub struct PredQuery<'world, 'state, P: PredQueryData> {
+pub struct PredQuery<'world, 'state, D: PredQueryData> {
     world: UnsafeWorldCell<'world>,
-    state: &'state P::Id,
+    state: &'state D::Id,
 }
 
-impl<'w, 's, P: PredQueryData> PredQuery<'w, 's, P> {
-	pub fn get_inner(self) -> P::Output<'w> {
+impl<'w, 's, D: PredQueryData> PredQuery<'w, 's, D> {
+	pub fn get_inner(self) -> D::Output<'w> {
 		unsafe {
 			// SAFETY: Right now this method consumes `self`. If it could be
 			// called multiple times, the returned values would overlap.
-			<P as PredQueryData>::get_inner(self.world, *self.state)
+			<D as PredQueryData>::get_inner(self.world, *self.state)
 		}
 	}
 }
 
-unsafe impl<P: PredQueryData> SystemParam for PredQuery<'_, '_, P> {
-	type State = P::Id;
-	type Item<'world, 'state> = PredQuery<'world, 'state, P>;
+unsafe impl<D: PredQueryData> SystemParam for PredQuery<'_, '_, D> {
+	type State = D::Id;
+	type Item<'world, 'state> = PredQuery<'world, 'state, D>;
 	fn init_state(world: &mut World, system_meta: &mut SystemMeta) -> Self::State {
 		// !!! Check for component access overlap. This isn't safe right now.
 		if let Some(PredSystemId(id)) = world.get_resource::<PredSystemId>() {
-			if let Some(id) = id.downcast_ref::<P::Id>() {
+			if let Some(id) = id.downcast_ref::<D::Id>() {
 				*id
 			} else {
 				panic!("!!! parameter is for wrong ID type");
@@ -703,22 +703,22 @@ where
 }
 
 /// Iterator for array of [`PredParam`] type.
-pub struct PredArrayCombIter<'w, 's, K, T, const N: usize>
+pub struct PredArrayCombIter<'w, 's, K, P, const N: usize>
 where
 	K: CombKind,
-	T: PredParam,
+	P: PredParam,
 {
-	slice: Box<[<T::Comb<'w, 's, CombAll> as IntoIterator>::Item]>,
+	slice: Box<[<P::Comb<'w, 's, CombAll> as IntoIterator>::Item]>,
 	index: [usize; N],
 	is_first: bool,
 	kind: PhantomData<K>,
 }
 
-impl<'w, 's, K, T, const N: usize> PredArrayCombIter<'w, 's, K, T, N>
+impl<'w, 's, K, P, const N: usize> PredArrayCombIter<'w, 's, K, P, N>
 where
 	K: CombKind,
-	T: PredParam,
-	T::Id: Ord,
+	P: PredParam,
+	P::Id: Ord,
 {
 	fn step_main(&mut self) {
 		//! Moves the main index to the next updated item.
@@ -752,13 +752,13 @@ where
 	}
 }
 
-impl<'w, 's, K, T, const N: usize> Iterator for PredArrayCombIter<'w, 's, K, T, N>
+impl<'w, 's, K, P, const N: usize> Iterator for PredArrayCombIter<'w, 's, K, P, N>
 where
 	K: CombKind,
-	T: PredParam,
-	T::Id: Ord,
+	P: PredParam,
+	P::Id: Ord,
 {
-	type Item = CombCase<'w, [T; N]>;
+	type Item = CombCase<'w, [P; N]>;
 	fn next(&mut self) -> Option<Self::Item> {
 		// !!! Might be faster:
 		// f(slice, layer):
