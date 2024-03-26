@@ -156,7 +156,9 @@ pub trait PredParam {
 	type Id: PredId;
 	
 	/// Creates iterators over `Param`'s items with their IDs and updated state.
-	type Comb<'w, K: CombKind>: IntoIterator<Item = CombCase<'w, Self::Item<'w>, Self::Id>>;
+	type Comb<'w, K: CombKind>:
+		IntoIterator<Item = CombCase<'w, Self::Item<'w>, Self::Id>>
+		+ Clone;
 	
 	/// Produces `Self::Comb`.
 	fn comb<'w, K: CombKind>(param: &'w SystemParamItem<Self::Param>)
@@ -489,9 +491,29 @@ unsafe impl<D: PredQueryData> SystemParam for PredQuery<'_, '_, D> {
 }
 
 /// Combinator for `PredParam` `Query` implementation.
-pub struct QueryComb<'w, K: CombKind, T: Component, F: QueryFilter + 'static> {
+pub struct QueryComb<'w, K, T, F>
+where
+	T: Component,
+	F: QueryFilter + 'static,
+{
 	inner: &'w Query<'w, 'w, (Ref<'static, T>, Entity), F>,
 	kind: PhantomData<K>,
+}
+
+impl<K, T, F> Copy for QueryComb<'_, K, T, F>
+where
+	T: Component,
+	F: QueryFilter + 'static,
+{}
+
+impl<K, T, F> Clone for QueryComb<'_, K, T, F>
+where
+	T: Component,
+	F: QueryFilter + 'static,
+{
+	fn clone(&self) -> Self {
+		*self
+	}
 }
 
 impl<'w, K, T, F> IntoIterator for QueryComb<'w, K, T, F>
@@ -521,6 +543,22 @@ where
 	b_comb: B::Comb<'w, K::Pal>,
 	a_inv_comb: A::Comb<'w, K::Inv>,
 	b_inv_comb: B::Comb<'w, <<K::Inv as CombKind>::Pal as CombKind>::Inv>,
+}
+
+impl<K, A, B> Clone for PredPairComb<'_, K, A, B>
+where
+	K: CombKind,
+	A: PredParam,
+	B: PredParam,
+{
+	fn clone(&self) -> Self {
+		Self {
+			a_comb: self.a_comb.clone(),
+			b_comb: self.b_comb.clone(),
+			a_inv_comb: self.a_inv_comb.clone(),
+			b_inv_comb: self.b_inv_comb.clone(),
+		}
+	}
 }
 
 impl<'p, K, A, B> PredPairComb<'p, K, A, B>
@@ -751,6 +789,14 @@ where
 	P: PredParam,
 {
 	slice: Box<[<P::Comb<'w, K> as IntoIterator>::Item]>,
+}
+
+impl<K: CombKind, P: PredParam, const N: usize> Clone for PredArrayComb<'_, K, P, N> {
+	fn clone(&self) -> Self {
+		Self {
+			slice: self.slice.clone(),
+		}
+	}
 }
 
 impl<'p, K, P, const N: usize> PredArrayComb<'p, K, P, N>
