@@ -479,17 +479,17 @@ where
 	B: PredParam,
 {
 	type Item = CombCase<'w, (A, B)>;
-	type IntoIter = PredPairIter<'w, 's, K, A, B>;
+	type IntoIter = PredPairCombIter<'w, 's, K, A, B>;
 	fn into_iter(self) -> Self::IntoIter {
 		let Self { a_iter, b_slice, b_iter } = self;
 		let ((_, Some(size)) | (size, None)) = a_iter.size_hint(); // !!! Maybe don't use upper bound
 		let a_vec = Vec::with_capacity(size);
-		PredPairIter::primary_next(a_iter, a_vec, b_slice, b_iter)
+		PredPairCombIter::primary_next(a_iter, a_vec, b_slice, b_iter)
 	}
 }
 
 /// Iterator for 2-tuple [`PredParam`] types.
-pub enum PredPairIter<'w, 's, K, A, B>
+pub enum PredPairCombIter<'w, 's, K, A, B>
 where
 	K: CombKind,
 	A: PredParam,
@@ -512,7 +512,7 @@ where
 	},
 }
 
-impl<'w, 's, A, B, K> PredPairIter<'w, 's, K, A, B>
+impl<'w, 's, A, B, K> PredPairCombIter<'w, 's, K, A, B>
 where
 	K: CombKind,
 	A: PredParam,
@@ -567,7 +567,7 @@ where
 	}
 }
 
-impl<'w, 's, K, A, B> Iterator for PredPairIter<'w, 's, K, A, B>
+impl<'w, 's, K, A, B> Iterator for PredPairCombIter<'w, 's, K, A, B>
 where
 	K: CombKind,
 	A: PredParam,
@@ -690,9 +690,9 @@ where
 	P::Id: Ord,
 {
 	type Item = CombCase<'w, [P; N]>;
-	type IntoIter = PredArrayIter<'w, 's, K, P, N>;
+	type IntoIter = PredArrayCombIter<'w, 's, K, P, N>;
 	fn into_iter(self) -> Self::IntoIter {
-		let mut iter = PredArrayIter {
+		let mut iter = PredArrayCombIter {
 			slice: self.slice,
 			index: [0; N],
 			is_first: true,
@@ -704,7 +704,7 @@ where
 }
 
 /// Iterator for array of [`PredParam`] type.
-pub struct PredArrayIter<'w, 's, K, T, const N: usize>
+pub struct PredArrayCombIter<'w, 's, K, T, const N: usize>
 where
 	K: CombKind,
 	T: PredParam,
@@ -715,7 +715,7 @@ where
 	kind: PhantomData<K>,
 }
 
-impl<'w, 's, K, T, const N: usize> PredArrayIter<'w, 's, K, T, N>
+impl<'w, 's, K, T, const N: usize> PredArrayCombIter<'w, 's, K, T, N>
 where
 	K: CombKind,
 	T: PredParam,
@@ -753,7 +753,7 @@ where
 	}
 }
 
-impl<'w, 's, K, T, const N: usize> Iterator for PredArrayIter<'w, 's, K, T, N>
+impl<'w, 's, K, T, const N: usize> Iterator for PredArrayCombIter<'w, 's, K, T, N>
 where
 	K: CombKind,
 	T: PredParam,
