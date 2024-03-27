@@ -136,6 +136,20 @@ impl<'w, P: PredItem<'w>, I: PredId> CombCase<'w, P, I> {
 			Self::Same(..) => false,
 		}
 	}
+	fn join<A: PredItem<'w>, B: PredId>(self, other: CombCase<'w, A, B>)
+		-> CombCase<'w, (P, A), (I, B)>
+	{
+		match (self, other) {
+			(
+				CombCase::Same(a, a_id),
+				CombCase::Same(b, b_id),
+			) => CombCase::Same((a, b), (a_id, b_id)),
+			(
+				CombCase::Diff(a, a_id) | CombCase::Same(a, a_id),
+				CombCase::Diff(b, b_id) | CombCase::Same(b, b_id),
+			) => CombCase::Diff((a, b), (a_id, b_id)),
+		}
+	}
 }
 
 /// A set of [`PredItem`] values used to predict & schedule events.
@@ -712,57 +726,23 @@ where
 		match std::mem::replace(self, Self::Empty) {
 			Self::Empty => None,
 			
-			 // (Updated A, All B): 
 			Self::Primary {
-				a_iter,
-				a_curr,
-				b_comb,
-				mut b_iter,
-				a_inv_comb,
-				b_inv_comb,
+				a_iter, a_curr, b_comb, mut b_iter, a_inv_comb, b_inv_comb
 			} => {
 				if let Some(b_curr) = b_iter.next() {
 					*self = Self::Primary {
-						a_iter,
-						a_curr,
-						b_comb,
-						b_iter,
-						a_inv_comb,
-						b_inv_comb,
+						a_iter, a_curr, b_comb, b_iter, a_inv_comb, b_inv_comb
 					};
-					let (a, a_id) = a_curr.into_inner();
-					let (b, b_id) = b_curr.into_inner();
-					return Some(if a_curr.is_diff() || b_curr.is_diff() {
-						CombCase::Diff((a, b), (a_id, b_id))
-					} else {
-						CombCase::Same((a, b), (a_id, b_id))
-					})
+					return Some(a_curr.join(b_curr))
 				}
 				*self = Self::primary_next(a_iter, b_comb, a_inv_comb, b_inv_comb);
 				self.next()
-			}
+			},
 			
-			 // (Updated B, Non-updated A):
-			Self::Secondary {
-				b_iter,
-				b_curr,
-				a_comb,
-				mut a_iter,
-			} => {
+			Self::Secondary { b_iter, b_curr, a_comb, mut a_iter } => {
 				if let Some(a_curr) = a_iter.next() {
-					*self = Self::Secondary {
-						b_iter,
-						b_curr,
-						a_comb,
-						a_iter,
-					};
-					let (a, a_id) = a_curr.into_inner();
-					let (b, b_id) = b_curr.into_inner();
-					return Some(if a_curr.is_diff() || b_curr.is_diff() {
-						CombCase::Diff((a, b), (a_id, b_id))
-					} else {
-						CombCase::Same((a, b), (a_id, b_id))
-					})
+					*self = Self::Secondary { b_iter, b_curr, a_comb, a_iter };
+					return Some(a_curr.join(b_curr))
 				}
 				*self = Self::secondary_next(b_iter, a_comb);
 				self.next()
