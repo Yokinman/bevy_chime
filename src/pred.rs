@@ -597,8 +597,8 @@ where
 		} = self;
 		PredPairCombIter::primary_next(
 			a_comb.into_iter(),
-			b_comb.into_iter().collect(),
-			a_inv_comb.into_iter().collect(),
+			b_comb,
+			a_inv_comb,
 			b_inv_comb,
 		)
 	}
@@ -615,16 +615,16 @@ where
 	Primary {
 		a_iter: <A::Comb<'w, K> as IntoIterator>::IntoIter,
 		a_curr: <A::Comb<'w, K> as IntoIterator>::Item,
-		b_slice: Box<[<B::Comb<'w, K::Pal> as IntoIterator>::Item]>,
-		b_index: usize,
-		a_inv_comb: Box<[<A::Comb<'w, K::Inv> as IntoIterator>::Item]>, // A::Comb<'w, 's, K::Inv>,
+		b_comb: B::Comb<'w, K::Pal>,
+		b_iter: <B::Comb<'w, K::Pal> as IntoIterator>::IntoIter,
+		a_inv_comb: A::Comb<'w, K::Inv>,
 		b_inv_comb: B::Comb<'w, <<K::Inv as CombKind>::Pal as CombKind>::Inv>,
 	},
 	Secondary {
 		b_iter: <B::Comb<'w, <<K::Inv as CombKind>::Pal as CombKind>::Inv> as IntoIterator>::IntoIter,
 		b_curr: <B::Comb<'w, <<K::Inv as CombKind>::Pal as CombKind>::Inv> as IntoIterator>::Item,
-		a_slice: Box<[<A::Comb<'w, K::Inv> as IntoIterator>::Item]>,
-		a_index: usize,
+		a_comb: A::Comb<'w, K::Inv>,
+		a_iter: <A::Comb<'w, K::Inv> as IntoIterator>::IntoIter,
 	},
 }
 
@@ -636,49 +636,35 @@ where
 {
 	fn primary_next(
 		mut a_iter: <A::Comb<'w, K> as IntoIterator>::IntoIter,
-		b_slice: Box<[<B::Comb<'w, K::Pal> as IntoIterator>::Item]>,
-		a_inv_comb: Box<[<A::Comb<'w, K::Inv> as IntoIterator>::Item]>,
+		b_comb: B::Comb<'w, K::Pal>,
+		a_inv_comb: A::Comb<'w, K::Inv>,
 		b_inv_comb: B::Comb<'w, <<K::Inv as CombKind>::Pal as CombKind>::Inv>,
 	) -> Self {
 		if let Some(a_curr) = a_iter.next() {
+			let b_iter = b_comb.clone().into_iter();
 			return Self::Primary {
 				a_iter,
 				a_curr,
-				b_slice,
-				b_index: 0,
+				b_comb,
+				b_iter,
 				a_inv_comb,
 				b_inv_comb,
 			}
 		}
-		
-		 // Switch to Secondary Iteration:
-		let mut b_iter = b_inv_comb.into_iter();
-		if let Some(b_curr) = b_iter.next() {
-			let a_slice = a_inv_comb; // .into_iter().collect::<Box<[_]>>();
-			if a_slice.is_empty() {
-				return Self::Empty
-			}
-			return Self::Secondary {
-				b_iter,
-				b_curr,
-				a_slice,
-				a_index: 0,
-			}
-		}
-		
-		Self::Empty
+		Self::secondary_next(b_inv_comb.into_iter(), a_inv_comb)
 	}
 	
 	fn secondary_next(
 		mut b_iter: <B::Comb<'w, <<K::Inv as CombKind>::Pal as CombKind>::Inv> as IntoIterator>::IntoIter,
-		a_slice: Box<[<A::Comb<'w, K::Inv> as IntoIterator>::Item]>,
+		a_comb: A::Comb<'w, K::Inv>,
 	) -> Self {
 		if let Some(b_curr) = b_iter.next() {
+			let a_iter = a_comb.clone().into_iter();
 			return Self::Secondary {
 				b_iter,
 				b_curr,
-				a_slice,
-				a_index: 0,
+				a_comb,
+				a_iter,
 			}
 		}
 		Self::Empty
@@ -701,17 +687,17 @@ where
 			Self::Primary {
 				a_iter,
 				a_curr,
-				b_slice,
-				b_index,
+				b_comb,
+				mut b_iter,
 				a_inv_comb,
 				b_inv_comb,
 			} => {
-				if let Some(b_curr) = b_slice.get(b_index).copied() {
+				if let Some(b_curr) = b_iter.next() {
 					*self = Self::Primary {
 						a_iter,
 						a_curr,
-						b_slice,
-						b_index: b_index + 1,
+						b_comb,
+						b_iter,
 						a_inv_comb,
 						b_inv_comb,
 					};
@@ -723,7 +709,7 @@ where
 						CombCase::Same((a, b), (a_id, b_id))
 					})
 				}
-				*self = Self::primary_next(a_iter, b_slice, a_inv_comb, b_inv_comb);
+				*self = Self::primary_next(a_iter, b_comb, a_inv_comb, b_inv_comb);
 				self.next()
 			}
 			
@@ -731,15 +717,15 @@ where
 			Self::Secondary {
 				b_iter,
 				b_curr,
-				a_slice,
-				a_index,
+				a_comb,
+				mut a_iter,
 			} => {
-				if let Some(a_curr) = a_slice.get(a_index).copied() {
+				if let Some(a_curr) = a_iter.next() {
 					*self = Self::Secondary {
 						b_iter,
 						b_curr,
-						a_slice,
-						a_index: a_index + 1,
+						a_comb,
+						a_iter,
 					};
 					let (a, a_id) = a_curr.into_inner();
 					let (b, b_id) = b_curr.into_inner();
@@ -749,7 +735,7 @@ where
 						CombCase::Same((a, b), (a_id, b_id))
 					})
 				}
-				*self = Self::secondary_next(b_iter, a_slice);
+				*self = Self::secondary_next(b_iter, a_comb);
 				self.next()
 			},
 		}
@@ -757,24 +743,24 @@ where
 	fn size_hint(&self) -> (usize, Option<usize>) {
 		match self {
 			Self::Empty => (0, Some(0)),
-			Self::Primary { a_iter, b_slice, b_index, a_inv_comb, .. } => {
-				let min = b_slice.len() - b_index;
+			Self::Primary { a_iter, b_iter, a_inv_comb, .. } => {
+				let min = b_iter.size_hint().0;
 				let a_max = a_iter.size_hint().1;
 				(
 					min,
 					a_max.and_then(|a_max| a_max
-						.checked_add(a_inv_comb.len()/*.size_hint().1?*/)?
-						.checked_mul(b_slice.len())?
+						.checked_add(a_inv_comb.clone().into_iter().size_hint().1?)?
+						.checked_mul(b_iter.size_hint().1?)?
 						.checked_add(min))
 				)
 			}
-			Self::Secondary { b_iter, a_slice, a_index, .. } => {
-				let min = a_slice.len() - a_index;
+			Self::Secondary { b_iter, a_comb, a_iter, .. } => {
+				let min = a_iter.size_hint().0;
 				let b_max = b_iter.size_hint().1;
 				(
 					min,
 					b_max.and_then(|b_max| b_max
-						.checked_mul(a_slice.len())?
+						.checked_mul(a_comb.clone().into_iter().size_hint().1?)?
 						.checked_add(min))
 				)
 			},
