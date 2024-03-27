@@ -5,7 +5,7 @@ use bevy_ecs::change_detection::{DetectChanges, Ref, Res};
 use bevy_ecs::component::{Component, Tick};
 use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::{Query, Resource, World};
-use bevy_ecs::query::{QueryFilter, QueryIter};
+use bevy_ecs::query::{ArchetypeFilter, QueryIter};
 use bevy_ecs::system::{ReadOnlySystemParam, SystemMeta, SystemParam, SystemParamItem};
 use bevy_ecs::world::{Mut, unsafe_world_cell::UnsafeWorldCell};
 use chime::time::TimeRanges;
@@ -165,7 +165,7 @@ pub trait PredParam {
 		-> Self::Comb<'w, K>;
 }
 
-impl<T: Component, F: QueryFilter + 'static> PredParam for Query<'_, '_, &T, F> {
+impl<T: Component, F: ArchetypeFilter + 'static> PredParam for Query<'_, '_, &T, F> {
 	type Param = Query<'static, 'static, (Ref<'static, T>, Entity), F>;
 	type Item<'w> = Ref<'w, T>;
 	type Id = Entity;
@@ -494,7 +494,7 @@ unsafe impl<D: PredQueryData> SystemParam for PredQuery<'_, '_, D> {
 pub struct QueryComb<'w, K, T, F>
 where
 	T: Component,
-	F: QueryFilter + 'static,
+	F: ArchetypeFilter + 'static,
 {
 	inner: &'w Query<'w, 'w, (Ref<'static, T>, Entity), F>,
 	kind: PhantomData<K>,
@@ -503,13 +503,13 @@ where
 impl<K, T, F> Copy for QueryComb<'_, K, T, F>
 where
 	T: Component,
-	F: QueryFilter + 'static,
+	F: ArchetypeFilter + 'static,
 {}
 
 impl<K, T, F> Clone for QueryComb<'_, K, T, F>
 where
 	T: Component,
-	F: QueryFilter + 'static,
+	F: ArchetypeFilter + 'static,
 {
 	fn clone(&self) -> Self {
 		*self
@@ -520,7 +520,7 @@ impl<'w, K, T, F> IntoIterator for QueryComb<'w, K, T, F>
 where
 	K: CombKind,
 	T: Component,
-	F: QueryFilter + 'static,
+	F: ArchetypeFilter + 'static,
 {
 	type Item = <Self::IntoIter as Iterator>::Item;
 	type IntoIter = std::iter::FilterMap<
@@ -528,7 +528,8 @@ where
 		fn((Ref<'w, T>, Entity)) -> Option<CombCase<'w, Ref<'w, T>, Entity>>
 	>;
 	fn into_iter(self) -> Self::IntoIter {
-		self.inner.iter().filter_map(K::wrap::<Query<&T, F>>)
+		self.inner.iter()
+			.filter_map(K::wrap::<Query<&T, F>>)
 	}
 }
 
