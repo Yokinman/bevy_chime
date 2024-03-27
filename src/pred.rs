@@ -657,7 +657,7 @@ where
 	Empty,
 	Primary {
 		a_iter: <A::Comb<'w, K> as IntoIterator>::IntoIter,
-		a_curr: <A::Comb<'w, K> as IntoIterator>::Item,
+		a_case: <A::Comb<'w, K> as IntoIterator>::Item,
 		b_comb: B::Comb<'w, K::Pal>,
 		b_iter: <B::Comb<'w, K::Pal> as IntoIterator>::IntoIter,
 		a_inv_comb: A::Comb<'w, K::Inv>,
@@ -665,7 +665,7 @@ where
 	},
 	Secondary {
 		b_iter: <B::Comb<'w, <<K::Inv as CombKind>::Pal as CombKind>::Inv> as IntoIterator>::IntoIter,
-		b_curr: <B::Comb<'w, <<K::Inv as CombKind>::Pal as CombKind>::Inv> as IntoIterator>::Item,
+		b_case: <B::Comb<'w, <<K::Inv as CombKind>::Pal as CombKind>::Inv> as IntoIterator>::Item,
 		a_comb: A::Comb<'w, K::Inv>,
 		a_iter: <A::Comb<'w, K::Inv> as IntoIterator>::IntoIter,
 	},
@@ -683,15 +683,12 @@ where
 		a_inv_comb: A::Comb<'w, K::Inv>,
 		b_inv_comb: B::Comb<'w, <<K::Inv as CombKind>::Pal as CombKind>::Inv>,
 	) -> Self {
-		if let Some(a_curr) = a_iter.next() {
+		if let Some(a_case) = a_iter.next() {
 			let b_iter = b_comb.clone().into_iter();
-			return Self::Primary {
-				a_iter,
-				a_curr,
-				b_comb,
-				b_iter,
-				a_inv_comb,
-				b_inv_comb,
+			if b_iter.size_hint().1 != Some(0) {
+				return Self::Primary {
+					a_iter, a_case, b_comb, b_iter, a_inv_comb, b_inv_comb
+				}
 			}
 		}
 		Self::secondary_next(b_inv_comb.into_iter(), a_inv_comb)
@@ -701,13 +698,10 @@ where
 		mut b_iter: <B::Comb<'w, <<K::Inv as CombKind>::Pal as CombKind>::Inv> as IntoIterator>::IntoIter,
 		a_comb: A::Comb<'w, K::Inv>,
 	) -> Self {
-		if let Some(b_curr) = b_iter.next() {
+		if let Some(b_case) = b_iter.next() {
 			let a_iter = a_comb.clone().into_iter();
-			return Self::Secondary {
-				b_iter,
-				b_curr,
-				a_comb,
-				a_iter,
+			if a_iter.size_hint().1 != Some(0) {
+				return Self::Secondary { b_iter, b_case, a_comb, a_iter }
 			}
 		}
 		Self::Empty
@@ -727,22 +721,22 @@ where
 			Self::Empty => None,
 			
 			Self::Primary {
-				a_iter, a_curr, b_comb, mut b_iter, a_inv_comb, b_inv_comb
+				a_iter, a_case, b_comb, mut b_iter, a_inv_comb, b_inv_comb
 			} => {
-				if let Some(b_curr) = b_iter.next() {
+				if let Some(b_case) = b_iter.next() {
 					*self = Self::Primary {
-						a_iter, a_curr, b_comb, b_iter, a_inv_comb, b_inv_comb
+						a_iter, a_case, b_comb, b_iter, a_inv_comb, b_inv_comb
 					};
-					return Some(a_curr.join(b_curr))
+					return Some(a_case.join(b_case))
 				}
 				*self = Self::primary_next(a_iter, b_comb, a_inv_comb, b_inv_comb);
 				self.next()
-			},
+			}
 			
-			Self::Secondary { b_iter, b_curr, a_comb, mut a_iter } => {
-				if let Some(a_curr) = a_iter.next() {
-					*self = Self::Secondary { b_iter, b_curr, a_comb, a_iter };
-					return Some(a_curr.join(b_curr))
+			Self::Secondary { b_iter, b_case, a_comb, mut a_iter } => {
+				if let Some(a_case) = a_iter.next() {
+					*self = Self::Secondary { b_iter, b_case, a_comb, a_iter };
+					return Some(a_case.join(b_case))
 				}
 				*self = Self::secondary_next(b_iter, a_comb);
 				self.next()
