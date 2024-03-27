@@ -37,8 +37,30 @@ where
 pub trait CombKind {
 	type Pal: CombKind;
 	type Inv: CombKind;
-	fn wrap<'w, T: PredItem<'w>, I: PredId>(item: (T, I)) -> Option<CombCase<'w, T, I>>;
-	fn is_all() -> bool;
+	
+	const HAS_DIFF: bool;
+	const HAS_SAME: bool;
+	
+	fn wrap<'w, T, I>((item, id): (T, I)) -> Option<CombCase<'w, T, I>>
+	where
+		T: PredItem<'w>,
+		I: PredId,
+	{
+		if Self::HAS_DIFF || Self::HAS_SAME {
+			if T::is_updated(&item) {
+				if Self::HAS_DIFF {
+					return Some(CombCase::Diff(T::into_ref(item), id))
+				}
+			} else if Self::HAS_SAME {
+				return Some(CombCase::Same(T::into_ref(item), id))
+			}
+		}
+		None
+	}
+	
+	fn is_all() -> bool {
+		Self::HAS_DIFF && Self::HAS_SAME
+	}
 }
 
 /// No combinations.
@@ -47,12 +69,8 @@ pub struct CombNone;
 impl CombKind for CombNone {
 	type Pal = CombNone;
 	type Inv = CombAll;
-	fn wrap<'w, T: PredItem<'w>, I: PredId>(_: (T, I)) -> Option<CombCase<'w, T, I>> {
-		None
-	}
-	fn is_all() -> bool {
-		false
-	}
+	const HAS_DIFF: bool = false;
+	const HAS_SAME: bool = false;
 }
 
 /// All combinations.
@@ -61,16 +79,8 @@ pub struct CombAll;
 impl CombKind for CombAll {
 	type Pal = CombAll;
 	type Inv = CombNone;
-	fn wrap<'w, T: PredItem<'w>, I: PredId>((item, id): (T, I)) -> Option<CombCase<'w, T, I>> {
-		Some(if T::is_updated(&item) {
-			CombCase::Diff(T::into_ref(item), id)
-		} else {
-			CombCase::Same(T::into_ref(item), id)
-		})
-	}
-	fn is_all() -> bool {
-		true
-	}
+	const HAS_DIFF: bool = true;
+	const HAS_SAME: bool = true;
 }
 
 /// Combinations where either item updated.
@@ -79,16 +89,8 @@ pub struct CombUpdated;
 impl CombKind for CombUpdated {
 	type Pal = CombAll;
 	type Inv = CombStatic;
-	fn wrap<'w, T: PredItem<'w>, I: PredId>((item, id): (T, I)) -> Option<CombCase<'w, T, I>> {
-		if T::is_updated(&item) {
-			Some(CombCase::Diff(T::into_ref(item), id))
-		} else {
-			None
-		}
-	}
-	fn is_all() -> bool {
-		false
-	}
+	const HAS_DIFF: bool = true;
+	const HAS_SAME: bool = false;
 }
 
 /// Combinations where neither item updated.
@@ -97,16 +99,8 @@ pub struct CombStatic;
 impl CombKind for CombStatic {
 	type Pal = CombStatic;
 	type Inv = CombUpdated;
-	fn wrap<'w, T: PredItem<'w>, I: PredId>((item, id): (T, I)) -> Option<CombCase<'w, T, I>> {
-		if T::is_updated(&item) {
-			None
-		} else {
-			Some(CombCase::Same(T::into_ref(item), id))
-		}
-	}
-	fn is_all() -> bool {
-		false
-	}
+	const HAS_DIFF: bool = false;
+	const HAS_SAME: bool = true;
 }
 
 /// An item & ID pair of a `PredParam`, with their updated state.
@@ -523,13 +517,47 @@ where
 	F: ArchetypeFilter + 'static,
 {
 	type Item = <Self::IntoIter as Iterator>::Item;
-	type IntoIter = std::iter::FilterMap<
-		QueryIter<'w, 'w, (Ref<'static, T>, Entity), F>,
-		fn((Ref<'w, T>, Entity)) -> Option<CombCase<'w, Ref<'w, T>, Entity>>
-	>;
+	type IntoIter = QueryCombIter<'w, K, T, F>;
 	fn into_iter(self) -> Self::IntoIter {
-		self.inner.iter()
-			.filter_map(K::wrap)
+		QueryCombIter {
+			iter: self.inner.iter_inner(),
+			kind: PhantomData,
+		}
+	}
+}
+
+/// `Iterator` of `QueryComb`'s `IntoIterator` implementation.
+pub struct QueryCombIter<'w, K, T, F>
+where
+	T: Component,
+	F: ArchetypeFilter + 'static,
+{
+	iter: QueryIter<'w, 'w, (Ref<'static, T>, Entity), F>,
+	kind: PhantomData<K>,
+}
+
+impl<'w, K, T, F> Iterator for QueryCombIter<'w, K, T, F>
+where
+	K: CombKind,
+	T: Component,
+	F: ArchetypeFilter + 'static,
+{
+	type Item = CombCase<'w, Ref<'w, T>, Entity>;
+	fn next(&mut self) -> Option<Self::Item> {
+		while let Some(next) = self.iter.next() {
+			let wrap = K::wrap(next);
+			if wrap.is_some() {
+				return wrap
+			}
+		}
+		None
+	}
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		match (K::HAS_DIFF, K::HAS_SAME) {
+			(false, false) => (0, Some(0)),
+			(true, true) => self.iter.size_hint(),
+			_ => (0, self.iter.size_hint().1)
+		}
 	}
 }
 
@@ -744,26 +772,28 @@ where
 	fn size_hint(&self) -> (usize, Option<usize>) {
 		match self {
 			Self::Empty => (0, Some(0)),
-			Self::Primary { a_iter, b_iter, a_inv_comb, .. } => {
+			Self::Primary { a_iter, b_comb, b_iter, a_inv_comb, b_inv_comb, .. } => {
 				let min = b_iter.size_hint().0;
-				let a_max = a_iter.size_hint().1;
-				(
-					min,
-					a_max.and_then(|a_max| a_max
-						.checked_add(a_inv_comb.clone().into_iter().size_hint().1?)?
-						.checked_mul(b_iter.size_hint().1?)?
-						.checked_add(min))
-				)
+				let max = a_iter.size_hint().1.and_then(|a_max| {
+					let b_max = b_comb.clone().into_iter().size_hint().1?;
+					let a_inv_max = a_inv_comb.clone().into_iter().size_hint().1?;
+					let b_inv_max = b_inv_comb.clone().into_iter().size_hint().1?;
+					std::cmp::max(
+						// This may be inaccurate if a new `CombKind` is added.
+						// It should work for `K = CombAll|None|Updated|Static`.
+						min.checked_add(a_max.checked_mul(b_max)?),
+						a_inv_max.checked_mul(b_inv_max)
+					)
+				});
+				(min, max)
 			},
 			Self::Secondary { b_iter, a_comb, a_iter, .. } => {
 				let min = a_iter.size_hint().0;
-				let b_max = b_iter.size_hint().1;
-				(
-					min,
-					b_max.and_then(|b_max| b_max
-						.checked_mul(a_comb.clone().into_iter().size_hint().1?)?
-						.checked_add(min))
-				)
+				let max = b_iter.size_hint().1.and_then(|b_max| {
+					let a_max = a_comb.clone().into_iter().size_hint().1?;
+					min.checked_add(a_max.checked_mul(b_max)?)
+				});
+				(min, max)
 			},
 		}
 	}
