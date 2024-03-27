@@ -37,7 +37,7 @@ where
 pub trait CombKind {
 	type Pal: CombKind;
 	type Inv: CombKind;
-	fn wrap<P: PredParam>(item: (P::Item<'_>, P::Id)) -> Option<CombCase<P::Item<'_>, P::Id>>;
+	fn wrap<'w, T: PredItem<'w>, I: PredId>(item: (T, I)) -> Option<CombCase<'w, T, I>>;
 	fn is_all() -> bool;
 }
 
@@ -47,7 +47,7 @@ pub struct CombNone;
 impl CombKind for CombNone {
 	type Pal = CombNone;
 	type Inv = CombAll;
-	fn wrap<P: PredParam>(_item: (P::Item<'_>, P::Id)) -> Option<CombCase<P::Item<'_>, P::Id>> {
+	fn wrap<'w, T: PredItem<'w>, I: PredId>(_: (T, I)) -> Option<CombCase<'w, T, I>> {
 		None
 	}
 	fn is_all() -> bool {
@@ -61,11 +61,11 @@ pub struct CombAll;
 impl CombKind for CombAll {
 	type Pal = CombAll;
 	type Inv = CombNone;
-	fn wrap<P: PredParam>((item, id): (P::Item<'_>, P::Id)) -> Option<CombCase<P::Item<'_>, P::Id>> {
-		Some(if P::Item::is_updated(&item) {
-			CombCase::Diff(P::Item::into_ref(item), id)
+	fn wrap<'w, T: PredItem<'w>, I: PredId>((item, id): (T, I)) -> Option<CombCase<'w, T, I>> {
+		Some(if T::is_updated(&item) {
+			CombCase::Diff(T::into_ref(item), id)
 		} else {
-			CombCase::Same(P::Item::into_ref(item), id)
+			CombCase::Same(T::into_ref(item), id)
 		})
 	}
 	fn is_all() -> bool {
@@ -79,9 +79,9 @@ pub struct CombUpdated;
 impl CombKind for CombUpdated {
 	type Pal = CombAll;
 	type Inv = CombStatic;
-	fn wrap<P: PredParam>((item, id): (P::Item<'_>, P::Id)) -> Option<CombCase<P::Item<'_>, P::Id>> {
-		if P::Item::is_updated(&item) {
-			Some(CombCase::Diff(P::Item::into_ref(item), id))
+	fn wrap<'w, T: PredItem<'w>, I: PredId>((item, id): (T, I)) -> Option<CombCase<'w, T, I>> {
+		if T::is_updated(&item) {
+			Some(CombCase::Diff(T::into_ref(item), id))
 		} else {
 			None
 		}
@@ -97,11 +97,11 @@ pub struct CombStatic;
 impl CombKind for CombStatic {
 	type Pal = CombStatic;
 	type Inv = CombUpdated;
-	fn wrap<P: PredParam>((item, id): (P::Item<'_>, P::Id)) -> Option<CombCase<P::Item<'_>, P::Id>> {
-		if P::Item::is_updated(&item) {
+	fn wrap<'w, T: PredItem<'w>, I: PredId>((item, id): (T, I)) -> Option<CombCase<'w, T, I>> {
+		if T::is_updated(&item) {
 			None
 		} else {
-			Some(CombCase::Same(P::Item::into_ref(item), id))
+			Some(CombCase::Same(T::into_ref(item), id))
 		}
 	}
 	fn is_all() -> bool {
@@ -188,7 +188,7 @@ impl<R: Resource> PredParam for Res<'_, R> {
 	fn comb<'w, K: CombKind>(param: &'w SystemParamItem<Self::Param>)
 		-> Self::Comb<'w, K>
 	{
-		K::wrap::<Self>((Res::clone(param), ()))
+		K::wrap((Res::clone(param), ()))
 	}
 }
 
@@ -200,7 +200,7 @@ impl PredParam for () {
 	fn comb<'w, K: CombKind>(param: &'w SystemParamItem<Self::Param>)
 		-> Self::Comb<'w, K>
 	{
-		K::wrap::<Self>((*param, ()))
+		K::wrap((*param, ()))
 	}
 }
 
@@ -529,7 +529,7 @@ where
 	>;
 	fn into_iter(self) -> Self::IntoIter {
 		self.inner.iter()
-			.filter_map(K::wrap::<Query<&T, F>>)
+			.filter_map(K::wrap)
 	}
 }
 
@@ -754,7 +754,7 @@ where
 						.checked_mul(b_iter.size_hint().1?)?
 						.checked_add(min))
 				)
-			}
+			},
 			Self::Secondary { b_iter, a_comb, a_iter, .. } => {
 				let min = a_iter.size_hint().0;
 				let b_max = b_iter.size_hint().1;
