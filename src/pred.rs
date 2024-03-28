@@ -813,9 +813,12 @@ where
 			layer: 0,
 		};
 		if iter.slice[0].1 == 0 {
-			iter.layer = N-1;
+			iter.layer = N - 1;
 		}
-		iter.step_sub(N-1);
+		for i in 1..N {
+			iter.index[N-i - 1] = iter.index[N-i];
+			iter.step(N-i - 1);
+		}
 		iter
 	}
 }
@@ -837,35 +840,50 @@ where
 	P: PredParam,
 	P::Id: Ord,
 {
-	fn step_sub(&mut self, start: usize) -> bool {
-		//! Initializes and moves the sub-indices to the next updated item.
-		//! Returns false if an index exceeds the slice's length.
-		if start == 0 {
+	fn step_index(&mut self, i: usize) -> bool {
+		let index = self.index[i] + 1;
+		if index >= self.slice.len() {
+			self.index[i] = self.slice.len();
 			return true
 		}
-		for i in 1..=start {
-			self.index[start - i] = self.index[start - i + 1];
-			self.step_index(start - i);
+		self.index[i] = match self.layer.cmp(&i) {
+			std::cmp::Ordering::Equal => self.slice[index].1,
+			std::cmp::Ordering::Less => {
+				if index == self.slice[index].1 {
+					self.layer = i;
+				}
+				index
+			},
+			_ => index
+		};
+		if self.index[i] >= self.slice.len() {
+			self.index[i] = self.slice.len();
+			true
+		} else {
+			false
 		}
-		self.index[0] < self.slice.len()
 	}
 	
-	fn step_index(&mut self, i: usize) {
-		let index = self.index[i] + 1;
-		self.index[i] = if index >= self.slice.len() {
-			self.slice.len()
-		} else {
-			match self.layer.cmp(&i) {
-				std::cmp::Ordering::Equal => self.slice[index].1,
-				std::cmp::Ordering::Less => {
-					if index == self.slice[index].1 {
-						self.layer = i;
-					}
-					index
-				},
-				_ => index
+	fn step(&mut self, i: usize) {
+		if self.step_index(i) && i != N-1 {
+			let layer = self.layer;
+			if self.layer != 0 && i + 1 >= self.layer {
+				let next = self.index[i + 1] + 1;
+				if next < self.slice.len() && self.slice[next].1 < self.slice.len() {
+					self.layer = 0;
+				}
 			}
-		};
+			self.step(i + 1);
+			self.index[i] = self.index[i + 1];
+			if self.step_index(i) {
+				for i in i..layer {
+					self.index[i] = self.slice.len();
+				}
+				if self.index[N-1] < self.slice.len() {
+					self.step(i);
+				}
+			}
+		}
 	}
 }
 
@@ -877,44 +895,33 @@ where
 {
 	type Item = CombCase<'w, <[P; N] as PredParam>::Item<'w>, <[P; N] as PredParam>::Id>;
 	fn next(&mut self) -> Option<Self::Item> {
-		for i in 0..N {
-			if self.index[i] >= self.slice.len() {
-				if self.layer == i + 1 {
-					self.layer = 0;
-				}
-				self.step_index(i + 1);
-				continue
-			}
-			if self.step_sub(i) {
-				let (refs, ids) = (
-					self.index.map(|i| self.slice[i].0.item()),
-					self.index.map(|i| self.slice[i].0.id()),
-				);
-				self.step_index(0);
-				return Some(CombCase(refs, ids))
-			}
-			break
+		if self.index[N-1] >= self.slice.len() {
+			return None
 		}
-		None
+		let case = CombCase(
+			self.index.map(|i| self.slice[i].0.item()),
+			self.index.map(|i| self.slice[i].0.id()),
+		);
+		self.step(0);
+		Some(case)
 	}
 	fn size_hint(&self) -> (usize, Option<usize>) {
-		if self.slice.get(self.index[N-1]).is_none() {
-			(0, Some(0))
-		} else {
-			// let len = self.slice.len();
-			// let lower = (1+len-N..len).product::<usize>()
-			// 	/ (1..N).product::<usize>(); // (len-1) choose (N-1)
-			// let upper = lower * len / N; // len choose N
-			// if self.is_first {
-			// 	(lower, Some(upper))
-			// } else {
-			// 	(1, Some(upper)) // !!! Improve lower bound estimation later.
-			// }
-			(1, None)
-			// remaining = (len choose N) - (len-X choose N)
-			// where X is how many "updated" values are left
-			// https://www.desmos.com/calculator/l6jawvulhk
+		if self.index[N-1] >= self.slice.len() {
+			return (0, Some(0))
 		}
+		// let len = self.slice.len();
+		// let lower = (1+len-N..len).product::<usize>()
+		// 	/ (1..N).product::<usize>(); // (len-1) choose (N-1)
+		// let upper = lower * len / N; // len choose N
+		// if self.is_first {
+		// 	(lower, Some(upper))
+		// } else {
+		// 	(1, Some(upper)) // !!! Improve lower bound estimation later.
+		// }
+		(1, None)
+		// remaining = (len choose N) - (len-X choose N)
+		// where X is how many "updated" values are left
+		// https://www.desmos.com/calculator/l6jawvulhk
 	}
 }
 
