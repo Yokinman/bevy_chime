@@ -779,7 +779,7 @@ where
 	K: CombKind,
 	P: PredParam,
 {
-	slice: Box<[<P::Comb<'w, K> as IntoIterator>::Item]>,
+	slice: Box<[(<P::Comb<'w, K::Pal> as IntoIterator>::Item, usize)]>,
 }
 
 impl<K: CombKind, P: PredParam, const N: usize> Clone for PredArrayComb<'_, K, P, N> {
@@ -797,8 +797,27 @@ where
 	P::Id: Ord,
 {
 	fn new(param: &'p SystemParamItem<P::Param>) -> Self {
-		let mut vec = P::comb::<CombAll>(param).into_iter().collect::<Vec<_>>();
-		vec.sort_unstable_by_key(|x| x.id());
+		let mut vec = P::comb::<K::Pal>(param).into_iter()
+			.map(|x| (x, usize::MAX))
+			.collect::<Vec<_>>();
+		
+		vec.sort_unstable_by_key(|(x, _)| x.id());
+		
+		for item in P::comb::<K>(param) {
+			if let Ok(target) = vec.binary_search_by(|(x, _)| x.id().cmp(&item.id())) {
+				vec[target].1 = target;
+				let mut i = target;
+				while i != 0 {
+					i -= 1;
+					if vec[i].1 < target {
+						break
+					}
+					vec[i].1 = target;
+				}
+			}
+		}
+		// !!! If `P::comb::<K>(param)` returns empty, there's nothing to do.
+		
 		Self {
 			slice: vec.into_boxed_slice()
 		}
@@ -817,10 +836,12 @@ where
 		let mut iter = PredArrayCombIter {
 			slice: self.slice,
 			index: [0; N],
-			is_first: true,
-			kind: PhantomData,
+			layer: 0,
 		};
-		iter.step_main();
+		if iter.slice[0].1 == 0 {
+			iter.layer = N-1;
+		}
+		iter.step_sub(N-1);
 		iter
 	}
 }
@@ -831,10 +852,9 @@ where
 	K: CombKind,
 	P: PredParam,
 {
-	slice: Box<[<P::Comb<'w, CombAll> as IntoIterator>::Item]>,
+	slice: Box<[(<P::Comb<'w, K::Pal> as IntoIterator>::Item, usize)]>,
 	index: [usize; N],
-	is_first: bool,
-	kind: PhantomData<K>,
+	layer: usize,
 }
 
 impl<'w, K, P, const N: usize> PredArrayCombIter<'w, K, P, N>
@@ -843,35 +863,35 @@ where
 	P: PredParam,
 	P::Id: Ord,
 {
-	fn step_main(&mut self) {
-		//! Moves the main index to the next updated item.
-		while let Some(x) = self.slice.get(self.index[N-1]) {
-			if x.is_diff() && self.step_sub(N-1) {
-				break
-			}
-			self.index[N-1] += 1;
-		}
-	}
-	
 	fn step_sub(&mut self, start: usize) -> bool {
 		//! Initializes and moves the sub-indices to the next updated item.
 		//! Returns false if an index exceeds the slice's length.
-		let mut index = if start == N-1 {
-			0
-		} else {
-			self.index[start] + 1
-		};
-		for i in (0..start).rev() {
-			while index <= self.index[N-1] && (K::is_all() || self.slice[index].is_diff()) {
-				index += 1;
-			}
-			if index >= self.slice.len() {
-				return false
-			}
-			self.index[i] = index;
-			index += 1;
+		if start == 0 {
+			return true
 		}
-		true
+		for i in 1..=start {
+			self.index[start - i] = self.index[start - i + 1];
+			self.step_index(start - i);
+		}
+		self.index[0] < self.slice.len()
+	}
+	
+	fn step_index(&mut self, i: usize) {
+		let index = self.index[i] + 1;
+		self.index[i] = if index >= self.slice.len() {
+			self.slice.len()
+		} else {
+			match self.layer.cmp(&i) {
+				std::cmp::Ordering::Equal => self.slice[index].1,
+				std::cmp::Ordering::Less => {
+					if index == self.slice[index].1 {
+						self.layer = i;
+					}
+					index
+				},
+				_ => index
+			}
+		};
 	}
 }
 
@@ -883,71 +903,43 @@ where
 {
 	type Item = CombCase<'w, <[P; N] as PredParam>::Item<'w>, <[P; N] as PredParam>::Id>;
 	fn next(&mut self) -> Option<Self::Item> {
-		// !!! Might be faster:
-		// f(slice, layer):
-		//   if layer == top_layer:
-		//     for (index, item) in updated_slice:
-		//       if index >= slice.starting_point:
-		//         yield item
-		//   else:
-		//     for (index, item) in slice:
-		//       if item.is_updated():
-		//         yield all combinations of this item and the items after it
-		//       else:
-		//         yield item + f(slice[index+1..], layer+1)
-		self.is_first = false; // Temporary `size_hint` initial lower bound.
-		if self.index[N-1] >= self.slice.len() {
-			return None
-		}
-		for i in 0..N-1 {
-			let mut index = self.index[i];
-			while index <= self.index[N-1] && (K::is_all() || self.slice[index].is_diff()) {
-				index += 1;
-			}
-			if index >= self.slice.len() {
-				self.index[i+1] += 1;
+		for i in 0..N {
+			if self.index[i] >= self.slice.len() {
+				if self.layer == i + 1 {
+					self.layer = 0;
+				}
+				self.step_index(i + 1);
 				continue
 			}
-			self.index[i] = index;
-			
 			if self.step_sub(i) {
-				let (mut refs, mut ids) = (
-					self.index.map(|i| self.slice[i].item()),
-					self.index.map(|i| self.slice[i].id()),
+				let (refs, ids) = (
+					self.index.map(|i| self.slice[i].0.item()),
+					self.index.map(|i| self.slice[i].0.id()),
 				);
-				let mut last = N-1;
-				while last != 0 && ids[last] > ids[last - 1] {
-					ids .swap(last, last - 1);
-					refs.swap(last, last - 1);
-					last -= 1;
-				}
-				self.index[0] += 1;
-				return Some(if self.slice.iter().any(CombCase::is_diff) {
-					CombCase::Diff(refs, ids)
-				} else {
-					CombCase::Same(refs, ids)
-				})
+				self.step_index(0);
+				return Some(CombCase::Diff(refs, ids))
 			}
-			
-			self.index[N-1] += 1;
 			break
 		}
-		self.step_main();
-		self.next()
+		None
 	}
 	fn size_hint(&self) -> (usize, Option<usize>) {
 		if self.slice.get(self.index[N-1]).is_none() {
 			(0, Some(0))
 		} else {
-			let len = self.slice.len();
-			let lower = (1+len-N..len).product::<usize>()
-				/ (1..N).product::<usize>(); // (len-1) choose (N-1)
-			let upper = lower * len / N; // len choose N
-			if self.is_first {
-				(lower, Some(upper))
-			} else {
-				(1, Some(upper)) // !!! Improve lower bound estimation later.
-			}
+			// let len = self.slice.len();
+			// let lower = (1+len-N..len).product::<usize>()
+			// 	/ (1..N).product::<usize>(); // (len-1) choose (N-1)
+			// let upper = lower * len / N; // len choose N
+			// if self.is_first {
+			// 	(lower, Some(upper))
+			// } else {
+			// 	(1, Some(upper)) // !!! Improve lower bound estimation later.
+			// }
+			(1, None)
+			// remaining = (len choose N) - (len-X choose N)
+			// where X is how many "updated" values are left
+			// https://www.desmos.com/calculator/l6jawvulhk
 		}
 	}
 }
