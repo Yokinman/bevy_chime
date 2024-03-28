@@ -49,17 +49,13 @@ pub trait CombKind {
 		if Self::HAS_DIFF || Self::HAS_SAME {
 			if T::is_updated(&item) {
 				if Self::HAS_DIFF {
-					return Some(CombCase::Diff(T::into_ref(item), id))
+					return Some(CombCase(T::into_ref(item), id))
 				}
 			} else if Self::HAS_SAME {
-				return Some(CombCase::Same(T::into_ref(item), id))
+				return Some(CombCase(T::into_ref(item), id))
 			}
 		}
 		None
-	}
-	
-	fn is_all() -> bool {
-		Self::HAS_DIFF && Self::HAS_SAME
 	}
 }
 
@@ -104,10 +100,7 @@ impl CombKind for CombStatic {
 }
 
 /// An item & ID pair of a `PredParam`, with their updated state.
-pub enum CombCase<'w, P: PredItem<'w>, I: PredId> {
-	Diff(P::Ref<'w>, I),
-	Same(P::Ref<'w>, I),
-}
+pub struct CombCase<'w, P: PredItem<'w>, I: PredId>(P::Ref<'w>, I);
 
 impl<'w, P: PredItem<'w>, I: PredId> Copy for CombCase<'w, P, I> {}
 
@@ -119,36 +112,17 @@ impl<'w, P: PredItem<'w>, I: PredId> Clone for CombCase<'w, P, I> {
 
 impl<'w, P: PredItem<'w>, I: PredId> CombCase<'w, P, I> {
 	fn id(&self) -> I {
-		let (Self::Diff(_, id) | Self::Same(_, id)) = self;
-		*id
+		self.1
 	}
 	fn item(&self) -> P::Ref<'w> {
-		let (Self::Diff(item, _) | Self::Same(item, _)) = self;
-		*item
-	}
-	fn into_inner(self) -> (P::Ref<'w>, I) {
-		let (Self::Diff(item, id) | Self::Same(item, id)) = self;
-		(item, id)
-	}
-	fn is_diff(&self) -> bool {
-		match self {
-			Self::Diff(..) => true,
-			Self::Same(..) => false,
-		}
+		self.0
 	}
 	fn join<A: PredItem<'w>, B: PredId>(self, other: CombCase<'w, A, B>)
 		-> CombCase<'w, (P, A), (I, B)>
 	{
-		match (self, other) {
-			(
-				CombCase::Same(a, a_id),
-				CombCase::Same(b, b_id),
-			) => CombCase::Same((a, b), (a_id, b_id)),
-			(
-				CombCase::Diff(a, a_id) | CombCase::Same(a, a_id),
-				CombCase::Diff(b, b_id) | CombCase::Same(b, b_id),
-			) => CombCase::Diff((a, b), (a_id, b_id)),
-		}
+		let CombCase(a, a_id) = self;
+		let CombCase(b, b_id) = other;
+		CombCase((a, b), (a_id, b_id))
 	}
 }
 
@@ -558,7 +532,7 @@ where
 {
 	type Item = CombCase<'w, Ref<'w, T>, Entity>;
 	fn next(&mut self) -> Option<Self::Item> {
-		while let Some(next) = self.iter.next() {
+		for next in self.iter.by_ref() {
 			let wrap = K::wrap(next);
 			if wrap.is_some() {
 				return wrap
@@ -917,7 +891,7 @@ where
 					self.index.map(|i| self.slice[i].0.id()),
 				);
 				self.step_index(0);
-				return Some(CombCase::Diff(refs, ids))
+				return Some(CombCase(refs, ids))
 			}
 			break
 		}
@@ -958,7 +932,7 @@ impl<'p, P: PredParam> Iterator for PredCombinator<'p, P> {
 	);
 	fn next(&mut self) -> Option<Self::Item> {
 		if let Some(case) = self.iter.next() {
-			let (item, id) = case.into_inner();
+			let CombCase(item, id) = case;
 			Some((
 				self.node.write(PredStateCase::new(id)),
 				item
