@@ -812,7 +812,12 @@ where
 			index: [0; N],
 			layer: 0,
 		};
-		if iter.slice[0].1 == 0 {
+		if N == 0 {
+			return iter
+		}
+		if iter.slice.is_empty() || iter.slice[0].1 >= iter.slice.len() {
+			iter.index[0] = iter.slice.len();
+		} else if iter.slice[0].1 == 0 {
 			iter.layer = N - 1;
 		}
 		for i in 1..N {
@@ -889,7 +894,7 @@ where
 {
 	type Item = CombCase<'w, <[P; N] as PredParam>::Item<'w>, <[P; N] as PredParam>::Id>;
 	fn next(&mut self) -> Option<Self::Item> {
-		if self.index[N-1] >= self.slice.len() {
+		if N == 0 || self.index[N-1] >= self.slice.len() {
 			return None
 		}
 		let case = CombCase(
@@ -902,7 +907,7 @@ where
 	fn size_hint(&self) -> (usize, Option<usize>) {
 		// Currently always produces an exact size.
 		
-		if self.index[N-1] >= self.slice.len() {
+		if N == 0 || self.index[N-1] >= self.slice.len() {
 			return (0, Some(0))
 		}
 		
