@@ -865,17 +865,14 @@ where
 	}
 	
 	fn step(&mut self, i: usize) {
-		while self.step_index(i) {
+		while self.step_index(i) && self.index[N-1] < self.slice.len() {
 			if i + 1 >= self.layer {
 				self.layer = 0;
 				
 				 // Jump to End:
 				let next = self.index[i + 1] + 1;
-				if next >= self.slice.len() || self.slice[next].1 >= self.slice.len() {
+				if next < self.slice.len() && self.slice[next].1 >= self.slice.len() {
 					self.index[i + 1] = self.slice.len();
-					if i + 1 == N-1 {
-						break
-					}
 				}
 			}
 			self.step(i + 1);
