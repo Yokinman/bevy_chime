@@ -865,24 +865,21 @@ where
 	}
 	
 	fn step(&mut self, i: usize) {
-		if self.step_index(i) && i != N-1 {
-			let layer = self.layer;
-			if self.layer != 0 && i + 1 >= self.layer {
+		while self.step_index(i) {
+			if i + 1 >= self.layer {
+				self.layer = 0;
+				
+				 // Jump to End:
 				let next = self.index[i + 1] + 1;
-				if next < self.slice.len() && self.slice[next].1 < self.slice.len() {
-					self.layer = 0;
+				if next >= self.slice.len() || self.slice[next].1 >= self.slice.len() {
+					self.index[i + 1] = self.slice.len();
+					if i + 1 == N-1 {
+						break
+					}
 				}
 			}
 			self.step(i + 1);
 			self.index[i] = self.index[i + 1];
-			if self.step_index(i) {
-				for i in i..layer {
-					self.index[i] = self.slice.len();
-				}
-				if self.index[N-1] < self.slice.len() {
-					self.step(i);
-				}
-			}
 		}
 	}
 }
