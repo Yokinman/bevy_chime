@@ -916,24 +916,23 @@ where
 		let mut tot = 0;
 		let mut div = 1;
 		for i in 0..N {
-			let mut remaining = self.slice.len() - self.index[i];
+			let mut index = self.index[i];
 			if i != 0 {
-				remaining -= 1;
+				index += 1;
 			}
+			let mut remaining = self.slice.len() - index;
 			let mut num = falling_factorial(remaining, i + 1);
 			if i >= self.layer {
-				let mut updated = 0;
-				let mut index = self.index[i] + 1;
 				while index < self.slice.len() {
 					if index == self.slice[index].1 {
-						updated += 1;
+						remaining -= 1;
 					}
 					index += 1;
 					if index < self.slice.len() {
 						index = self.slice[index].1;
 					}
 				}
-				num -= falling_factorial(remaining - updated, i + 1);
+				num -= falling_factorial(remaining, i + 1);
 			}
 			div *= i + 1;
 			tot += num / div;
