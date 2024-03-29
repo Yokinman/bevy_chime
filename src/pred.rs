@@ -906,22 +906,47 @@ where
 		Some(case)
 	}
 	fn size_hint(&self) -> (usize, Option<usize>) {
+		// Currently always produces an exact size.
+		
 		if self.index[N-1] >= self.slice.len() {
 			return (0, Some(0))
 		}
-		// let len = self.slice.len();
-		// let lower = (1+len-N..len).product::<usize>()
-		// 	/ (1..N).product::<usize>(); // (len-1) choose (N-1)
-		// let upper = lower * len / N; // len choose N
-		// if self.is_first {
-		// 	(lower, Some(upper))
-		// } else {
-		// 	(1, Some(upper)) // !!! Improve lower bound estimation later.
-		// }
-		(1, None)
-		// remaining = (len choose N) - (len-X choose N)
-		// where X is how many "updated" values are left
-		// https://www.desmos.com/calculator/l6jawvulhk
+		
+		fn falling_factorial(n: usize, r: usize) -> usize {
+			if n < r {
+				return 0
+			}
+			((1+n-r)..=n).product()
+		}
+		
+		let mut tot = 0;
+		let mut div = 1;
+		for i in 0..N {
+			let mut remaining = self.slice.len() - self.index[i];
+			if i != 0 {
+				remaining -= 1;
+			}
+			let mut num = falling_factorial(remaining, i + 1);
+			if i >= self.layer {
+				let mut updated = 0;
+				let mut index = self.index[i] + 1;
+				while index < self.slice.len() {
+					if index == self.slice[index].1 {
+						updated += 1;
+					}
+					index += 1;
+					if index < self.slice.len() {
+						index = self.slice[index].1;
+					}
+				}
+				num -= falling_factorial(remaining - updated, i + 1);
+			}
+			div *= i + 1;
+			tot += num / div;
+			// https://www.desmos.com/calculator/l6jawvulhk
+		}
+		
+		(tot, Some(tot))
 	}
 }
 
