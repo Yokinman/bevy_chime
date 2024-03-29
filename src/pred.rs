@@ -975,3 +975,101 @@ impl<'p, P: PredParam> Iterator for PredCombinator<'p, P> {
 		self.iter.size_hint()
 	}
 }
+
+#[test]
+fn array_comb() {
+	fn test<const N: usize, const R: usize>(update_list: &[usize]) {
+		use crate::*;
+		
+		#[derive(Component, Copy, Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
+		struct Test(usize);
+		
+		let mut app = App::new();
+		app.insert_resource::<Time>(Time::default());
+		app.add_plugins(ChimePlugin);
+		
+		for i in 0..N {
+			app.world.spawn(Test(i));
+		}
+		
+		fn choose(n: usize, r: usize) -> usize {
+			if n < r || r == 0 {
+				return 0
+			}
+			((1+n-r)..=n).product::<usize>() / (1..=r).product::<usize>()
+		}
+		
+		let n_choose_r = choose(N, R);
+		let update_vec = update_list.to_vec();
+		
+		app.add_chime_events((move |
+			state: PredState<[Query<&Test>; R]>,
+			query: Query<&Test>,
+			mut index: system::Local<usize>,
+		| {
+			let mut iter = state.into_iter();
+			match *index {
+				0 => { // Full
+					assert_eq!(iter.size_hint(), (n_choose_r, Some(n_choose_r)));
+					let mut n = 0;
+					for ((_, mut a), mut b) in iter
+						.zip(query.iter_combinations::<R>())
+					{
+						// This assumes `iter` and `Query::iter_combinations`
+						// will always return in the same order.
+						a.sort_unstable();
+						b.sort_unstable();
+						assert_eq!(a, b);
+						n += 1;
+					}
+					assert_eq!(n, n_choose_r);
+				},
+				1 => { // Empty
+					assert_eq!(iter.size_hint(), (0, Some(0)));
+					let next = iter.next();
+					if next.is_some() {
+						println!("> {:?}", next.as_ref().unwrap().1);
+					}
+					assert!(next.is_none());
+				},
+				2 => { // Misc
+					let count = n_choose_r - choose(N - update_vec.len(), R);
+					assert_eq!(iter.size_hint(), (count, Some(count)));
+					let mut n = 0;
+					for (_, a) in iter {
+						assert!(update_vec.iter()
+							.any(|i| a.contains(&&Test(*i))));
+						n += 1;
+					}
+					assert_eq!(n, count);
+				},
+				_ => unimplemented!(),
+			}
+			*index += 1;
+		}).into_events().on_begin(|| {}));
+		
+		app.world.run_schedule(ChimeSchedule);
+		app.world.run_schedule(ChimeSchedule);
+		
+		for mut test in app.world.query::<&mut Test>()
+			.iter_mut(&mut app.world)
+		{
+			if update_list.contains(&test.0) {
+				test.0 = std::hint::black_box(test.0);
+			}
+		}
+		
+		app.world.run_schedule(ChimeSchedule);
+	}
+	
+	 // Normal Cases:
+	test::<10, 4>(&[0, 4, 7]);
+	test::<200, 2>(&[10, 17, 100, 101, 102, 103, 104, 105, 199]);
+	
+	 // Weird Cases:
+	test::<10, 10>(&[]);
+	test::<16, 1>(&[]);
+	test::<0, 2>(&[]);
+	test::<10, 0>(&[]);
+	test::<0, 0>(&[]);
+}
