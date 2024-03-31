@@ -54,7 +54,7 @@ impl AddChimeEvent for App {
 		assert!(begin_sys.is_some() || end_sys.is_some() || outlier_sys.is_some());
 		
 		let id = self.world.resource_mut::<ChimeEventMap>()
-			.setup_id::<P::Id>();
+			.setup_id::<PredParamId<P>>();
 		
 		let mut state = system::SystemState::<(P::Param, A)>::new(
 			&mut self.world
@@ -171,9 +171,9 @@ where
 	F: PredFn<P, A>,
 {
 	pred_sys: F,
-	begin_sys: Option<Box<dyn ChimeEventSystem<P::Id>>>,
-	end_sys: Option<Box<dyn ChimeEventSystem<P::Id>>>,
-	outlier_sys: Option<Box<dyn ChimeEventSystem<P::Id>>>,
+	begin_sys: Option<Box<dyn for<'a> ChimeEventSystem<PredParamId<'a, P>>>>,
+	end_sys: Option<Box<dyn for<'a> ChimeEventSystem<PredParamId<'a, P>>>>,
+	outlier_sys: Option<Box<dyn for<'a> ChimeEventSystem<PredParamId<'a, P>>>>,
 	_param: std::marker::PhantomData<fn(A)>,
 }
 
