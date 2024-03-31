@@ -41,9 +41,9 @@ pub trait CombKind {
 	const HAS_DIFF: bool;
 	const HAS_SAME: bool;
 	
-	fn wrap<'w, T, I>((item, id): (T, I)) -> Option<CombCase<'w, T, I>>
+	fn wrap<T, I>((item, id): (T, I)) -> Option<CombCase<T, I>>
 	where
-		T: PredItem<'w>,
+		T: PredItem,
 		I: PredId,
 	{
 		if Self::HAS_DIFF || Self::HAS_SAME {
@@ -100,25 +100,25 @@ impl CombKind for CombStatic {
 }
 
 /// An item & ID pair of a `PredParam`, with their updated state.
-pub struct CombCase<'w, P: PredItem<'w>, I: PredId>(P::Ref<'w>, I);
+pub struct CombCase<P: PredItem, I: PredId>(P::Ref, I);
 
-impl<'w, P: PredItem<'w>, I: PredId> Copy for CombCase<'w, P, I> {}
+impl<P: PredItem, I: PredId> Copy for CombCase<P, I> {}
 
-impl<'w, P: PredItem<'w>, I: PredId> Clone for CombCase<'w, P, I> {
+impl<P: PredItem, I: PredId> Clone for CombCase<P, I> {
 	fn clone(&self) -> Self {
 		*self
 	}
 }
 
-impl<'w, P: PredItem<'w>, I: PredId> CombCase<'w, P, I> {
+impl<P: PredItem, I: PredId> CombCase<P, I> {
 	fn id(&self) -> I {
 		self.1
 	}
-	fn item(&self) -> P::Ref<'w> {
+	fn item(&self) -> P::Ref {
 		self.0
 	}
-	fn join<A: PredItem<'w>, B: PredId>(self, other: CombCase<'w, A, B>)
-		-> CombCase<'w, (P, A), (I, B)>
+	fn join<A: PredItem, B: PredId>(self, other: CombCase<A, B>)
+		-> CombCase<(P, A), (I, B)>
 	{
 		let CombCase(a, a_id) = self;
 		let CombCase(b, b_id) = other;
@@ -127,25 +127,25 @@ impl<'w, P: PredItem<'w>, I: PredId> CombCase<'w, P, I> {
 }
 
 /// Combinator type produced by `PredParam::comb`.
-pub trait PredComb<'w>: Clone {
+pub trait PredComb: Clone {
 	type WithKind<Kind: CombKind>:
-		PredComb<'w>
-		+ IntoIterator<Item = CombCase<'w, Self::Item, Self::Id>>;
+		PredComb
+		+ IntoIterator<Item = CombCase<Self::Item, Self::Id>>;
 	
 	/// The item that `Param` iterates over.
-	type Item: PredItem<'w>;
+	type Item: PredItem;
 	
 	/// Unique identifier of each `Item`.
 	type Id: PredId;
 }
 
-impl<'w, T: PredItem<'w>> PredComb<'w> for Option<CombCase<'w, T, ()>> {
+impl<T: PredItem> PredComb for Option<CombCase<T, ()>> {
 	type WithKind<Kind: CombKind> = Self;
 	type Item = T;
 	type Id = ();
 }
 
-impl<'w, K, T, F> PredComb<'w> for QueryComb<'w, K, T, F>
+impl<'w, K, T, F> PredComb for QueryComb<'w, K, T, F>
 where
 	K: CombKind,
 	T: Component,
@@ -156,7 +156,7 @@ where
 	type Id = Entity;
 }
 
-impl<'w, K, A, B> PredComb<'w> for PredPairComb<'w, K, A, B>
+impl<'w, K, A, B> PredComb for PredPairComb<'w, K, A, B>
 where
 	K: CombKind,
 	A: PredParam,
@@ -167,7 +167,7 @@ where
 	type Id = (PredParamId<'w, A>, PredParamId<'w, B>);
 }
 
-impl<'w, K, P, const N: usize> PredComb<'w> for PredArrayComb<'w, K, P, N>
+impl<'w, K, P, const N: usize> PredComb for PredArrayComb<'w, K, P, N>
 where
 	K: CombKind,
 	P: PredParam,
@@ -179,10 +179,10 @@ where
 }
 
 /// Shortcut for accessing `PredParam::Comb::Item`.
-pub type PredParamItem<'w, P> = <<P as PredParam>::Comb<'w> as PredComb<'w>>::Item;
+pub type PredParamItem<'w, P> = <<P as PredParam>::Comb<'w> as PredComb>::Item;
 
 /// Shortcut for accessing `PredParam::Comb::Id`.
-pub type PredParamId<'w, P> = <<P as PredParam>::Comb<'w> as PredComb<'w>>::Id;
+pub type PredParamId<'w, P> = <<P as PredParam>::Comb<'w> as PredComb>::Id;
 
 /// A set of [`PredItem`] values used to predict & schedule events.
 pub trait PredParam {
@@ -190,18 +190,18 @@ pub trait PredParam {
 	type Param: ReadOnlySystemParam + 'static;
 	
 	/// Creates iterators over `Param`'s items with their IDs and updated state.
-	type Comb<'w>: PredComb<'w>;
+	type Comb<'w>: PredComb;
 	
 	/// Produces `Self::Comb`.
 	fn comb<'w, K: CombKind>(param: &'w SystemParamItem<Self::Param>)
-		-> <Self::Comb<'w> as PredComb<'w>>::WithKind<K>;
+		-> <Self::Comb<'w> as PredComb>::WithKind<K>;
 }
 
 impl<T: Component, F: ArchetypeFilter + 'static> PredParam for Query<'_, '_, &T, F> {
 	type Param = Query<'static, 'static, (Ref<'static, T>, Entity), F>;
 	type Comb<'w> = QueryComb<'w, CombNone, T, F>;
 	fn comb<'w, K: CombKind>(param: &'w SystemParamItem<Self::Param>)
-		-> <Self::Comb<'w> as PredComb<'w>>::WithKind<K>
+		-> <Self::Comb<'w> as PredComb>::WithKind<K>
 	{
 		QueryComb {
 			inner: param,
@@ -212,9 +212,9 @@ impl<T: Component, F: ArchetypeFilter + 'static> PredParam for Query<'_, '_, &T,
 
 impl<R: Resource> PredParam for Res<'_, R> {
 	type Param = Res<'static, R>;
-	type Comb<'w> = Option<CombCase<'w, Res<'w, R>, ()>>;
+	type Comb<'w> = Option<CombCase<Res<'w, R>, ()>>;
 	fn comb<'w, K: CombKind>(param: &'w SystemParamItem<Self::Param>)
-		-> <Self::Comb<'w> as PredComb<'w>>::WithKind<K>
+		-> <Self::Comb<'w> as PredComb>::WithKind<K>
 	{
 		K::wrap((Res::clone(param), ()))
 	}
@@ -222,9 +222,9 @@ impl<R: Resource> PredParam for Res<'_, R> {
 
 impl PredParam for () {
 	type Param = ();
-	type Comb<'w> = Option<CombCase<'w, (), ()>>;
+	type Comb<'w> = Option<CombCase<(), ()>>;
 	fn comb<'w, K: CombKind>(param: &'w SystemParamItem<Self::Param>)
-		-> <Self::Comb<'w> as PredComb<'w>>::WithKind<K>
+		-> <Self::Comb<'w> as PredComb>::WithKind<K>
 	{
 		K::wrap((*param, ()))
 	}
@@ -234,9 +234,9 @@ impl<A: PredParam, B: PredParam> PredParam for (A, B) {
 	type Param = (A::Param, B::Param);
 	type Comb<'w> = PredPairComb<'w, CombNone, A, B>;
 	fn comb<'w, K: CombKind>(param: &'w SystemParamItem<Self::Param>)
-		-> <Self::Comb<'w> as PredComb<'w>>::WithKind<K>
+		-> <Self::Comb<'w> as PredComb>::WithKind<K>
 	{
-		PredPairComb::new(&param.0, &param.1)
+		PredPairComb::<'w, K, A, B>::new(&param.0, &param.1)
 	}
 }
 
@@ -247,28 +247,28 @@ where
 	type Param = P::Param;
 	type Comb<'w> = PredArrayComb<'w, CombNone, P, N>;
 	fn comb<'w, K: CombKind>(param: &'w SystemParamItem<Self::Param>)
-		-> <Self::Comb<'w> as PredComb<'w>>::WithKind<K>
+		-> <Self::Comb<'w> as PredComb>::WithKind<K>
 	{
-		PredArrayComb::new(param)
+		PredArrayComb::<'w, K, P, N>::new(param)
 	}
 }
 
 /// A case of prediction.
-pub trait PredItem<'w> {
-	type Ref<'i>: Copy/* + std::ops::Deref<Target=Self::Inner>*/;
-	type Inner: 'w;
+pub trait PredItem {
+	type Ref: Copy/* + std::ops::Deref<Target=Self::Inner>*/;
+	type Inner;
 	
 	/// Needed because `bevy_ecs::world::Ref` can't be cloned/copied.
-	fn into_ref(item: Self) -> Self::Ref<'w>;
+	fn into_ref(item: Self) -> Self::Ref;
 	
 	/// Whether this item is in need of a prediction update.
 	fn is_updated(item: &Self) -> bool;
 }
 
-impl<'w, T: 'static> PredItem<'w> for Ref<'w, T> {
-	type Ref<'i> = &'i Self::Inner;
+impl<'w, T: 'static> PredItem for Ref<'w, T> {
+	type Ref = &'w Self::Inner;
 	type Inner = T;
-	fn into_ref(item: Self) -> Self::Ref<'w> {
+	fn into_ref(item: Self) -> Self::Ref {
 		Ref::into_inner(item)
 	}
 	fn is_updated(item: &Self) -> bool {
@@ -276,10 +276,10 @@ impl<'w, T: 'static> PredItem<'w> for Ref<'w, T> {
 	}
 }
 
-impl<'w, R: Resource> PredItem<'w> for Res<'w, R> {
-	type Ref<'i> = &'i Self::Inner;
+impl<'w, R: Resource> PredItem for Res<'w, R> {
+	type Ref = &'w Self::Inner;
 	type Inner = R;
-	fn into_ref(item: Self) -> Self::Ref<'w> {
+	fn into_ref(item: Self) -> Self::Ref {
 		Res::into_inner(item)
 	}
 	fn is_updated(item: &Self) -> bool {
@@ -287,10 +287,10 @@ impl<'w, R: Resource> PredItem<'w> for Res<'w, R> {
 	}
 }
 
-impl<'w> PredItem<'w> for () {
-	type Ref<'i> = ();
+impl PredItem for () {
+	type Ref = ();
 	type Inner = ();
-	fn into_ref(item: Self) -> Self::Ref<'w> {
+	fn into_ref(item: Self) -> Self::Ref {
 		item
 	}
 	fn is_updated(_item: &Self) -> bool {
@@ -298,14 +298,14 @@ impl<'w> PredItem<'w> for () {
 	}
 }
 
-impl<'w, A, B> PredItem<'w> for (A, B)
+impl<A, B> PredItem for (A, B)
 where
-	A: PredItem<'w>,
-	B: PredItem<'w>,
+	A: PredItem,
+	B: PredItem,
 {
-	type Ref<'i> = (A::Ref<'i>, B::Ref<'i>);
+	type Ref = (A::Ref, B::Ref);
 	type Inner = (A::Inner, B::Inner);
-	fn into_ref((a, b): Self) -> Self::Ref<'w> {
+	fn into_ref((a, b): Self) -> Self::Ref {
 		(A::into_ref(a), B::into_ref(b))
 	}
 	fn is_updated((a, b): &Self) -> bool {
@@ -313,13 +313,13 @@ where
 	}
 }
 
-impl<'w, T, const N: usize> PredItem<'w> for [T; N]
+impl<T, const N: usize> PredItem for [T; N]
 where
-	T: PredItem<'w>
+	T: PredItem
 {
-	type Ref<'i> = [T::Ref<'i>; N];
+	type Ref = [T::Ref; N];
 	type Inner = [T::Inner; N];
-	fn into_ref(item: Self) -> Self::Ref<'w> {
+	fn into_ref(item: Self) -> Self::Ref {
 		item.map(T::into_ref)
 	}
 	fn is_updated(item: &Self) -> bool {
@@ -570,7 +570,7 @@ where
 	T: Component,
 	F: ArchetypeFilter + 'static,
 {
-	type Item = CombCase<'w, Ref<'w, T>, Entity>;
+	type Item = CombCase<Ref<'w, T>, Entity>;
 	fn next(&mut self) -> Option<Self::Item> {
 		for next in self.iter.by_ref() {
 			let wrap = K::wrap(next);
@@ -596,10 +596,10 @@ where
 	A: PredParam,
 	B: PredParam,
 {
-	a_comb: <A::Comb<'w> as PredComb<'w>>::WithKind<K>,
-	b_comb: <B::Comb<'w> as PredComb<'w>>::WithKind<K::Pal>,
-	a_inv_comb: <A::Comb<'w> as PredComb<'w>>::WithKind<K::Inv>,
-	b_inv_comb: <B::Comb<'w> as PredComb<'w>>::WithKind<<<K::Inv as CombKind>::Pal as CombKind>::Inv>,
+	a_comb: <A::Comb<'w> as PredComb>::WithKind<K>,
+	b_comb: <B::Comb<'w> as PredComb>::WithKind<K::Pal>,
+	a_inv_comb: <A::Comb<'w> as PredComb>::WithKind<K::Inv>,
+	b_inv_comb: <B::Comb<'w> as PredComb>::WithKind<<<K::Inv as CombKind>::Pal as CombKind>::Inv>,
 }
 
 impl<K, A, B> Clone for PredPairComb<'_, K, A, B>
@@ -643,7 +643,7 @@ where
 	A: PredParam,
 	B: PredParam,
 {
-	type Item = CombCase<'w,
+	type Item = CombCase<
 		PredParamItem<'w, (A, B)>,
 		PredParamId<'w, (A, B)>
 	>;
@@ -673,18 +673,18 @@ where
 {
 	Empty,
 	Primary {
-		a_iter: <<A::Comb<'w> as PredComb<'w>>::WithKind<K> as IntoIterator>::IntoIter,
-		a_case: <<A::Comb<'w> as PredComb<'w>>::WithKind<K> as IntoIterator>::Item,
-		b_comb: <B::Comb<'w> as PredComb<'w>>::WithKind<K::Pal>,
-		b_iter: <<B::Comb<'w> as PredComb<'w>>::WithKind<K::Pal> as IntoIterator>::IntoIter,
-		a_inv_comb: <A::Comb<'w> as PredComb<'w>>::WithKind<K::Inv>,
-		b_inv_comb: <B::Comb<'w> as PredComb<'w>>::WithKind<<<K::Inv as CombKind>::Pal as CombKind>::Inv>,
+		a_iter: <<A::Comb<'w> as PredComb>::WithKind<K> as IntoIterator>::IntoIter,
+		a_case: <<A::Comb<'w> as PredComb>::WithKind<K> as IntoIterator>::Item,
+		b_comb: <B::Comb<'w> as PredComb>::WithKind<K::Pal>,
+		b_iter: <<B::Comb<'w> as PredComb>::WithKind<K::Pal> as IntoIterator>::IntoIter,
+		a_inv_comb: <A::Comb<'w> as PredComb>::WithKind<K::Inv>,
+		b_inv_comb: <B::Comb<'w> as PredComb>::WithKind<<<K::Inv as CombKind>::Pal as CombKind>::Inv>,
 	},
 	Secondary {
-		b_iter: <<B::Comb<'w> as PredComb<'w>>::WithKind<<<K::Inv as CombKind>::Pal as CombKind>::Inv> as IntoIterator>::IntoIter,
-		b_case: <<B::Comb<'w> as PredComb<'w>>::WithKind<<<K::Inv as CombKind>::Pal as CombKind>::Inv> as IntoIterator>::Item,
-		a_comb: <A::Comb<'w> as PredComb<'w>>::WithKind<K::Inv>,
-		a_iter: <<A::Comb<'w> as PredComb<'w>>::WithKind<K::Inv> as IntoIterator>::IntoIter,
+		b_iter: <<B::Comb<'w> as PredComb>::WithKind<<<K::Inv as CombKind>::Pal as CombKind>::Inv> as IntoIterator>::IntoIter,
+		b_case: <<B::Comb<'w> as PredComb>::WithKind<<<K::Inv as CombKind>::Pal as CombKind>::Inv> as IntoIterator>::Item,
+		a_comb: <A::Comb<'w> as PredComb>::WithKind<K::Inv>,
+		a_iter: <<A::Comb<'w> as PredComb>::WithKind<K::Inv> as IntoIterator>::IntoIter,
 	},
 }
 
@@ -695,10 +695,10 @@ where
 	B: PredParam,
 {
 	fn primary_next(
-		mut a_iter: <<A::Comb<'w> as PredComb<'w>>::WithKind<K> as IntoIterator>::IntoIter,
-		b_comb: <B::Comb<'w> as PredComb<'w>>::WithKind<K::Pal>,
-		a_inv_comb: <A::Comb<'w> as PredComb<'w>>::WithKind<K::Inv>,
-		b_inv_comb: <B::Comb<'w> as PredComb<'w>>::WithKind<<<K::Inv as CombKind>::Pal as CombKind>::Inv>,
+		mut a_iter: <<A::Comb<'w> as PredComb>::WithKind<K> as IntoIterator>::IntoIter,
+		b_comb: <B::Comb<'w> as PredComb>::WithKind<K::Pal>,
+		a_inv_comb: <A::Comb<'w> as PredComb>::WithKind<K::Inv>,
+		b_inv_comb: <B::Comb<'w> as PredComb>::WithKind<<<K::Inv as CombKind>::Pal as CombKind>::Inv>,
 	) -> Self {
 		if let Some(a_case) = a_iter.next() {
 			let b_iter = b_comb.clone().into_iter();
@@ -712,8 +712,8 @@ where
 	}
 	
 	fn secondary_next(
-		mut b_iter: <<B::Comb<'w> as PredComb<'w>>::WithKind<<<K::Inv as CombKind>::Pal as CombKind>::Inv> as IntoIterator>::IntoIter,
-		a_comb: <A::Comb<'w> as PredComb<'w>>::WithKind<K::Inv>,
+		mut b_iter: <<B::Comb<'w> as PredComb>::WithKind<<<K::Inv as CombKind>::Pal as CombKind>::Inv> as IntoIterator>::IntoIter,
+		a_comb: <A::Comb<'w> as PredComb>::WithKind<K::Inv>,
 	) -> Self {
 		if let Some(b_case) = b_iter.next() {
 			let a_iter = a_comb.clone().into_iter();
@@ -731,7 +731,7 @@ where
 	A: PredParam,
 	B: PredParam,
 {
-	type Item = CombCase<'w,
+	type Item = CombCase<
 		PredParamItem<'w, (A, B)>,
 		PredParamId<'w, (A, B)>
 	>;
@@ -800,7 +800,7 @@ where
 	P: PredParam,
 {
 	slice: Box<[(
-		<<P::Comb<'w> as PredComb<'w>>::WithKind<K::Pal> as IntoIterator>::Item,
+		<<P::Comb<'w> as PredComb>::WithKind<K::Pal> as IntoIterator>::Item,
 		usize
 	)]>,
 }
@@ -853,7 +853,7 @@ where
 	P: PredParam,
 	for<'a> PredParamId<'a, P>: Ord,
 {
-	type Item = CombCase<'w,
+	type Item = CombCase<
 		PredParamItem<'w, [P; N]>,
 		PredParamId<'w, [P; N]>
 	>;
@@ -887,7 +887,7 @@ where
 	P: PredParam,
 {
 	slice: Box<[(
-		<<P::Comb<'w> as PredComb<'w>>::WithKind<K::Pal> as IntoIterator>::Item,
+		<<P::Comb<'w> as PredComb>::WithKind<K::Pal> as IntoIterator>::Item,
 		usize
 	)]>,
 	index: [usize; N],
@@ -947,7 +947,7 @@ where
 	P: PredParam,
 	for<'a> PredParamId<'a, P>: Ord,
 {
-	type Item = CombCase<'w,
+	type Item = CombCase<
 		PredParamItem<'w, [P; N]>,
 		PredParamId<'w, [P; N]>
 	>;
@@ -1009,14 +1009,14 @@ where
 /// Produces all case combinations in need of a new prediction, alongside a
 /// [`PredStateCase`] for scheduling.
 pub struct PredCombinator<'p, P: PredParam> {
-	iter: <<P::Comb<'p> as PredComb<'p>>::WithKind<CombUpdated> as IntoIterator>::IntoIter,
+	iter: <<P::Comb<'p> as PredComb>::WithKind<CombUpdated> as IntoIterator>::IntoIter,
 	node: NodeWriter<'p, PredStateCase<PredParamId<'p, P>>>,
 }
 
 impl<'p, P: PredParam> Iterator for PredCombinator<'p, P> {
 	type Item = (
 		&'p mut PredStateCase<PredParamId<'p, P>>,
-		<PredParamItem<'p, P> as PredItem<'p>>::Ref<'p>
+		<PredParamItem<'p, P> as PredItem>::Ref
 	);
 	fn next(&mut self) -> Option<Self::Item> {
 		if let Some(case) = self.iter.next() {
