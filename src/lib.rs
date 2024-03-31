@@ -27,19 +27,21 @@ use chime::time::TimeRanges;
 
 /// Builder entry point for adding chime events to a [`World`].
 pub trait AddChimeEvent {
-	fn add_chime_events<P, A, F>(&mut self, events: ChimeEventBuilder<P, A, F>) -> &mut Self
+	fn add_chime_events<P, M, A, F>(&mut self, events: ChimeEventBuilder<P, M, A, F>) -> &mut Self
 	where
 		P: PredParam + 'static,
+		M: PredId,
 		A: ReadOnlySystemParam + 'static,
-		F: PredFn<P, A> + Send + Sync + 'static;
+		F: PredFn<P, M, A> + Send + Sync + 'static;
 }
 
 impl AddChimeEvent for App {
-	fn add_chime_events<P, A, F>(&mut self, events: ChimeEventBuilder<P, A, F>) -> &mut Self
+	fn add_chime_events<P, M, A, F>(&mut self, events: ChimeEventBuilder<P, M, A, F>) -> &mut Self
 	where
 		P: PredParam + 'static,
+		M: PredId,
 		A: ReadOnlySystemParam + 'static,
-		F: PredFn<P, A> + Send + Sync + 'static,
+		F: PredFn<P, M, A> + Send + Sync + 'static,
 	{
 		assert!(self.is_plugin_added::<ChimePlugin>());
 		
@@ -95,21 +97,22 @@ impl AddChimeEvent for App {
 
 /// Specialized function used for predicting and scheduling events, functionally
 /// similar to a read-only [`bevy_ecs::system::SystemParamFunction`].
-pub trait PredFn<P: PredParam, A: ReadOnlySystemParam>:
-	/*Fn(PredState<P>, A) + */ Fn(PredState<P>, SystemParamItem<A>)
+pub trait PredFn<P: PredParam, M: PredId, A: ReadOnlySystemParam>:
+	/*Fn(PredState<P>, A) + */ Fn(PredState<P, M>, SystemParamItem<A>)
 {}
 
-impl<P, A, F> PredFn<P, A> for F
+impl<P, M, A, F> PredFn<P, M, A> for F
 where
 	P: PredParam,
+	M: PredId,
 	A: ReadOnlySystemParam,
-	F: /*Fn(PredState<P>, A) + */ Fn(PredState<P>, SystemParamItem<A>),
+	F: /*Fn(PredState<P>, A) + */ Fn(PredState<P, M>, SystemParamItem<A>),
 {}
 
 /// Types that can be converted into a [`PredFn`].
-pub trait IntoPredFn<P: PredParam, A: ReadOnlySystemParam>: Sized {
-	fn into_pred_fn(self) -> impl PredFn<P, A>;
-	fn into_events(self) -> ChimeEventBuilder<P, A, impl PredFn<P, A>> {
+pub trait IntoPredFn<P: PredParam, M: PredId, A: ReadOnlySystemParam>: Sized {
+	fn into_pred_fn(self) -> impl PredFn<P, M, A>;
+	fn into_events(self) -> ChimeEventBuilder<P, M, A, impl PredFn<P, M, A>> {
 		ChimeEventBuilder {
 			pred_sys: self.into_pred_fn(),
 			begin_sys: None,
@@ -126,13 +129,14 @@ macro_rules! impl_into_pred_fn {
 		$(impl_into_pred_fn!(@all $($rest),*);)?
 	};
 	($($param:ident),*) => {
-		impl<F, P, $($param: ReadOnlySystemParam),*> IntoPredFn<P, ($($param,)*)> for F
+		impl<F, P, M, $($param: ReadOnlySystemParam),*> IntoPredFn<P, M, ($($param,)*)> for F
 		where
-			F: Fn(PredState<P>, $($param),*)
-				+ Fn(PredState<P>, $(SystemParamItem<$param>),*),
+			F: Fn(PredState<P, M>, $($param),*)
+				+ Fn(PredState<P, M>, $(SystemParamItem<$param>),*),
 			P: PredParam,
+			M: PredId,
 		{
-			fn into_pred_fn(self) -> impl PredFn<P, ($($param,)*)> {
+			fn into_pred_fn(self) -> impl PredFn<P, M, ($($param,)*)> {
 				move |state, misc| {
 					let ($($param,)*) = misc;
 					self(state, $($param),*);
@@ -147,13 +151,14 @@ impl_into_pred_fn!(@all
 );
 
 /// Begin/end-type system for a chime event (object-safe).
-trait ChimeEventSystem<I: PredId>: System<In=(), Out=()> + Send + Sync {
+trait ChimeEventSystem<I: PredId, M: PredId>: System<In=(), Out=()> + Send + Sync {
 	fn init_sys(&self, store: &mut Option<Box<dyn System<In=(), Out=()>>>, world: &mut World);
 }
 
-impl<I, T> ChimeEventSystem<I> for T
+impl<I, M, T> ChimeEventSystem<I, M> for T
 where
 	I: PredId,
+	M: PredId,
 	T: System<In=(), Out=()> + Send + Sync + Clone,
 {
 	fn init_sys(&self, store: &mut Option<Box<dyn System<In=(), Out=()>>>, world: &mut World) {
@@ -164,29 +169,31 @@ where
 }
 
 /// Builder for inserting a chime event into a [`World`].  
-pub struct ChimeEventBuilder<P, A, F>
+pub struct ChimeEventBuilder<P, M, A, F>
 where
 	P: PredParam,
+	M: PredId,
 	A: ReadOnlySystemParam,
-	F: PredFn<P, A>,
+	F: PredFn<P, M, A>,
 {
 	pred_sys: F,
-	begin_sys: Option<Box<dyn for<'a> ChimeEventSystem<PredParamId<'a, P>>>>,
-	end_sys: Option<Box<dyn for<'a> ChimeEventSystem<PredParamId<'a, P>>>>,
-	outlier_sys: Option<Box<dyn for<'a> ChimeEventSystem<PredParamId<'a, P>>>>,
+	begin_sys: Option<Box<dyn for<'a> ChimeEventSystem<PredParamId<'a, P>, M>>>,
+	end_sys: Option<Box<dyn for<'a> ChimeEventSystem<PredParamId<'a, P>, M>>>,
+	outlier_sys: Option<Box<dyn for<'a> ChimeEventSystem<PredParamId<'a, P>, M>>>,
 	_param: std::marker::PhantomData<fn(A)>,
 }
 
-impl<P, A, F> ChimeEventBuilder<P, A, F>
+impl<P, M, A, F> ChimeEventBuilder<P, M, A, F>
 where
 	P: PredParam,
+	M: PredId,
 	A: ReadOnlySystemParam,
-	F: PredFn<P, A>,
+	F: PredFn<P, M, A>,
 {
 	/// The system that runs when the event's prediction becomes active.
-	pub fn on_begin<T, M>(mut self, sys: T) -> Self
+	pub fn on_begin<T, Marker>(mut self, sys: T) -> Self
 	where
-		T: IntoSystem<(), (), M>,
+		T: IntoSystem<(), (), Marker>,
 		T::System: Send + Sync + Clone,
 	{
 		assert!(self.begin_sys.is_none(), "can't have >1 begin systems");
@@ -195,9 +202,9 @@ where
 	}
 	
 	/// The system that runs when the event's prediction becomes inactive.
-	pub fn on_end<T, M>(mut self, sys: T) -> Self
+	pub fn on_end<T, Marker>(mut self, sys: T) -> Self
 	where
-		T: IntoSystem<(), (), M>,
+		T: IntoSystem<(), (), Marker>,
 		T::System: Send + Sync + Clone,
 	{
 		assert!(self.end_sys.is_none(), "can't have >1 end systems");
@@ -206,9 +213,9 @@ where
 	}
 	
 	/// The system that runs when the event's prediction repeats excessively.
-	pub fn on_repeat<T, M>(mut self, sys: T) -> Self
+	pub fn on_repeat<T, Marker>(mut self, sys: T) -> Self
 	where
-		T: IntoSystem<(), (), M>,
+		T: IntoSystem<(), (), Marker>,
 		T::System: Send + Sync + Clone,
 	{
 		assert!(self.outlier_sys.is_none(), "can't have >1 outlier systems");
@@ -381,14 +388,14 @@ impl ChimeEventMap {
 		self.table.len() - 1
 	}
 	
-	fn sched<I: PredId>(
+	fn sched<I: PredId, M: PredId>(
 		&mut self,
-		input: impl IntoIterator<Item=PredStateCase<I>>,
+		input: impl IntoIterator<Item=PredStateCase<I, M>>,
 		pred_time: Duration,
 		event_id: usize,
-		begin_sys: Option<&dyn ChimeEventSystem<I>>,
-		end_sys: Option<&dyn ChimeEventSystem<I>>,
-		outlier_sys: Option<&dyn ChimeEventSystem<I>>,
+		begin_sys: Option<&dyn ChimeEventSystem<I, M>>,
+		end_sys: Option<&dyn ChimeEventSystem<I, M>>,
+		outlier_sys: Option<&dyn ChimeEventSystem<I, M>>,
 		world: &mut World,
 	) {
 		let event_map = self.table.get_mut(event_id)
