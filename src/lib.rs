@@ -50,6 +50,7 @@ impl AddChimeEvent for App {
 			begin_sys,
 			end_sys,
 			outlier_sys,
+			misc_state,
 			..
 		} = events;
 		
@@ -69,7 +70,7 @@ impl AddChimeEvent for App {
 			{
 				let (state, misc) = state.get(world);
 				pred_sys(
-					PredState::new(&state, &mut node),
+					PredState::new(&state, misc_state.clone(), &mut node),
 					misc
 				);
 			}
@@ -112,14 +113,21 @@ where
 /// Types that can be converted into a [`PredFn`].
 pub trait IntoPredFn<P: PredParam, M: PredId, A: ReadOnlySystemParam>: Sized {
 	fn into_pred_fn(self) -> impl PredFn<P, M, A>;
-	fn into_events(self) -> ChimeEventBuilder<P, M, A, impl PredFn<P, M, A>> {
-		ChimeEventBuilder {
-			pred_sys: self.into_pred_fn(),
-			begin_sys: None,
-			end_sys: None,
-			outlier_sys: None,
-			_param: std::marker::PhantomData,
-		}
+	
+	fn into_events(self) -> ChimeEventBuilder<P, M, A, impl PredFn<P, M, A>>
+	where
+		(): std::borrow::Borrow<M>,
+	{
+		ChimeEventBuilder::new(
+			self.into_pred_fn(),
+			std::iter::once(*std::borrow::Borrow::borrow(&()))
+		)
+	}
+	
+	fn into_events_with_id(self, id: impl IntoIterator<Item=M>)
+		-> ChimeEventBuilder<P, M, A, impl PredFn<P, M, A>>
+	{
+		ChimeEventBuilder::new(self.into_pred_fn(), id)
 	}
 }
 
@@ -180,6 +188,7 @@ where
 	begin_sys: Option<Box<dyn for<'a> ChimeEventSystem<PredParamId<'a, P>, M>>>,
 	end_sys: Option<Box<dyn for<'a> ChimeEventSystem<PredParamId<'a, P>, M>>>,
 	outlier_sys: Option<Box<dyn for<'a> ChimeEventSystem<PredParamId<'a, P>, M>>>,
+	misc_state: Box<[M]>,
 	_param: std::marker::PhantomData<fn(A)>,
 }
 
@@ -190,6 +199,17 @@ where
 	A: ReadOnlySystemParam,
 	F: PredFn<P, M, A>,
 {
+	fn new(pred_sys: F, id: impl IntoIterator<Item=M>) -> Self {
+		ChimeEventBuilder {
+			pred_sys,
+			begin_sys: None,
+			end_sys: None,
+			outlier_sys: None,
+			misc_state: id.into_iter().collect(),
+			_param: std::marker::PhantomData,
+		}
+	}
+	
 	/// The system that runs when the event's prediction becomes active.
 	pub fn on_begin<T, Marker>(mut self, sys: T) -> Self
 	where
