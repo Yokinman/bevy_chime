@@ -57,7 +57,7 @@ impl AddChimeEvent for App {
 		assert!(begin_sys.is_some() || end_sys.is_some() || outlier_sys.is_some());
 		
 		let id = self.world.resource_mut::<ChimeEventMap>()
-			.setup_id::<PredParamId<P>>();
+			.setup_id::<(PredParamId<P>, M)>();
 		
 		let mut state = system::SystemState::<(P::Param, A)>::new(
 			&mut self.world
@@ -421,7 +421,7 @@ impl ChimeEventMap {
 		let event_map = self.table.get_mut(event_id)
 			.expect("id must be initialized with ChimeEventMap::setup_id")
 			.as_any_mut()
-			.downcast_mut::<EventMap<I>>()
+			.downcast_mut::<EventMap<(I, M)>>()
 			.expect("should always work");
 		
 		for case in input {
@@ -432,7 +432,10 @@ impl ChimeEventMap {
 				let mut event = ChimeEvent::default();
 				
 				 // Initialize Systems:
-				world.insert_resource(PredSystemId(Box::new(case_id)));
+				world.insert_resource(PredSystemId {
+					id: Box::new(case_id.0),
+					misc_id: Box::new(case_id.1),
+				});
 				if let Some(sys) = begin_sys {
 					sys.init_sys(&mut event.begin_sys, world);
 				}

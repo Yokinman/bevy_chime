@@ -13,7 +13,10 @@ use crate::node::*;
 
 /// Resource for passing an event's unique ID to its system parameters. 
 #[derive(Resource)]
-pub(crate) struct PredSystemId(pub Box<dyn std::any::Any + Send + Sync>);
+pub(crate) struct PredSystemId {
+	pub id: Box<dyn std::any::Any + Send + Sync>,
+	pub misc_id: Box<dyn std::any::Any + Send + Sync>,
+}
 
 /// A hashable unique identifier for a case of prediction.
 pub trait PredId:
@@ -404,9 +407,9 @@ impl<I: PredId, M: PredId> PredStateCase<I, M> {
 	}
 	
 	pub(crate) fn into_parts(self)
-		-> (I, Option<Box<dyn Iterator<Item = (Duration, Duration)> + Send + Sync>>)
+		-> ((I, M), Option<Box<dyn Iterator<Item = (Duration, Duration)> + Send + Sync>>)
 	{
-		(self.id, self.times)
+		((self.id, self.misc), self.times)
 	}
 	
 	pub fn misc_id(&self) -> M {
@@ -498,32 +501,49 @@ impl<A: PredQueryData, B: PredQueryData> PredQueryData for (A, B) {
 }
 
 /// Prediction data fed as a parameter to an event's systems.
-pub struct PredQuery<'world, 'state, D: PredQueryData> {
+pub struct PredQuery<'world, 'state, D: PredQueryData, M = ()> {
     world: UnsafeWorldCell<'world>,
-    state: &'state D::Id,
+    state: &'state (D::Id, M),
 }
 
-impl<'w, D: PredQueryData> PredQuery<'w, '_, D> {
+impl<'w, D: PredQueryData, M: PredId> PredQuery<'w, '_, D, M> {
 	pub fn get_inner(self) -> D::Output<'w> {
 		unsafe {
 			// SAFETY: Right now this method consumes `self`. If it could be
 			// called multiple times, the returned values would overlap.
-			<D as PredQueryData>::get_inner(self.world, *self.state)
+			<D as PredQueryData>::get_inner(self.world, self.state.0)
 		}
+	}
+	pub fn misc_id(&self) -> M {
+		self.state.1
 	}
 }
 
-unsafe impl<D: PredQueryData> SystemParam for PredQuery<'_, '_, D> {
-	type State = D::Id;
-	type Item<'world, 'state> = PredQuery<'world, 'state, D>;
+unsafe impl<D: PredQueryData, M: PredId> SystemParam for PredQuery<'_, '_, D, M> {
+	type State = (D::Id, M);
+	type Item<'world, 'state> = PredQuery<'world, 'state, D, M>;
 	fn init_state(world: &mut World, system_meta: &mut SystemMeta) -> Self::State {
 		// !!! Check for component access overlap. This isn't safe right now.
-		if let Some(PredSystemId(id)) = world.get_resource::<PredSystemId>() {
-			if let Some(id) = id.downcast_ref::<D::Id>() {
+		if let Some(PredSystemId { id, misc_id }) = world
+			.get_resource::<PredSystemId>()
+		{
+			let id = if let Some(id) = id.downcast_ref::<D::Id>() {
 				*id
 			} else {
-				panic!("!!! parameter is for wrong ID type");
-			}
+				panic!(
+					"!!! parameter is for wrong ID type. got {:?}",
+					std::any::type_name::<D::Id>()
+				);
+			};
+			let misc_id = if let Some(misc_id) = misc_id.downcast_ref::<M>() {
+				*misc_id
+			} else {
+				panic!(
+					"!!! misc parameter is for wrong ID type. got {:?}",
+					std::any::type_name::<M>()
+				);
+			};
+			(id, misc_id)
 		} else {
 			panic!("!!! {:?} is not a Chime event system, it can't use this parameter type", system_meta.name());
 		}
