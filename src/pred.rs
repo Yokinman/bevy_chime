@@ -374,10 +374,14 @@ where
 	type Item = <Self::IntoIter as IntoIterator>::Item;
 	type IntoIter = PredCombinator<'p, P, M>;
 	fn into_iter(self) -> Self::IntoIter {
-		let iter = P::comb::<CombUpdated>(self.state).into_iter();
+		let mut iter = P::comb::<CombUpdated>(self.state).into_iter();
 		self.node.reserve(4 * iter.size_hint().0.max(1));
+		let curr = iter.next();
 		PredCombinator {
 			iter,
+			curr,
+			misc_state: self.misc_state,
+			misc_index: 0,
 			node: NodeWriter::new(self.node),
 		}
 	}
@@ -386,15 +390,15 @@ where
 /// A scheduled case of prediction, used in [`crate::PredState`].
 pub struct PredStateCase<I, M> {
 	id: I,
-	misc: PhantomData<M>,
+	misc: M,
 	times: Option<Box<dyn Iterator<Item = (Duration, Duration)> + Send + Sync>>,
 }
 
 impl<I: PredId, M: PredId> PredStateCase<I, M> {
-	fn new(id: I) -> Self {
+	fn new(id: I, misc: M) -> Self {
 		Self {
 			id,
-			misc: PhantomData,
+			misc,
 			times: None,
 		}
 	}
@@ -403,6 +407,10 @@ impl<I: PredId, M: PredId> PredStateCase<I, M> {
 		-> (I, Option<Box<dyn Iterator<Item = (Duration, Duration)> + Send + Sync>>)
 	{
 		(self.id, self.times)
+	}
+	
+	pub fn misc_id(&self) -> M {
+		self.misc
 	}
 	
 	pub fn set<T>(&mut self, times: TimeRanges<T>)
@@ -1026,6 +1034,9 @@ where
 /// [`PredStateCase`] for scheduling.
 pub struct PredCombinator<'p, P: PredParam, M: PredId> {
 	iter: <<P::Comb<'p> as PredComb>::WithKind<CombUpdated> as IntoIterator>::IntoIter,
+	curr: Option<<<P::Comb<'p> as PredComb>::WithKind<CombUpdated> as IntoIterator>::Item>,
+	misc_state: Box<[M]>,
+	misc_index: usize,
 	node: NodeWriter<'p, PredStateCase<PredParamId<'p, P>, M>>,
 }
 
@@ -1035,18 +1046,32 @@ impl<'p, P: PredParam, M: PredId> Iterator for PredCombinator<'p, P, M> {
 		<PredParamItem<'p, P> as PredItem>::Ref
 	);
 	fn next(&mut self) -> Option<Self::Item> {
-		if let Some(case) = self.iter.next() {
-			let CombCase(item, id) = case;
-			Some((
-				self.node.write(PredStateCase::new(id)),
-				item
-			))
-		} else {
-			None
+		while let Some(case) = self.curr {
+			if let Some(misc) = self.misc_state.get(self.misc_index) {
+				self.misc_index += 1;
+				let CombCase(item, id) = case;
+				return Some((
+					self.node.write(PredStateCase::new(id, *misc)),
+					item
+				))
+			}
+			self.curr = self.iter.next();
+			self.misc_index = 0;
 		}
+		None
 	}
 	fn size_hint(&self) -> (usize, Option<usize>) {
-		self.iter.size_hint()
+		let (min, max) = self.iter.size_hint();
+		if self.curr.is_some() {
+			let misc_len = self.misc_state.len();
+			let misc_num = misc_len - self.misc_index;
+			(
+				(min * misc_len) + misc_num,
+				max.map(|x| (x * misc_len) + misc_num)
+			)
+		} else {
+			(0, Some(0))
+		}
 	}
 }
 
