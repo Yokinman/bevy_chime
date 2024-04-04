@@ -102,6 +102,110 @@ impl CombKind for CombStatic {
 	const HAS_SAME: bool = true;
 }
 
+/// ...
+pub trait CombinatorCase {
+	type Item: PredItem;
+	type Id: PredId;
+	type HeadItem: PredItem;
+	type HeadId: PredId;
+	type Latter: CombinatorCase;
+	// type Iter: Iterator<Item = CombCase<Self::Item, Self::Id>>;
+	fn join_item(a: Self::HeadItem, b: <Self::Latter as CombinatorCase>::Item) -> Self::Item;
+	fn join_id(a: Self::HeadId, b: <Self::Latter as CombinatorCase>::Id) -> Self::Id;
+}
+
+impl CombinatorCase for () {
+	type Item = ();
+	type Id = ();
+	type HeadItem = ();
+	type HeadId = ();
+	type Latter = ();
+	// type Iter = Option<CombCase<(), ()>>;
+	fn join_item(_: Self::HeadItem, _: <Self::Latter as CombinatorCase>::Item) -> Self::Item {}
+	fn join_id(_: Self::HeadId, _: <Self::Latter as CombinatorCase>::Id) -> Self::Id {}
+}
+
+impl<P: PredItem, I: PredId> CombinatorCase for CombCase<P, I> {
+	type Item = P;
+	type Id = I;
+	type HeadItem = P;
+	type HeadId = I;
+	type Latter = ();
+	// type Iter = Option<CombCase<(), ()>>;
+	fn join_item(a: Self::HeadItem, _: <Self::Latter as CombinatorCase>::Item) -> Self::Item {
+		a
+	}
+	fn join_id(a: Self::HeadId, _: <Self::Latter as CombinatorCase>::Id) -> Self::Id {
+		a
+	}
+}
+
+impl<P: PredItem, I: PredId> CombinatorCase for [CombCase<P, I>; 2] {
+	type Item = [P; 2];
+	type Id = [I; 2];
+	type HeadItem = P;
+	type HeadId = I;
+	type Latter = CombCase<P, I>;
+	// type Iter = PredArrayCombIter<..>;
+	fn join_item(a: Self::HeadItem, b: <Self::Latter as CombinatorCase>::Item) -> Self::Item {
+		[a, b]
+	}
+	fn join_id(a: Self::HeadId, b: <Self::Latter as CombinatorCase>::Id) -> Self::Id {
+		[a, b]
+	}
+}
+
+impl<P: PredItem, I: PredId> CombinatorCase for [CombCase<P, I>; 3] {
+	type Item = [P; 3];
+	type Id = [I; 3];
+	type HeadItem = P;
+	type HeadId = I;
+	type Latter = [CombCase<P, I>; 2];
+	// type Iter = PredArrayCombIter<..>;
+	fn join_item(a: Self::HeadItem, [b, c]: <Self::Latter as CombinatorCase>::Item) -> Self::Item {
+		[a, b, c]
+	}
+	fn join_id(a: Self::HeadId, [b, c]: <Self::Latter as CombinatorCase>::Id) -> Self::Id {
+		[a, b, c]
+	}
+}
+
+impl<P: PredItem, I: PredId> CombinatorCase for [CombCase<P, I>; 4] {
+	type Item = [P; 4];
+	type Id = [I; 4];
+	type HeadItem = P;
+	type HeadId = I;
+	type Latter = [CombCase<P, I>; 3];
+	// type Iter = PredArrayCombIter<..>;
+	fn join_item(a: Self::HeadItem, [b, c, d]: <Self::Latter as CombinatorCase>::Item) -> Self::Item {
+		[a, b, c, d]
+	}
+	fn join_id(a: Self::HeadId, [b, c, d]: <Self::Latter as CombinatorCase>::Id) -> Self::Id {
+		[a, b, c, d]
+	}
+}
+
+impl<P0, I0, P1, I1> CombinatorCase for (CombCase<P0, I0>, CombCase<P1, I1>)
+where
+	P0: PredItem,
+	I0: PredId,
+	P1: PredItem,
+	I1: PredId,
+{
+	type Item = (P0, P1);
+	type Id = (I0, I1);
+	type HeadItem = P0;
+	type HeadId = I0;
+	type Latter = CombCase<P1, I1>;
+	// type Iter = PredPairCombIter<..>;
+	fn join_item(a: Self::HeadItem, b: <Self::Latter as CombinatorCase>::Item) -> Self::Item {
+		(a, b)
+	}
+	fn join_id(a: Self::HeadId, b: <Self::Latter as CombinatorCase>::Id) -> Self::Id {
+		(a, b)
+	}
+}
+
 /// An item & ID pair of a `PredParam`, with their updated state.
 pub struct CombCase<P: PredItem, I: PredId>(P::Ref, I);
 
