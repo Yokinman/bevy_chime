@@ -265,15 +265,15 @@ where
 	type Case = (<A::Comb<'w> as PredComb>::Case, <B::Comb<'w> as PredComb>::Case);
 }
 
-impl<'w, K, P, const N: usize> PredComb for PredArrayComb<'w, K, P, N>
+impl<K, C, const N: usize> PredComb for PredArrayComb<K, C, N>
 where
 	K: CombKind,
-	P: PredParam,
-	for<'a> PredParamId<'a, P>: Ord,
-	for<'a> [<P::Comb<'a> as PredComb>::Case; N]: CombinatorCase,
+	C: PredComb,
+	<C::Case as CombinatorCase>::Id: Ord,
+	[C::Case; N]: CombinatorCase,
 {
-	type WithKind<Kind: CombKind> = PredArrayComb<'w, Kind, P, N>;
-	type Case = [<P::Comb<'w> as PredComb>::Case; N];
+	type WithKind<Kind: CombKind> = PredArrayComb<Kind, C, N>;
+	type Case = [C::Case; N];
 }
 
 /// Shortcut for accessing `PredParam::Comb::Item`.
@@ -344,11 +344,11 @@ where
 	for<'a> [<P::Comb<'a> as PredComb>::Case; N]: CombinatorCase,
 {
 	type Param = P::Param;
-	type Comb<'w> = PredArrayComb<'w, CombNone, P, N>;
+	type Comb<'w> = PredArrayComb<CombNone, P::Comb<'w>, N>;
 	fn comb<'w, K: CombKind>(param: &'w SystemParamItem<Self::Param>)
 		-> <Self::Comb<'w> as PredComb>::WithKind<K>
 	{
-		PredArrayComb::<'w, K, P, N>::new(param)
+		PredArrayComb::<K, _, N>::new::<P>(param)
 	}
 }
 
@@ -934,18 +934,18 @@ where
 }
 
 /// Combinator for `PredParam` array implementation.
-pub struct PredArrayComb<'w, K, P, const N: usize>
+pub struct PredArrayComb<K, C, const N: usize>
 where
 	K: CombKind,
-	P: PredParam,
+	C: PredComb,
 {
 	slice: Box<[(
-		<<P::Comb<'w> as PredComb>::WithKind<K::Pal> as IntoIterator>::Item,
+		<C::WithKind<K::Pal> as IntoIterator>::Item,
 		usize
 	)]>,
 }
 
-impl<K: CombKind, P: PredParam, const N: usize> Clone for PredArrayComb<'_, K, P, N> {
+impl<K: CombKind, C: PredComb, const N: usize> Clone for PredArrayComb<K, C, N> {
 	fn clone(&self) -> Self {
 		Self {
 			slice: self.slice.clone(),
@@ -953,13 +953,13 @@ impl<K: CombKind, P: PredParam, const N: usize> Clone for PredArrayComb<'_, K, P
 	}
 }
 
-impl<'p, K, P, const N: usize> PredArrayComb<'p, K, P, N>
+impl<K, C, const N: usize> PredArrayComb<K, C, N>
 where
 	K: CombKind,
-	P: PredParam,
-	PredParamId<'p, P>: Ord,
+	C: PredComb,
+	<C::Case as CombinatorCase>::Id: Ord,
 {
-	fn new(param: &'p SystemParamItem<P::Param>) -> Self {
+	fn new<'p, P: PredParam<Comb<'p> = C>>(param: &'p SystemParamItem<P::Param>) -> Self {
 		let mut vec = P::comb::<K::Pal>(param).into_iter()
 			.map(|x| (x, usize::MAX))
 			.collect::<Vec<_>>();
@@ -987,18 +987,18 @@ where
 	}
 }
 
-impl<'w, K, P, const N: usize> IntoIterator for PredArrayComb<'w, K, P, N>
+impl<K, C, const N: usize> IntoIterator for PredArrayComb<K, C, N>
 where
 	K: CombKind,
-	P: PredParam,
-	for<'a> PredParamId<'a, P>: Ord,
-	for<'a> [<P::Comb<'a> as PredComb>::Case; N]: CombinatorCase,
+	C: PredComb,
+	<C::Case as CombinatorCase>::Id: Ord,
+	[C::Case; N]: CombinatorCase,
 {
 	type Item = CombCase<
-		PredParamItem<'w, [P; N]>,
-		PredParamId<'w, [P; N]>
+		<[C::Case; N] as CombinatorCase>::Item,
+		<[C::Case; N] as CombinatorCase>::Id
 	>;
-	type IntoIter = PredArrayCombIter<'w, K, P, N>;
+	type IntoIter = PredArrayCombIter<K, C, N>;
 	fn into_iter(self) -> Self::IntoIter {
 		let mut iter = PredArrayCombIter {
 			slice: self.slice,
@@ -1022,24 +1022,24 @@ where
 }
 
 /// Iterator for array of [`PredParam`] type.
-pub struct PredArrayCombIter<'w, K, P, const N: usize>
+pub struct PredArrayCombIter<K, C, const N: usize>
 where
 	K: CombKind,
-	P: PredParam,
+	C: PredComb,
 {
 	slice: Box<[(
-		<<P::Comb<'w> as PredComb>::WithKind<K::Pal> as IntoIterator>::Item,
+		<C::WithKind<K::Pal> as IntoIterator>::Item,
 		usize
 	)]>,
 	index: [usize; N],
 	layer: usize,
 }
 
-impl<'w, K, P, const N: usize> PredArrayCombIter<'w, K, P, N>
+impl<K, C, const N: usize> PredArrayCombIter<K, C, N>
 where
 	K: CombKind,
-	P: PredParam,
-	PredParamId<'w, P>: Ord,
+	C: PredComb,
+	<C::Case as CombinatorCase>::Id: Ord,
 {
 	fn step_index(&mut self, i: usize) -> bool {
 		let index = self.index[i] + 1;
@@ -1082,16 +1082,16 @@ where
 	}
 }
 
-impl<'w, K, P, const N: usize> Iterator for PredArrayCombIter<'w, K, P, N>
+impl<K, C, const N: usize> Iterator for PredArrayCombIter<K, C, N>
 where
 	K: CombKind,
-	P: PredParam,
-	for<'a> PredParamId<'a, P>: Ord,
-	for<'a> [<P::Comb<'a> as PredComb>::Case; N]: CombinatorCase,
+	C: PredComb,
+	<C::Case as CombinatorCase>::Id: Ord,
+	[C::Case; N]: CombinatorCase,
 {
 	type Item = CombCase<
-		PredParamItem<'w, [P; N]>,
-		PredParamId<'w, [P; N]>
+		<[C::Case; N] as CombinatorCase>::Item,
+		<[C::Case; N] as CombinatorCase>::Id
 	>;
 	fn next(&mut self) -> Option<Self::Item> {
 		if N == 0 || self.index[N-1] >= self.slice.len() {
