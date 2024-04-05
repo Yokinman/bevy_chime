@@ -459,6 +459,18 @@ where
 	}
 }
 
+impl<'p, 'w, 's, P, M> PredState<'p, 'w, 's, P, M>
+where
+	'w: 'p,
+	's: 'p,
+	P: PredParamVec,
+	M: PredId,
+{
+	pub fn iter_step(self) -> P::Split<'p, 'w, 's, M> {
+		P::split(self)
+	}
+}
+
 impl<'p, 'w, 's, P, M> IntoIterator for PredState<'p, 'w, 's, P, M>
 where
 	'w: 'p,
