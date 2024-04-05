@@ -109,7 +109,7 @@ pub trait PredParamVec: PredParam {
 	type Tail: PredParam;
 	
 	type Split<'p, 'w: 'p, 's: 'p, M: PredId, K: CombKind>: Iterator<Item = (
-		PredSubState<'p, 'w, 's, Self::Tail, M, K>,
+		PredSubStateSplit<'p, 'w, 's, Self::Tail, M, K>,
 		<PredParamItem<'p, Self::Head> as PredItem>::Ref,
 	)>;
 	
@@ -136,7 +136,7 @@ where
 	type Tail = P;
 	
 	type Split<'p, 'w: 'p, 's: 'p, M: PredId, K: CombKind> = std::vec::IntoIter<(
-		PredSubState<'p, 'w, 's, Self::Tail, M, K>,
+		PredSubStateSplit<'p, 'w, 's, Self::Tail, M, K>,
 		<PredParamItem<'p, Self::Head> as PredItem>::Ref,
 	)>;
 	
@@ -162,9 +162,16 @@ where
 }
 
 /// ...
-pub enum PredCombLatter<K: CombKind, C: PredComb> {
-	Case(<C::WithKind<K> as PredComb>::Case),
-	Pal(<C::WithKind<K::Pal> as PredComb>::Case),
+pub enum PredSubStateSplit<'p, 'w, 's, P, M, K>
+where
+	'w: 'p,
+	's: 'p,
+	P: PredParam,
+	M: PredId,
+	K: CombKind,
+{
+	Main(PredSubState<'p, 'w, 's, P, M, K>),
+	Pal(PredSubState<'p, 'w, 's, P, M, K::Pal>),
 }
 
 /// ...
