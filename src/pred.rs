@@ -185,18 +185,16 @@ impl<P: PredItem, I: PredId> CombinatorCase for [CombCase<P, I>; 4] {
 	}
 }
 
-impl<P0, I0, P1, I1> CombinatorCase for (CombCase<P0, I0>, CombCase<P1, I1>)
+impl<A, B> CombinatorCase for (A, B)
 where
-	P0: PredItem,
-	I0: PredId,
-	P1: PredItem,
-	I1: PredId,
+	A: CombinatorCase,
+	B: CombinatorCase,
 {
-	type Item = (P0, P1);
-	type Id = (I0, I1);
-	type HeadItem = P0;
-	type HeadId = I0;
-	type Latter = CombCase<P1, I1>;
+	type Item = (A::Item, B::Item);
+	type Id = (A::Id, B::Id);
+	type HeadItem = A::Item;
+	type HeadId = A::Id;
+	type Latter = CombCase<B::Item, B::Id>;
 	// type Iter = PredPairCombIter<..>;
 	fn join_item(a: Self::HeadItem, b: <Self::Latter as CombinatorCase>::Item) -> Self::Item {
 		(a, b)
@@ -237,19 +235,14 @@ impl<P: PredItem, I: PredId> CombCase<P, I> {
 pub trait PredComb: Clone {
 	type WithKind<Kind: CombKind>:
 		PredComb
-		+ IntoIterator<Item = CombCase<Self::Item, Self::Id>>;
+		+ IntoIterator<Item = CombCase<<Self::Case as CombinatorCase>::Item, <Self::Case as CombinatorCase>::Id>>;
 	
-	/// The item that `Param` iterates over.
-	type Item: PredItem;
-	
-	/// Unique identifier of each `Item`.
-	type Id: PredId;
+	type Case: CombinatorCase;
 }
 
 impl<T: PredItem> PredComb for Option<CombCase<T, ()>> {
 	type WithKind<Kind: CombKind> = Self;
-	type Item = T;
-	type Id = ();
+	type Case = CombCase<T, ()>;
 }
 
 impl<'w, K, T, F> PredComb for QueryComb<'w, K, T, F>
@@ -259,8 +252,7 @@ where
 	F: ArchetypeFilter + 'static,
 {
 	type WithKind<Kind: CombKind> = QueryComb<'w, Kind, T, F>;
-	type Item = Ref<'w, T>;
-	type Id = Entity;
+	type Case = CombCase<Ref<'w, T>, Entity>;
 }
 
 impl<'w, K, A, B> PredComb for PredPairComb<'w, K, A, B>
@@ -270,8 +262,7 @@ where
 	B: PredParam,
 {
 	type WithKind<Kind: CombKind> = PredPairComb<'w, Kind, A, B>;
-	type Item = (PredParamItem<'w, A>, PredParamItem<'w, B>);
-	type Id = (PredParamId<'w, A>, PredParamId<'w, B>);
+	type Case = (<A::Comb<'w> as PredComb>::Case, <B::Comb<'w> as PredComb>::Case);
 }
 
 impl<'w, K, P, const N: usize> PredComb for PredArrayComb<'w, K, P, N>
@@ -279,17 +270,17 @@ where
 	K: CombKind,
 	P: PredParam,
 	for<'a> PredParamId<'a, P>: Ord,
+	for<'a> [<P::Comb<'a> as PredComb>::Case; N]: CombinatorCase,
 {
 	type WithKind<Kind: CombKind> = PredArrayComb<'w, Kind, P, N>;
-	type Item = [PredParamItem<'w, P>; N];
-	type Id = [PredParamId<'w, P>; N];
+	type Case = [<P::Comb<'w> as PredComb>::Case; N];
 }
 
 /// Shortcut for accessing `PredParam::Comb::Item`.
-pub type PredParamItem<'w, P> = <<P as PredParam>::Comb<'w> as PredComb>::Item;
+pub type PredParamItem<'w, P> = <<<P as PredParam>::Comb<'w> as PredComb>::Case as CombinatorCase>::Item;
 
 /// Shortcut for accessing `PredParam::Comb::Id`.
-pub type PredParamId<'w, P> = <<P as PredParam>::Comb<'w> as PredComb>::Id;
+pub type PredParamId<'w, P> = <<<P as PredParam>::Comb<'w> as PredComb>::Case as CombinatorCase>::Id;
 
 /// A set of [`PredItem`] values used to predict & schedule events.
 pub trait PredParam {
@@ -349,7 +340,8 @@ impl<A: PredParam, B: PredParam> PredParam for (A, B) {
 
 impl<P: PredParam, const N: usize> PredParam for [P; N]
 where
-	for<'a> PredParamId<'a, P>: Ord
+	for<'a> PredParamId<'a, P>: Ord,
+	for<'a> [<P::Comb<'a> as PredComb>::Case; N]: CombinatorCase,
 {
 	type Param = P::Param;
 	type Comb<'w> = PredArrayComb<'w, CombNone, P, N>;
@@ -1000,6 +992,7 @@ where
 	K: CombKind,
 	P: PredParam,
 	for<'a> PredParamId<'a, P>: Ord,
+	for<'a> [<P::Comb<'a> as PredComb>::Case; N]: CombinatorCase,
 {
 	type Item = CombCase<
 		PredParamItem<'w, [P; N]>,
@@ -1094,6 +1087,7 @@ where
 	K: CombKind,
 	P: PredParam,
 	for<'a> PredParamId<'a, P>: Ord,
+	for<'a> [<P::Comb<'a> as PredComb>::Case; N]: CombinatorCase,
 {
 	type Item = CombCase<
 		PredParamItem<'w, [P; N]>,
@@ -1103,12 +1097,13 @@ where
 		if N == 0 || self.index[N-1] >= self.slice.len() {
 			return None
 		}
-		let case = CombCase(
-			self.index.map(|i| self.slice[i].0.item()),
-			self.index.map(|i| self.slice[i].0.id()),
-		);
+		// let case = CombCase(
+		// 	self.index.map(|i| self.slice[i].0.item()),
+		// 	self.index.map(|i| self.slice[i].0.id()),
+		// );
 		self.step(0);
-		Some(case)
+		// Some(case)
+		todo!()
 	}
 	fn size_hint(&self) -> (usize, Option<usize>) {
 		// Currently always produces an exact size.
