@@ -103,86 +103,75 @@ impl CombKind for CombStatic {
 }
 
 /// ...
-pub trait CombinatorCase {
+pub trait CombinatorCase: Copy + Clone {
 	type Item: PredItem;
 	type Id: PredId;
-	type HeadItem: PredItem;
-	type HeadId: PredId;
-	type Latter: CombinatorCase;
+	// type HeadItem: PredItem;
+	// type HeadId: PredId;
+	// type Latter: CombinatorCase;
 	// type Iter: Iterator<Item = CombCase<Self::Item, Self::Id>>;
-	fn join_item(a: Self::HeadItem, b: <Self::Latter as CombinatorCase>::Item) -> Self::Item;
-	fn join_id(a: Self::HeadId, b: <Self::Latter as CombinatorCase>::Id) -> Self::Id;
+	fn item(&self) -> <Self::Item as PredItem>::Ref;
+	fn id(&self) -> Self::Id;
+	fn into_parts(self) -> (<Self::Item as PredItem>::Ref, Self::Id) {
+		(self.item(), self.id())
+	}
+	// fn join_item(a: Self::HeadItem, b: <Self::Latter as CombinatorCase>::Item) -> Self::Item;
+	// fn join_id(a: Self::HeadId, b: <Self::Latter as CombinatorCase>::Id) -> Self::Id;
 }
 
 impl CombinatorCase for () {
 	type Item = ();
 	type Id = ();
-	type HeadItem = ();
-	type HeadId = ();
-	type Latter = ();
+	// type HeadItem = ();
+	// type HeadId = ();
+	// type Latter = ();
 	// type Iter = Option<CombCase<(), ()>>;
-	fn join_item(_: Self::HeadItem, _: <Self::Latter as CombinatorCase>::Item) -> Self::Item {}
-	fn join_id(_: Self::HeadId, _: <Self::Latter as CombinatorCase>::Id) -> Self::Id {}
+	fn item(&self) -> <Self::Item as PredItem>::Ref {}
+	fn id(&self) -> Self::Id {}
+	// fn join_item(_: Self::HeadItem, _: <Self::Latter as CombinatorCase>::Item) -> Self::Item {}
+	// fn join_id(_: Self::HeadId, _: <Self::Latter as CombinatorCase>::Id) -> Self::Id {}
 }
 
 impl<P: PredItem, I: PredId> CombinatorCase for CombCase<P, I> {
 	type Item = P;
 	type Id = I;
-	type HeadItem = P;
-	type HeadId = I;
-	type Latter = ();
+	// type HeadItem = P;
+	// type HeadId = I;
+	// type Latter = ();
 	// type Iter = Option<CombCase<(), ()>>;
-	fn join_item(a: Self::HeadItem, _: <Self::Latter as CombinatorCase>::Item) -> Self::Item {
-		a
+	fn item(&self) -> <Self::Item as PredItem>::Ref {
+		self.0
 	}
-	fn join_id(a: Self::HeadId, _: <Self::Latter as CombinatorCase>::Id) -> Self::Id {
-		a
+	fn id(&self) -> Self::Id {
+		self.1
 	}
+	// fn join_item(a: Self::HeadItem, _: <Self::Latter as CombinatorCase>::Item) -> Self::Item {
+	// 	a
+	// }
+	// fn join_id(a: Self::HeadId, _: <Self::Latter as CombinatorCase>::Id) -> Self::Id {
+	// 	a
+	// }
 }
 
-impl<P: PredItem, I: PredId> CombinatorCase for [CombCase<P, I>; 2] {
-	type Item = [P; 2];
-	type Id = [I; 2];
-	type HeadItem = P;
-	type HeadId = I;
-	type Latter = CombCase<P, I>;
+impl<C: CombinatorCase, const N: usize> CombinatorCase for [C; N] {
+	type Item = [C::Item; N];
+	type Id = [C::Id; N];
+	// type HeadItem = P;
+	// type HeadId = I;
+	// type Latter = [CombCase<P, I>; 2];
 	// type Iter = PredArrayCombIter<..>;
-	fn join_item(a: Self::HeadItem, b: <Self::Latter as CombinatorCase>::Item) -> Self::Item {
-		[a, b]
+	fn item(&self) -> <Self::Item as PredItem>::Ref {
+		self.map(|x| x.item())
 	}
-	fn join_id(a: Self::HeadId, b: <Self::Latter as CombinatorCase>::Id) -> Self::Id {
-		[a, b]
+	fn id(&self) -> Self::Id {
+		self.map(|x| x.id())
 	}
-}
-
-impl<P: PredItem, I: PredId> CombinatorCase for [CombCase<P, I>; 3] {
-	type Item = [P; 3];
-	type Id = [I; 3];
-	type HeadItem = P;
-	type HeadId = I;
-	type Latter = [CombCase<P, I>; 2];
-	// type Iter = PredArrayCombIter<..>;
-	fn join_item(a: Self::HeadItem, [b, c]: <Self::Latter as CombinatorCase>::Item) -> Self::Item {
-		[a, b, c]
-	}
-	fn join_id(a: Self::HeadId, [b, c]: <Self::Latter as CombinatorCase>::Id) -> Self::Id {
-		[a, b, c]
-	}
-}
-
-impl<P: PredItem, I: PredId> CombinatorCase for [CombCase<P, I>; 4] {
-	type Item = [P; 4];
-	type Id = [I; 4];
-	type HeadItem = P;
-	type HeadId = I;
-	type Latter = [CombCase<P, I>; 3];
-	// type Iter = PredArrayCombIter<..>;
-	fn join_item(a: Self::HeadItem, [b, c, d]: <Self::Latter as CombinatorCase>::Item) -> Self::Item {
-		[a, b, c, d]
-	}
-	fn join_id(a: Self::HeadId, [b, c, d]: <Self::Latter as CombinatorCase>::Id) -> Self::Id {
-		[a, b, c, d]
-	}
+	// fn join_item(a: Self::HeadItem, [b, c]: <Self::Latter as CombinatorCase>::Item) -> Self::Item {
+	// 	[a, b, c]
+	// }
+	// fn join_id(a: Self::HeadId, [b, c]: <Self::Latter as CombinatorCase>::Id) -> Self::Id {
+	// 	[a, b, c]
+	// }
 }
 
 impl<A, B> CombinatorCase for (A, B)
@@ -192,16 +181,22 @@ where
 {
 	type Item = (A::Item, B::Item);
 	type Id = (A::Id, B::Id);
-	type HeadItem = A::Item;
-	type HeadId = A::Id;
-	type Latter = CombCase<B::Item, B::Id>;
+	// type HeadItem = A::Item;
+	// type HeadId = A::Id;
+	// type Latter = CombCase<B::Item, B::Id>;
 	// type Iter = PredPairCombIter<..>;
-	fn join_item(a: Self::HeadItem, b: <Self::Latter as CombinatorCase>::Item) -> Self::Item {
-		(a, b)
+	fn item(&self) -> <Self::Item as PredItem>::Ref {
+		(self.0.item(), self.1.item())
 	}
-	fn join_id(a: Self::HeadId, b: <Self::Latter as CombinatorCase>::Id) -> Self::Id {
-		(a, b)
+	fn id(&self) -> Self::Id {
+		(self.0.id(), self.1.id())
 	}
+	// fn join_item(a: Self::HeadItem, b: <Self::Latter as CombinatorCase>::Item) -> Self::Item {
+	// 	(a, b)
+	// }
+	// fn join_id(a: Self::HeadId, b: <Self::Latter as CombinatorCase>::Id) -> Self::Id {
+	// 	(a, b)
+	// }
 }
 
 /// An item & ID pair of a `PredParam`, with their updated state.
@@ -215,28 +210,9 @@ impl<P: PredItem, I: PredId> Clone for CombCase<P, I> {
 	}
 }
 
-impl<P: PredItem, I: PredId> CombCase<P, I> {
-	fn id(&self) -> I {
-		self.1
-	}
-	fn item(&self) -> P::Ref {
-		self.0
-	}
-	fn join<A: PredItem, B: PredId>(self, other: CombCase<A, B>)
-		-> CombCase<(P, A), (I, B)>
-	{
-		let CombCase(a, a_id) = self;
-		let CombCase(b, b_id) = other;
-		CombCase((a, b), (a_id, b_id))
-	}
-}
-
 /// Combinator type produced by `PredParam::comb`.
 pub trait PredComb: Clone {
-	type WithKind<Kind: CombKind>:
-		PredComb
-		+ IntoIterator<Item = CombCase<<Self::Case as CombinatorCase>::Item, <Self::Case as CombinatorCase>::Id>>;
-	
+	type WithKind<Kind: CombKind>: PredComb + IntoIterator<Item=Self::Case>;
 	type Case: CombinatorCase;
 }
 
@@ -270,7 +246,6 @@ where
 	K: CombKind,
 	C: PredComb,
 	<C::Case as CombinatorCase>::Id: Ord,
-	[C::Case; N]: CombinatorCase,
 {
 	type WithKind<Kind: CombKind> = PredArrayComb<Kind, C, N>;
 	type Case = [C::Case; N];
@@ -341,7 +316,6 @@ impl<A: PredParam, B: PredParam> PredParam for (A, B) {
 impl<P: PredParam, const N: usize> PredParam for [P; N]
 where
 	for<'a> PredParamId<'a, P>: Ord,
-	for<'a> [<P::Comb<'a> as PredComb>::Case; N]: CombinatorCase,
 {
 	type Param = P::Param;
 	type Comb<'w> = PredArrayComb<CombNone, P::Comb<'w>, N>;
@@ -783,10 +757,7 @@ where
 	A: PredParam,
 	B: PredParam,
 {
-	type Item = CombCase<
-		PredParamItem<'w, (A, B)>,
-		PredParamId<'w, (A, B)>
-	>;
+	type Item = <Self::IntoIter as Iterator>::Item;
 	type IntoIter = PredPairCombIter<'w, K, A, B>;
 	fn into_iter(self) -> Self::IntoIter {
 		let Self {
@@ -871,10 +842,7 @@ where
 	A: PredParam,
 	B: PredParam,
 {
-	type Item = CombCase<
-		PredParamItem<'w, (A, B)>,
-		PredParamId<'w, (A, B)>
-	>;
+	type Item = <PredPairComb<'w, K, A, B> as PredComb>::Case;
 	fn next(&mut self) -> Option<Self::Item> {
 		// !!! Put A/B in order of ascending size to reduce redundancy.
 		match std::mem::replace(self, Self::Empty) {
@@ -887,7 +855,7 @@ where
 					*self = Self::Primary {
 						a_iter, a_case, b_comb, b_iter, a_inv_comb, b_inv_comb
 					};
-					return Some(a_case.join(b_case))
+					return Some((a_case, b_case))
 				}
 				*self = Self::primary_next(a_iter, b_comb, a_inv_comb, b_inv_comb);
 				self.next()
@@ -896,7 +864,7 @@ where
 			Self::Secondary { b_iter, b_case, a_comb, mut a_iter } => {
 				if let Some(a_case) = a_iter.next() {
 					*self = Self::Secondary { b_iter, b_case, a_comb, a_iter };
-					return Some(a_case.join(b_case))
+					return Some((a_case, b_case))
 				}
 				*self = Self::secondary_next(b_iter, a_comb);
 				self.next()
@@ -992,12 +960,8 @@ where
 	K: CombKind,
 	C: PredComb,
 	<C::Case as CombinatorCase>::Id: Ord,
-	[C::Case; N]: CombinatorCase,
 {
-	type Item = CombCase<
-		<[C::Case; N] as CombinatorCase>::Item,
-		<[C::Case; N] as CombinatorCase>::Id
-	>;
+	type Item = <Self::IntoIter as Iterator>::Item;
 	type IntoIter = PredArrayCombIter<K, C, N>;
 	fn into_iter(self) -> Self::IntoIter {
 		let mut iter = PredArrayCombIter {
@@ -1087,23 +1051,15 @@ where
 	K: CombKind,
 	C: PredComb,
 	<C::Case as CombinatorCase>::Id: Ord,
-	[C::Case; N]: CombinatorCase,
 {
-	type Item = CombCase<
-		<[C::Case; N] as CombinatorCase>::Item,
-		<[C::Case; N] as CombinatorCase>::Id
-	>;
+	type Item = <PredArrayComb<K, C, N> as PredComb>::Case;
 	fn next(&mut self) -> Option<Self::Item> {
 		if N == 0 || self.index[N-1] >= self.slice.len() {
 			return None
 		}
-		// let case = CombCase(
-		// 	self.index.map(|i| self.slice[i].0.item()),
-		// 	self.index.map(|i| self.slice[i].0.id()),
-		// );
+		let case = self.index.map(|i| self.slice[i].0);
 		self.step(0);
-		// Some(case)
-		todo!()
+		Some(case)
 	}
 	fn size_hint(&self) -> (usize, Option<usize>) {
 		// Currently always produces an exact size.
@@ -1168,7 +1124,7 @@ impl<'p, P: PredParam, M: PredId> Iterator for PredCombinator<'p, P, M> {
 		while let Some(case) = self.curr {
 			if let Some(misc) = self.misc_state.get(self.misc_index) {
 				self.misc_index += 1;
-				let CombCase(item, id) = case;
+				let (item, id) = case.into_parts();
 				return Some((
 					self.node.write(PredStateCase::new(id, *misc)),
 					item
