@@ -103,41 +103,59 @@ impl CombKind for CombStatic {
 }
 
 /// ...
-pub trait PredCombVec: PredComb {
-	type Head: PredComb;
-	type Tail: PredComb;
+pub trait PredParamVec: PredParam {
+	type Head: PredParam;
+	type Tail: PredParam;
 	
-	fn join_item(
-		a: <<Self::Head as PredComb>::Case as CombinatorCase>::Item,
-		b: <<Self::Tail as PredComb>::Case as CombinatorCase>::Item,
-	) -> <Self::Case as CombinatorCase>::Item;
+	type Split<'p, 'w: 'p, 's: 'p, M: PredId>: Iterator<Item = (
+		PredState<'p, 'w, 's, Self::Tail, M>,
+		<PredParamItem<'p, Self::Head> as PredItem>::Ref,
+	)>;
 	
-	fn join_id(
-		a: <<Self::Head as PredComb>::Case as CombinatorCase>::Id,
-		b: <<Self::Tail as PredComb>::Case as CombinatorCase>::Id,
-	) -> <Self::Case as CombinatorCase>::Id;
+	fn split<'p, 'w: 'p, 's: 'p, M: PredId>(
+		state: PredState<'p, 'w, 's, Self, M>
+	) -> Self::Split<'p, 'w, 's, M>;
+	
+	fn join_item<'p>(
+		a: PredParamItem<'p, Self::Head>,
+		b: PredParamItem<'p, Self::Tail>,
+	) -> PredParamItem<'p, Self>;
+	
+	fn join_id<'p>(
+		a: PredParamId<'p, Self::Head>,
+		b: PredParamId<'p, Self::Tail>,
+	) -> PredParamId<'p, Self>;
 }
 
-impl<K, C> PredCombVec for PredArrayComb<K, C, 2>
+impl<P: PredParam> PredParamVec for [P; 2]
 where
-	K: CombKind,
-	C: PredComb,
-	<C::Case as CombinatorCase>::Id: Ord,
+	for<'a> PredParamId<'a, P>: Ord,
 {
-	type Head = C;
-	type Tail = C;
+	type Head = P;
+	type Tail = P;
 	
-	fn join_item(
-		a: <<Self::Head as PredComb>::Case as CombinatorCase>::Item,
-		b: <<Self::Tail as PredComb>::Case as CombinatorCase>::Item,
-	) -> <Self::Case as CombinatorCase>::Item {
+	type Split<'p, 'w: 'p, 's: 'p, M: PredId> = std::vec::IntoIter<(
+		PredState<'p, 'w, 's, Self::Tail, M>,
+		<PredParamItem<'p, Self::Head> as PredItem>::Ref,
+	)>;
+	
+	fn split<'p, 'w: 'p, 's: 'p, M: PredId>(
+		state: PredState<'p, 'w, 's, Self, M>
+	) -> Self::Split<'p, 'w, 's, M> {
+		todo!()
+	}
+	
+	fn join_item<'p>(
+		a: PredParamItem<'p, Self::Head>,
+		b: PredParamItem<'p, Self::Tail>,
+	) -> PredParamItem<'p, Self> {
 		[a, b]
 	}
 	
-	fn join_id(
-		a: <<Self::Head as PredComb>::Case as CombinatorCase>::Id,
-		b: <<Self::Tail as PredComb>::Case as CombinatorCase>::Id,
-	) -> <Self::Case as CombinatorCase>::Id {
+	fn join_id<'p>(
+		a: PredParamId<'p, Self::Head>,
+		b: PredParamId<'p, Self::Tail>,
+	) -> PredParamId<'p, Self> {
 		[a, b]
 	}
 }
@@ -405,7 +423,7 @@ where
 }
 
 /// Collects predictions from "when" systems for later compilation.
-pub struct PredState<'p, 'w: 'p, 's: 'p, P: PredParam = (), M: PredId = ()> {
+pub struct PredState<'p, 'w: 'p, 's: 'p, P: PredParam + ?Sized = (), M: PredId = ()> {
 	state: &'p SystemParamItem<'w, 's, P::Param>,
 	misc_state: Box<[M]>,
 	node: &'p mut Node<PredStateCase<PredParamId<'p, P>, M>>,
