@@ -479,7 +479,7 @@ where
 	M: PredId,
 {
 	type Item = <Self::IntoIter as IntoIterator>::Item;
-	type IntoIter = PredCombinator<'p, P, M>;
+	type IntoIter = PredCombinator<'p, P, M, CombUpdated>;
 	fn into_iter(self) -> Self::IntoIter {
 		let mut iter = P::comb::<CombUpdated>(self.state).into_iter();
 		self.node.reserve(4 * iter.size_hint().0.max(1));
@@ -1141,15 +1141,20 @@ where
 
 /// Produces all case combinations in need of a new prediction, alongside a
 /// [`PredStateCase`] for scheduling.
-pub struct PredCombinator<'p, P: PredParam, M: PredId> {
-	iter: <<P::Comb<'p> as PredComb>::WithKind<CombUpdated> as IntoIterator>::IntoIter,
-	curr: Option<<<P::Comb<'p> as PredComb>::WithKind<CombUpdated> as IntoIterator>::Item>,
+pub struct PredCombinator<'p, P: PredParam, M: PredId, K: CombKind> {
+	iter: <<P::Comb<'p> as PredComb>::WithKind<K> as IntoIterator>::IntoIter,
+	curr: Option<<<P::Comb<'p> as PredComb>::WithKind<K> as IntoIterator>::Item>,
 	misc_state: Box<[M]>,
 	misc_index: usize,
 	node: NodeWriter<'p, PredStateCase<PredParamId<'p, P>, M>>,
 }
 
-impl<'p, P: PredParam, M: PredId> Iterator for PredCombinator<'p, P, M> {
+impl<'p, P, M, K> Iterator for PredCombinator<'p, P, M, K>
+where
+	P: PredParam,
+	M: PredId,
+	K: CombKind,
+{
 	type Item = (
 		&'p mut PredStateCase<PredParamId<'p, P>, M>,
 		<PredParamItem<'p, P> as PredItem>::Ref
