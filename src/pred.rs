@@ -103,75 +103,89 @@ impl CombKind for CombStatic {
 }
 
 /// ...
+pub trait PredCombVec: PredComb {
+	type Head: PredComb;
+	type Tail: PredComb;
+	
+	fn join_item(
+		a: <<Self::Head as PredComb>::Case as CombinatorCase>::Item,
+		b: <<Self::Tail as PredComb>::Case as CombinatorCase>::Item,
+	) -> <Self::Case as CombinatorCase>::Item;
+	
+	fn join_id(
+		a: <<Self::Head as PredComb>::Case as CombinatorCase>::Id,
+		b: <<Self::Tail as PredComb>::Case as CombinatorCase>::Id,
+	) -> <Self::Case as CombinatorCase>::Id;
+}
+
+impl<K, C> PredCombVec for PredArrayComb<K, C, 2>
+where
+	K: CombKind,
+	C: PredComb,
+	<C::Case as CombinatorCase>::Id: Ord,
+{
+	type Head = C;
+	type Tail = C;
+	
+	fn join_item(
+		a: <<Self::Head as PredComb>::Case as CombinatorCase>::Item,
+		b: <<Self::Tail as PredComb>::Case as CombinatorCase>::Item,
+	) -> <Self::Case as CombinatorCase>::Item {
+		[a, b]
+	}
+	
+	fn join_id(
+		a: <<Self::Head as PredComb>::Case as CombinatorCase>::Id,
+		b: <<Self::Tail as PredComb>::Case as CombinatorCase>::Id,
+	) -> <Self::Case as CombinatorCase>::Id {
+		[a, b]
+	}
+}
+
+/// ...
+pub enum PredCombLatter<K: CombKind, C: PredComb> {
+	Case(<C::WithKind<K> as PredComb>::Case),
+	Pal(<C::WithKind<K::Pal> as PredComb>::Case),
+}
+
+/// ...
 pub trait CombinatorCase: Copy + Clone {
 	type Item: PredItem;
 	type Id: PredId;
-	// type HeadItem: PredItem;
-	// type HeadId: PredId;
-	// type Latter: CombinatorCase;
-	// type Iter: Iterator<Item = CombCase<Self::Item, Self::Id>>;
 	fn item(&self) -> <Self::Item as PredItem>::Ref;
 	fn id(&self) -> Self::Id;
 	fn into_parts(self) -> (<Self::Item as PredItem>::Ref, Self::Id) {
 		(self.item(), self.id())
 	}
-	// fn join_item(a: Self::HeadItem, b: <Self::Latter as CombinatorCase>::Item) -> Self::Item;
-	// fn join_id(a: Self::HeadId, b: <Self::Latter as CombinatorCase>::Id) -> Self::Id;
 }
 
 impl CombinatorCase for () {
 	type Item = ();
 	type Id = ();
-	// type HeadItem = ();
-	// type HeadId = ();
-	// type Latter = ();
-	// type Iter = Option<CombCase<(), ()>>;
 	fn item(&self) -> <Self::Item as PredItem>::Ref {}
 	fn id(&self) -> Self::Id {}
-	// fn join_item(_: Self::HeadItem, _: <Self::Latter as CombinatorCase>::Item) -> Self::Item {}
-	// fn join_id(_: Self::HeadId, _: <Self::Latter as CombinatorCase>::Id) -> Self::Id {}
 }
 
 impl<P: PredItem, I: PredId> CombinatorCase for CombCase<P, I> {
 	type Item = P;
 	type Id = I;
-	// type HeadItem = P;
-	// type HeadId = I;
-	// type Latter = ();
-	// type Iter = Option<CombCase<(), ()>>;
 	fn item(&self) -> <Self::Item as PredItem>::Ref {
 		self.0
 	}
 	fn id(&self) -> Self::Id {
 		self.1
 	}
-	// fn join_item(a: Self::HeadItem, _: <Self::Latter as CombinatorCase>::Item) -> Self::Item {
-	// 	a
-	// }
-	// fn join_id(a: Self::HeadId, _: <Self::Latter as CombinatorCase>::Id) -> Self::Id {
-	// 	a
-	// }
 }
 
 impl<C: CombinatorCase, const N: usize> CombinatorCase for [C; N] {
 	type Item = [C::Item; N];
 	type Id = [C::Id; N];
-	// type HeadItem = P;
-	// type HeadId = I;
-	// type Latter = [CombCase<P, I>; 2];
-	// type Iter = PredArrayCombIter<..>;
 	fn item(&self) -> <Self::Item as PredItem>::Ref {
 		self.map(|x| x.item())
 	}
 	fn id(&self) -> Self::Id {
 		self.map(|x| x.id())
 	}
-	// fn join_item(a: Self::HeadItem, [b, c]: <Self::Latter as CombinatorCase>::Item) -> Self::Item {
-	// 	[a, b, c]
-	// }
-	// fn join_id(a: Self::HeadId, [b, c]: <Self::Latter as CombinatorCase>::Id) -> Self::Id {
-	// 	[a, b, c]
-	// }
 }
 
 impl<A, B> CombinatorCase for (A, B)
@@ -181,22 +195,12 @@ where
 {
 	type Item = (A::Item, B::Item);
 	type Id = (A::Id, B::Id);
-	// type HeadItem = A::Item;
-	// type HeadId = A::Id;
-	// type Latter = CombCase<B::Item, B::Id>;
-	// type Iter = PredPairCombIter<..>;
 	fn item(&self) -> <Self::Item as PredItem>::Ref {
 		(self.0.item(), self.1.item())
 	}
 	fn id(&self) -> Self::Id {
 		(self.0.id(), self.1.id())
 	}
-	// fn join_item(a: Self::HeadItem, b: <Self::Latter as CombinatorCase>::Item) -> Self::Item {
-	// 	(a, b)
-	// }
-	// fn join_id(a: Self::HeadId, b: <Self::Latter as CombinatorCase>::Id) -> Self::Id {
-	// 	(a, b)
-	// }
 }
 
 /// An item & ID pair of a `PredParam`, with their updated state.
