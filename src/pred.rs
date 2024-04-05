@@ -1,5 +1,6 @@
 use std::hash::Hash;
 use std::marker::PhantomData;
+use std::ops::{Deref, DerefMut};
 use std::time::Duration;
 use bevy_ecs::change_detection::{DetectChanges, Ref, Res};
 use bevy_ecs::component::{Component, Tick};
@@ -107,14 +108,14 @@ pub trait PredParamVec: PredParam {
 	type Head: PredParam;
 	type Tail: PredParam;
 	
-	type Split<'p, 'w: 'p, 's: 'p, M: PredId>: Iterator<Item = (
-		PredState<'p, 'w, 's, Self::Tail, M>,
+	type Split<'p, 'w: 'p, 's: 'p, M: PredId, K: CombKind>: Iterator<Item = (
+		PredSubState<'p, 'w, 's, Self::Tail, M, K>,
 		<PredParamItem<'p, Self::Head> as PredItem>::Ref,
 	)>;
 	
-	fn split<'p, 'w: 'p, 's: 'p, M: PredId>(
-		state: PredState<'p, 'w, 's, Self, M>
-	) -> Self::Split<'p, 'w, 's, M>;
+	fn split<'p, 'w: 'p, 's: 'p, M: PredId, K: CombKind>(
+		state: PredSubState<'p, 'w, 's, Self, M, K>
+	) -> Self::Split<'p, 'w, 's, M, K>;
 	
 	fn join_item<'p>(
 		a: PredParamItem<'p, Self::Head>,
@@ -134,14 +135,14 @@ where
 	type Head = P;
 	type Tail = P;
 	
-	type Split<'p, 'w: 'p, 's: 'p, M: PredId> = std::vec::IntoIter<(
-		PredState<'p, 'w, 's, Self::Tail, M>,
+	type Split<'p, 'w: 'p, 's: 'p, M: PredId, K: CombKind> = std::vec::IntoIter<(
+		PredSubState<'p, 'w, 's, Self::Tail, M, K>,
 		<PredParamItem<'p, Self::Head> as PredItem>::Ref,
 	)>;
 	
-	fn split<'p, 'w: 'p, 's: 'p, M: PredId>(
-		state: PredState<'p, 'w, 's, Self, M>
-	) -> Self::Split<'p, 'w, 's, M> {
+	fn split<'p, 'w: 'p, 's: 'p, M: PredId, K: CombKind>(
+		state: PredSubState<'p, 'w, 's, Self, M, K>
+	) -> Self::Split<'p, 'w, 's, M, K> {
 		todo!()
 	}
 	
@@ -422,26 +423,41 @@ where
 	}
 }
 
-/// Collects predictions from "when" systems for later compilation.
-pub struct PredState<'p, 'w: 'p, 's: 'p, P: PredParam + ?Sized = (), M: PredId = ()> {
+/// Collects predictions from "when" systems for later compilation. More general
+/// form of [`PredState`] for stepping through combinators layer-wise.
+pub struct PredSubState<'p, 'w, 's, P, M, K>
+where
+	'w: 'p,
+	's: 'p,
+	P: PredParam + ?Sized,
+	M: PredId,
+	K: CombKind,
+{
 	state: &'p SystemParamItem<'w, 's, P::Param>,
 	misc_state: Box<[M]>,
 	node: &'p mut Node<PredStateCase<PredParamId<'p, P>, M>>,
+	kind: PhantomData<K>,
 }
 
-impl<'p, 'w, 's, P, M> PredState<'p, 'w, 's, P, M>
+impl<'p, 'w, 's, P, M, K> PredSubState<'p, 'w, 's, P, M, K>
 where
 	'w: 'p,
 	's: 'p,
 	P: PredParam,
 	M: PredId,
+	K: CombKind,
 {
-	pub(crate) fn new(
+	fn new(
 		state: &'p SystemParamItem<'w, 's, P::Param>,
 		misc_state: Box<[M]>, 
 		node: &'p mut Node<PredStateCase<PredParamId<'p, P>, M>>,
 	) -> Self {
-		Self { state, misc_state, node }
+		Self {
+			state,
+			misc_state,
+			node,
+			kind: PhantomData,
+		}
 	}
 	
 	/// Sets all updated cases to the given times.
@@ -459,29 +475,31 @@ where
 	}
 }
 
-impl<'p, 'w, 's, P, M> PredState<'p, 'w, 's, P, M>
+impl<'p, 'w, 's, P, M, K> PredSubState<'p, 'w, 's, P, M, K>
 where
 	'w: 'p,
 	's: 'p,
 	P: PredParamVec,
 	M: PredId,
+	K: CombKind,
 {
-	pub fn iter_step(self) -> P::Split<'p, 'w, 's, M> {
+	pub fn iter_step(self) -> P::Split<'p, 'w, 's, M, K> {
 		P::split(self)
 	}
 }
 
-impl<'p, 'w, 's, P, M> IntoIterator for PredState<'p, 'w, 's, P, M>
+impl<'p, 'w, 's, P, M, K> IntoIterator for PredSubState<'p, 'w, 's, P, M, K>
 where
 	'w: 'p,
 	's: 'p,
 	P: PredParam,
 	M: PredId,
+	K: CombKind,
 {
 	type Item = <Self::IntoIter as IntoIterator>::Item;
-	type IntoIter = PredCombinator<'p, P, M, CombUpdated>;
+	type IntoIter = PredCombinator<'p, P, M, K>;
 	fn into_iter(self) -> Self::IntoIter {
-		let mut iter = P::comb::<CombUpdated>(self.state).into_iter();
+		let mut iter = P::comb::<K>(self.state).into_iter();
 		self.node.reserve(4 * iter.size_hint().0.max(1));
 		let curr = iter.next();
 		PredCombinator {
@@ -491,6 +509,60 @@ where
 			misc_index: 0,
 			node: NodeWriter::new(self.node),
 		}
+	}
+}
+
+/// Collects predictions from "when" systems for later compilation.
+pub struct PredState<'p, 'w, 's, P = (), M = ()>
+where
+	'w: 'p,
+	's: 'p,
+	P: PredParam,
+	M: PredId,
+{
+	inner: PredSubState<'p, 'w, 's, P, M, CombUpdated>,
+}
+
+impl<'p, 'w, 's, P, M> PredState<'p, 'w, 's, P, M>
+where
+	'w: 'p,
+	's: 'p,
+	P: PredParam,
+	M: PredId,
+{
+	pub(crate) fn new(
+		state: &'p SystemParamItem<'w, 's, P::Param>,
+		misc_state: Box<[M]>, 
+		node: &'p mut Node<PredStateCase<PredParamId<'p, P>, M>>,
+	) -> Self {
+		Self {
+			inner: PredSubState::new(state, misc_state, node),
+		}
+	}
+}
+
+impl<'p, 'w, 's, P, M> Deref for PredState<'p, 'w, 's, P, M>
+where
+	'w: 'p,
+	's: 'p,
+	P: PredParam,
+	M: PredId,
+{
+	type Target = PredSubState<'p, 'w, 's, P, M, CombUpdated>;
+	fn deref(&self) -> &Self::Target {
+		&self.inner
+	}
+}
+
+impl<'p, 'w, 's, P, M> DerefMut for PredState<'p, 'w, 's, P, M>
+where
+	'w: 'p,
+	's: 'p,
+	P: PredParam,
+	M: PredId,
+{
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.inner
 	}
 }
 
