@@ -111,11 +111,13 @@ pub trait PredParamVec: PredParam {
 	type Split<'p, 'w: 'p, 's: 'p, M: PredId, K: CombKind>: Iterator<Item = (
 		PredSubStateSplit<'p, 'w, 's, Self::Tail, M, K>,
 		<PredParamItem<'p, Self::Head> as PredItem>::Ref,
-	)>;
+	)> where Self: 'p;
 	
 	fn split<'p, 'w: 'p, 's: 'p, M: PredId, K: CombKind>(
 		state: PredSubState<'p, 'w, 's, Self, M, K>
-	) -> Self::Split<'p, 'w, 's, M, K>;
+	) -> Self::Split<'p, 'w, 's, M, K>
+	where
+		Self: Sized;
 	
 	fn join_item<'p>(
 		a: PredParamItem<'p, Self::Head>,
@@ -138,11 +140,14 @@ where
 	type Split<'p, 'w: 'p, 's: 'p, M: PredId, K: CombKind> = std::vec::IntoIter<(
 		PredSubStateSplit<'p, 'w, 's, Self::Tail, M, K>,
 		<PredParamItem<'p, Self::Head> as PredItem>::Ref,
-	)>;
+	)> where Self: 'p;
 	
 	fn split<'p, 'w: 'p, 's: 'p, M: PredId, K: CombKind>(
 		state: PredSubState<'p, 'w, 's, Self, M, K>
-	) -> Self::Split<'p, 'w, 's, M, K> {
+	) -> Self::Split<'p, 'w, 's, M, K>
+	where
+		Self: Sized
+	{
 		todo!()
 	}
 	
@@ -436,13 +441,13 @@ pub struct PredSubState<'p, 'w, 's, P, M, K>
 where
 	'w: 'p,
 	's: 'p,
-	P: PredParam + ?Sized,
+	P: PredParam,
 	M: PredId,
 	K: CombKind,
 {
 	state: &'p SystemParamItem<'w, 's, P::Param>,
 	misc_state: Box<[M]>,
-	node: &'p mut Node<PredStateCase<PredParamId<'p, P>, M>>,
+	node: &'p mut PredNode<P, M>,
 	kind: PhantomData<K>,
 }
 
@@ -457,7 +462,7 @@ where
 	fn new(
 		state: &'p SystemParamItem<'w, 's, P::Param>,
 		misc_state: Box<[M]>, 
-		node: &'p mut Node<PredStateCase<PredParamId<'p, P>, M>>,
+		node: &'p mut PredNode<P, M>,
 	) -> Self {
 		Self {
 			state,
@@ -514,7 +519,7 @@ where
 			curr,
 			misc_state: self.misc_state,
 			misc_index: 0,
-			node: NodeWriter::new(self.node),
+			node: NodeWriter::new(todo!()),
 		}
 	}
 }
@@ -540,7 +545,7 @@ where
 	pub(crate) fn new(
 		state: &'p SystemParamItem<'w, 's, P::Param>,
 		misc_state: Box<[M]>, 
-		node: &'p mut Node<PredStateCase<PredParamId<'p, P>, M>>,
+		node: &'p mut PredNode<P, M>,
 	) -> Self {
 		Self {
 			inner: PredSubState::new(state, misc_state, node),
@@ -612,6 +617,23 @@ pub enum PredNode<P: PredParam, M> {
 	Blank,
 	Data(Node<PredStateCase<PredParamId<'static, P>, M>>),
 	Branches(Vec<Box<dyn PredNodeBranch<P, M>>>),
+}
+
+impl<P: PredParam, M> PredNode<P, M> {
+	fn reserve(&mut self, additional: usize) {
+		match self {
+			Self::Blank => {
+				*self = Self::Data(Node::default());
+				self.reserve(additional);
+			},
+			Self::Data(node) => {
+				node.reserve(additional);
+			},
+			Self::Branches(_) => {
+				todo!()
+			},
+		}
+	}
 }
 
 impl<'w, P: PredParam, M: PredId> IntoIterator for PredNode<P, M> {
@@ -688,7 +710,7 @@ where
 		let id = self.0;
 		let node = std::mem::replace(&mut self.1, PredNode::Blank);
 		Box::new(node.into_iter()
-			.map(move |mut case| PredStateCase::<PredParamId<'static, P>, M> {
+			.map(move |case| PredStateCase::<PredParamId<'static, P>, M> {
 				id: P::join_id(id, case.id),
 				misc: case.misc,
 				times: case.times,

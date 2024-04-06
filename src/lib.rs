@@ -66,7 +66,7 @@ impl AddChimeEvent for App {
 		let system = move |world: &mut World| {
 			// !!! Cache this in a Local so it doesn't need to reallocate much.
 			// Maybe chop off nodes that go proportionally underused.
-			let mut node = Node::default();
+			let mut node = PredNode::Blank;
 			{
 				let (state, misc) = state.get(world);
 				pred_sys(
