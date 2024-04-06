@@ -208,6 +208,48 @@ where
 	Pal(PredSubState<'p, 'w, 's, P, M, <<K::Inv as CombKind>::Pal as CombKind>::Inv>),
 }
 
+impl<'p, 'w, 's, P, M, K> IntoIterator for PredSubStateSplit<'p, 'w, 's, P, M, K>
+where
+	'w: 'p,
+	's: 'p,
+	P: PredParam,
+	M: PredId,
+	K: CombKind,
+{
+	type Item = <Self::IntoIter as Iterator>::Item;
+	type IntoIter = PredCombinatorSplit<'p, P, M, K>;
+	fn into_iter(self) -> Self::IntoIter {
+		match self {
+			Self::Main(state) => PredCombinatorSplit::Main(state.into_iter()),
+			Self::Pal(state) => PredCombinatorSplit::Pal(state.into_iter()),
+		}
+	}
+}
+
+/// ...
+pub enum PredCombinatorSplit<'p, P: PredParam, M: PredId, K: CombKind> {
+	Main(PredCombinator<'p, P, M, K::Pal>),
+	Pal(PredCombinator<'p, P, M, <<K::Inv as CombKind>::Pal as CombKind>::Inv>),
+}
+
+impl<'p, P, M, K> Iterator for PredCombinatorSplit<'p, P, M, K>
+where
+	P: PredParam,
+	M: PredId,
+	K: CombKind,
+{
+	type Item = (
+		&'p mut PredStateCase<PredParamId<P>, M>,
+		<PredParamItem<'p, P> as PredItem>::Ref
+	);
+	fn next(&mut self) -> Option<Self::Item> {
+		match self {
+			Self::Main(iter) => iter.next(),
+			Self::Pal(iter) => iter.next(),
+		}
+	}
+}
+
 /// ...
 pub trait CombinatorCase: Copy + Clone {
 	type Item: PredItem;
