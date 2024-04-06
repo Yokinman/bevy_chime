@@ -130,7 +130,7 @@ pub trait PredParamVec: PredParam {
 	) -> PredParamId<Self>;
 }
 
-impl<P: PredParam> PredParamVec for [P; 2]
+impl<P: PredParam + 'static> PredParamVec for [P; 2]
 where
 	PredParamId<P>: Ord,
 {
@@ -148,7 +148,36 @@ where
 	where
 		Self: Sized
 	{
-		todo!()
+		let comb_iter = Self::Head::comb::<K>(state.state).into_iter();
+		let inv_comb_iter = Self::Head::comb::<K::Inv>(state.state).into_iter();
+		
+		let capacity = comb_iter.size_hint().1.expect("should always work")
+			+ inv_comb_iter.size_hint().1.expect("should always work");
+		
+		let mut branches = state.node
+			.init_branches(Vec::<(PredParamId<Self::Head>, PredNode<Self::Tail, M>)>::with_capacity(capacity))
+			.iter_mut();
+		
+		let mut vec = Vec::with_capacity(capacity);
+		
+		for case in comb_iter {
+			let sub_state = PredSubStateSplit::Main(PredSubState::new(
+				state.state,
+				state.misc_state.clone(),
+				&mut branches.next().expect("should always work").1,
+			));
+			vec.push((sub_state, case.item()));
+		}
+		for case in inv_comb_iter {
+			let sub_state = PredSubStateSplit::Pal(PredSubState::new(
+				state.state,
+				state.misc_state.clone(),
+				&mut branches.next().expect("should always work").1,
+			));
+			vec.push((sub_state, case.item()));
+		}
+		
+		vec.into_iter()
 	}
 	
 	fn join_item<'p>(
@@ -175,8 +204,8 @@ where
 	M: PredId,
 	K: CombKind,
 {
-	Main(PredSubState<'p, 'w, 's, P, M, K>),
-	Pal(PredSubState<'p, 'w, 's, P, M, K::Pal>),
+	Main(PredSubState<'p, 'w, 's, P, M, K::Pal>),
+	Pal(PredSubState<'p, 'w, 's, P, M, <<K::Inv as CombKind>::Pal as CombKind>::Inv>),
 }
 
 /// ...
@@ -665,13 +694,16 @@ impl<P: PredParam, M: PredId> PredNode<P, M> {
 		}
 	}
 	
-	fn init_branches(&mut self, branches: impl PredNodeBranches<P, M> + 'static)
-		-> &mut dyn PredNodeBranches<P, M>
+	fn init_branches<T>(&mut self, branches: T) -> &mut T
+	where
+		T: PredNodeBranches<P, M> + 'static
 	{
 		if let Self::Blank = self {
 			*self = Self::Branches(Box::new(branches));
 			if let Self::Branches(branches) = self {
-				branches.as_mut()
+				branches.as_any_mut()
+					.downcast_mut()
+					.expect("should always be valid")
 			} else {
 				unreachable!()
 			}
@@ -741,13 +773,17 @@ impl<P: PredParam, M: PredId> Iterator for PredNodeIter<P, M> {
 
 /// ...
 pub trait PredNodeBranches<P: PredParam, M: PredId> {
+	fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
 	fn into_branch_iter(&mut self) -> std::vec::IntoIter<Box<dyn Iterator<Item = PredStateCase<PredParamId<P>, M>>>>;
 }
 
 impl<P: PredParam, M: PredId, T> PredNodeBranches<P, M> for Vec<T>
 where
-	T: PredNodeBranch<P, M>
+	T: PredNodeBranch<P, M> + 'static
 {
+	fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+		self
+	}
 	fn into_branch_iter(&mut self) -> std::vec::IntoIter<Box<dyn Iterator<Item = PredStateCase<PredParamId<P>, M>>>> {
 		let vec = std::mem::replace(self, Vec::new());
 		vec.into_iter()
