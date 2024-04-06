@@ -529,13 +529,17 @@ where
 	fn into_iter(self) -> Self::IntoIter {
 		let mut iter = P::comb::<K>(self.state).into_iter();
 		self.node.reserve(4 * iter.size_hint().0.max(1));
-		let curr = iter.next();
-		PredCombinator {
-			iter,
-			curr,
-			misc_state: self.misc_state,
-			misc_index: 0,
-			node: NodeWriter::new(todo!()),
+		if let PredNode::Data(node) = self.node {
+			let curr = iter.next();
+			PredCombinator {
+				iter,
+				curr,
+				misc_state: self.misc_state,
+				misc_index: 0,
+				node: NodeWriter::new(node),
+			}
+		} else {
+			unreachable!()
 		}
 	}
 }
