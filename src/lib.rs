@@ -185,9 +185,9 @@ where
 	F: PredFn<P, M, A>,
 {
 	pred_sys: F,
-	begin_sys: Option<Box<dyn for<'a> ChimeEventSystem<PredParamId<'a, P>, M>>>,
-	end_sys: Option<Box<dyn for<'a> ChimeEventSystem<PredParamId<'a, P>, M>>>,
-	outlier_sys: Option<Box<dyn for<'a> ChimeEventSystem<PredParamId<'a, P>, M>>>,
+	begin_sys: Option<Box<dyn ChimeEventSystem<PredParamId<P>, M>>>,
+	end_sys: Option<Box<dyn ChimeEventSystem<PredParamId<P>, M>>>,
+	outlier_sys: Option<Box<dyn ChimeEventSystem<PredParamId<P>, M>>>,
 	misc_state: Box<[M]>,
 	_param: std::marker::PhantomData<fn(A)>,
 }

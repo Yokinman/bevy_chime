@@ -125,14 +125,14 @@ pub trait PredParamVec: PredParam {
 	) -> PredParamItem<'p, Self>;
 	
 	fn join_id<'p>(
-		a: PredParamId<'p, Self::Head>,
-		b: PredParamId<'p, Self::Tail>,
-	) -> PredParamId<'p, Self>;
+		a: PredParamId<Self::Head>,
+		b: PredParamId<Self::Tail>,
+	) -> PredParamId<Self>;
 }
 
 impl<P: PredParam> PredParamVec for [P; 2]
 where
-	for<'a> PredParamId<'a, P>: Ord,
+	PredParamId<P>: Ord,
 {
 	type Head = P;
 	type Tail = P;
@@ -159,9 +159,9 @@ where
 	}
 	
 	fn join_id<'p>(
-		a: PredParamId<'p, Self::Head>,
-		b: PredParamId<'p, Self::Tail>,
-	) -> PredParamId<'p, Self> {
+		a: PredParamId<Self::Head>,
+		b: PredParamId<Self::Tail>,
+	) -> PredParamId<Self> {
 		[a, b]
 	}
 }
@@ -248,11 +248,13 @@ impl<P: PredItem, I: PredId> Clone for CombCase<P, I> {
 /// Combinator type produced by `PredParam::comb`.
 pub trait PredComb: Clone {
 	type WithKind<Kind: CombKind>: PredComb + IntoIterator<Item=Self::Case>;
-	type Case: CombinatorCase;
+	type Id: PredId;
+	type Case: CombinatorCase<Id=Self::Id>;
 }
 
 impl<T: PredItem> PredComb for Option<CombCase<T, ()>> {
 	type WithKind<Kind: CombKind> = Self;
+	type Id = ();
 	type Case = CombCase<T, ()>;
 }
 
@@ -263,6 +265,7 @@ where
 	F: ArchetypeFilter + 'static,
 {
 	type WithKind<Kind: CombKind> = QueryComb<'w, Kind, T, F>;
+	type Id = Entity;
 	type Case = CombCase<Ref<'w, T>, Entity>;
 }
 
@@ -273,6 +276,7 @@ where
 	B: PredParam,
 {
 	type WithKind<Kind: CombKind> = PredPairComb<'w, Kind, A, B>;
+	type Id = (<A::Comb<'w> as PredComb>::Id, <B::Comb<'w> as PredComb>::Id);
 	type Case = (<A::Comb<'w> as PredComb>::Case, <B::Comb<'w> as PredComb>::Case);
 }
 
@@ -283,22 +287,29 @@ where
 	<C::Case as CombinatorCase>::Id: Ord,
 {
 	type WithKind<Kind: CombKind> = PredArrayComb<Kind, C, N>;
+	type Id = [C::Id; N];
 	type Case = [C::Case; N];
 }
 
 /// Shortcut for accessing `PredParam::Comb::Item`.
-pub type PredParamItem<'w, P> = <<<P as PredParam>::Comb<'w> as PredComb>::Case as CombinatorCase>::Item;
+pub type PredParamItem<'w, P> = <<<P
+	as PredParam>::Comb<'w>
+	as PredComb>::Case
+	as CombinatorCase>::Item;
 
-/// Shortcut for accessing `PredParam::Comb::Id`.
-pub type PredParamId<'w, P> = <<<P as PredParam>::Comb<'w> as PredComb>::Case as CombinatorCase>::Id;
+/// Shortcut for accessing `PredParam::Id`.
+pub type PredParamId<P> = <P as PredParam>::Id;
 
 /// A set of [`PredItem`] values used to predict & schedule events.
 pub trait PredParam {
 	/// The equivalent [`bevy_ecs::system::SystemParam`].
 	type Param: ReadOnlySystemParam + 'static;
 	
+	/// ...
+	type Id: PredId;
+	
 	/// Creates iterators over `Param`'s items with their IDs and updated state.
-	type Comb<'w>: PredComb;
+	type Comb<'w>: PredComb<Id=Self::Id>;
 	
 	/// Produces `Self::Comb`.
 	fn comb<'w, K: CombKind>(param: &'w SystemParamItem<Self::Param>)
@@ -307,6 +318,7 @@ pub trait PredParam {
 
 impl<T: Component, F: ArchetypeFilter + 'static> PredParam for Query<'_, '_, &T, F> {
 	type Param = Query<'static, 'static, (Ref<'static, T>, Entity), F>;
+	type Id = Entity;
 	type Comb<'w> = QueryComb<'w, CombNone, T, F>;
 	fn comb<'w, K: CombKind>(param: &'w SystemParamItem<Self::Param>)
 		-> <Self::Comb<'w> as PredComb>::WithKind<K>
@@ -320,6 +332,7 @@ impl<T: Component, F: ArchetypeFilter + 'static> PredParam for Query<'_, '_, &T,
 
 impl<R: Resource> PredParam for Res<'_, R> {
 	type Param = Res<'static, R>;
+	type Id = ();
 	type Comb<'w> = Option<CombCase<Res<'w, R>, ()>>;
 	fn comb<'w, K: CombKind>(param: &'w SystemParamItem<Self::Param>)
 		-> <Self::Comb<'w> as PredComb>::WithKind<K>
@@ -330,6 +343,7 @@ impl<R: Resource> PredParam for Res<'_, R> {
 
 impl PredParam for () {
 	type Param = ();
+	type Id = ();
 	type Comb<'w> = Option<CombCase<(), ()>>;
 	fn comb<'w, K: CombKind>(param: &'w SystemParamItem<Self::Param>)
 		-> <Self::Comb<'w> as PredComb>::WithKind<K>
@@ -340,6 +354,7 @@ impl PredParam for () {
 
 impl<A: PredParam, B: PredParam> PredParam for (A, B) {
 	type Param = (A::Param, B::Param);
+	type Id = (A::Id, B::Id);
 	type Comb<'w> = PredPairComb<'w, CombNone, A, B>;
 	fn comb<'w, K: CombKind>(param: &'w SystemParamItem<Self::Param>)
 		-> <Self::Comb<'w> as PredComb>::WithKind<K>
@@ -350,9 +365,10 @@ impl<A: PredParam, B: PredParam> PredParam for (A, B) {
 
 impl<P: PredParam, const N: usize> PredParam for [P; N]
 where
-	for<'a> PredParamId<'a, P>: Ord,
+	PredParamId<P>: Ord,
 {
 	type Param = P::Param;
+	type Id = [P::Id; N];
 	type Comb<'w> = PredArrayComb<CombNone, P::Comb<'w>, N>;
 	fn comb<'w, K: CombKind>(param: &'w SystemParamItem<Self::Param>)
 		-> <Self::Comb<'w> as PredComb>::WithKind<K>
@@ -615,7 +631,7 @@ impl<I: PredId, M: PredId> PredStateCase<I, M> {
 /// ...
 pub enum PredNode<P: PredParam, M> {
 	Blank,
-	Data(Node<PredStateCase<PredParamId<'static, P>, M>>),
+	Data(Node<PredStateCase<PredParamId<P>, M>>),
 	Branches(Vec<Box<dyn PredNodeBranch<P, M>>>),
 }
 
@@ -637,7 +653,7 @@ impl<P: PredParam, M> PredNode<P, M> {
 }
 
 impl<'w, P: PredParam, M: PredId> IntoIterator for PredNode<P, M> {
-	type Item = PredStateCase<PredParamId<'static, P>, M>;
+	type Item = PredStateCase<PredParamId<P>, M>;
 	type IntoIter = PredNodeIter<P, M>;
 	fn into_iter(self) -> Self::IntoIter {
 		match self {
@@ -661,15 +677,15 @@ impl<'w, P: PredParam, M: PredId> IntoIterator for PredNode<P, M> {
 /// ...
 pub enum PredNodeIter<P: PredParam, M> {
 	Blank,
-	Data(NodeIter<PredStateCase<PredParamId<'static, P>, M>>),
+	Data(NodeIter<PredStateCase<PredParamId<P>, M>>),
 	Branches {
 		branch_iter: std::vec::IntoIter<Box<dyn PredNodeBranch<P, M>>>,
-		branch: Box<dyn Iterator<Item = PredStateCase<PredParamId<'static, P>, M>>>,
+		branch: Box<dyn Iterator<Item = PredStateCase<PredParamId<P>, M>>>,
 	}
 }
 
 impl<P: PredParam, M: PredId> Iterator for PredNodeIter<P, M> {
-	type Item = PredStateCase<PredParamId<'static, P>, M>;
+	type Item = PredStateCase<PredParamId<P>, M>;
 	fn next(&mut self) -> Option<Self::Item> {
 		match self {
 			Self::Blank => None,
@@ -697,20 +713,20 @@ impl<P: PredParam, M: PredId> Iterator for PredNodeIter<P, M> {
 
 /// ...
 pub trait PredNodeBranch<P: PredParam, M: PredId> {
-	fn case_iter(&mut self) -> Box<dyn Iterator<Item = PredStateCase<PredParamId<'static, P>, M>>>;
+	fn case_iter(&mut self) -> Box<dyn Iterator<Item = PredStateCase<PredParamId<P>, M>>>;
 }
 
-impl<P, M> PredNodeBranch<P, M> for (PredParamId<'static, P::Head>, PredNode<P::Tail, M>)
+impl<P, M> PredNodeBranch<P, M> for (PredParamId<P::Head>, PredNode<P::Tail, M>)
 where
 	P: PredParamVec,
 	P::Tail: 'static,
 	M: PredId,
 {
-	fn case_iter(&mut self) -> Box<dyn Iterator<Item = PredStateCase<PredParamId<'static, P>, M>>> {
+	fn case_iter(&mut self) -> Box<dyn Iterator<Item = PredStateCase<PredParamId<P>, M>>> {
 		let id = self.0;
 		let node = std::mem::replace(&mut self.1, PredNode::Blank);
 		Box::new(node.into_iter()
-			.map(move |case| PredStateCase::<PredParamId<'static, P>, M> {
+			.map(move |case| PredStateCase::<PredParamId<P>, M> {
 				id: P::join_id(id, case.id),
 				misc: case.misc,
 				times: case.times,
@@ -1336,7 +1352,7 @@ pub struct PredCombinator<'p, P: PredParam, M: PredId, K: CombKind> {
 	curr: Option<<<P::Comb<'p> as PredComb>::WithKind<K> as IntoIterator>::Item>,
 	misc_state: Box<[M]>,
 	misc_index: usize,
-	node: NodeWriter<'p, PredStateCase<PredParamId<'p, P>, M>>,
+	node: NodeWriter<'p, PredStateCase<PredParamId<P>, M>>,
 }
 
 impl<'p, P, M, K> Iterator for PredCombinator<'p, P, M, K>
@@ -1346,7 +1362,7 @@ where
 	K: CombKind,
 {
 	type Item = (
-		&'p mut PredStateCase<PredParamId<'p, P>, M>,
+		&'p mut PredStateCase<PredParamId<P>, M>,
 		<PredParamItem<'p, P> as PredItem>::Ref
 	);
 	fn next(&mut self) -> Option<Self::Item> {
