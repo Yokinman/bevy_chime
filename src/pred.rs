@@ -670,7 +670,7 @@ impl<P: PredParam, M> PredNode<P, M> {
 	}
 }
 
-impl<'w, P: PredParam, M: PredId> IntoIterator for PredNode<P, M> {
+impl<P: PredParam, M: PredId> IntoIterator for PredNode<P, M> {
 	type Item = PredStateCase<PredParamId<P>, M>;
 	type IntoIter = PredNodeIter<P, M>;
 	fn into_iter(self) -> Self::IntoIter {
