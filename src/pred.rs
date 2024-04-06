@@ -528,18 +528,14 @@ where
 	type IntoIter = PredCombinator<'p, P, M, K>;
 	fn into_iter(self) -> Self::IntoIter {
 		let mut iter = P::comb::<K>(self.state).into_iter();
-		self.node.reserve(4 * iter.size_hint().0.max(1));
-		if let PredNode::Data(node) = self.node {
-			let curr = iter.next();
-			PredCombinator {
-				iter,
-				curr,
-				misc_state: self.misc_state,
-				misc_index: 0,
-				node: NodeWriter::new(node),
-			}
-		} else {
-			unreachable!()
+		let node = self.node.init_data(4 * iter.size_hint().0.max(1));
+		let curr = iter.next();
+		PredCombinator {
+			iter,
+			curr,
+			misc_state: self.misc_state,
+			misc_index: 0,
+			node: NodeWriter::new(node),
 		}
 	}
 }
@@ -654,18 +650,31 @@ pub enum PredNode<P: PredParam, M> {
 }
 
 impl<P: PredParam, M> PredNode<P, M> {
-	fn reserve(&mut self, additional: usize) {
-		match self {
-			Self::Blank => {
-				*self = Self::Data(Node::default());
-				self.reserve(additional);
-			},
-			Self::Data(node) => {
-				node.reserve(additional);
-			},
-			Self::Branches(_) => {
-				todo!()
-			},
+	fn init_data(&mut self, c: usize) -> &mut Node<PredStateCase<PredParamId<P>, M>> {
+		if let Self::Blank = self {
+			let mut node = Node::default();
+			node.reserve(c);
+			*self = Self::Data(node);
+			if let Self::Data(node) = self {
+				node
+			} else {
+				unreachable!()
+			}
+		} else {
+			panic!("expected a Blank variant");
+		}
+	}
+	
+	fn init_branches(&mut self, c: usize) -> &mut Vec<Box<dyn PredNodeBranch<P, M>>> {
+		if let Self::Blank = self {
+			*self = Self::Branches(Vec::with_capacity(c));
+			if let Self::Branches(branches) = self {
+				branches
+			} else {
+				unreachable!()
+			}
+		} else {
+			panic!("expected a Blank variant");
 		}
 	}
 }
