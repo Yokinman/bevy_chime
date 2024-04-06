@@ -573,6 +573,20 @@ where
 	}
 }
 
+impl<'p, 'w, 's, P, M> IntoIterator for PredState<'p, 'w, 's, P, M>
+where
+	'w: 'p,
+	's: 'p,
+	P: PredParam,
+	M: PredId,
+{
+	type Item = <Self::IntoIter as Iterator>::Item;
+	type IntoIter = <PredSubState<'p, 'w, 's, P, M, CombUpdated> as IntoIterator>::IntoIter;
+	fn into_iter(self) -> Self::IntoIter {
+		self.inner.into_iter()
+	}
+}
+
 impl<'p, 'w, 's, P, M> Deref for PredState<'p, 'w, 's, P, M>
 where
 	'w: 'p,
