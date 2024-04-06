@@ -646,10 +646,10 @@ impl<I: PredId, M: PredId> PredStateCase<I, M> {
 pub enum PredNode<P: PredParam, M> {
 	Blank,
 	Data(Node<PredStateCase<PredParamId<P>, M>>),
-	Branches(Vec<Box<dyn PredNodeBranch<P, M>>>),
+	Branches(Box<dyn PredNodeBranches<P, M>>),
 }
 
-impl<P: PredParam, M> PredNode<P, M> {
+impl<P: PredParam, M: PredId> PredNode<P, M> {
 	fn init_data(&mut self, c: usize) -> &mut Node<PredStateCase<PredParamId<P>, M>> {
 		if let Self::Blank = self {
 			let mut node = Node::default();
@@ -665,11 +665,13 @@ impl<P: PredParam, M> PredNode<P, M> {
 		}
 	}
 	
-	fn init_branches(&mut self, c: usize) -> &mut Vec<Box<dyn PredNodeBranch<P, M>>> {
+	fn init_branches(&mut self, branches: impl PredNodeBranches<P, M> + 'static)
+		-> &mut dyn PredNodeBranches<P, M>
+	{
 		if let Self::Blank = self {
-			*self = Self::Branches(Vec::with_capacity(c));
+			*self = Self::Branches(Box::new(branches));
 			if let Self::Branches(branches) = self {
-				branches
+				branches.as_mut()
 			} else {
 				unreachable!()
 			}
@@ -686,13 +688,10 @@ impl<P: PredParam, M: PredId> IntoIterator for PredNode<P, M> {
 		match self {
 			Self::Blank => PredNodeIter::Blank,
 			Self::Data(node) => PredNodeIter::Data(node.into_iter()),
-			Self::Branches(branches) => {
-				let mut branch_iter = branches.into_iter();
-				if let Some(mut branch) = branch_iter.next() {
-					PredNodeIter::Branches {
-						branch_iter,
-						branch: branch.case_iter(),
-					}
+			Self::Branches(mut branches) => {
+				let mut branch_iter = branches.into_branch_iter();
+				if let Some(branch) = branch_iter.next() {
+					PredNodeIter::Branches { branch_iter, branch }
 				} else {
 					PredNodeIter::Blank
 				}
@@ -706,7 +705,9 @@ pub enum PredNodeIter<P: PredParam, M> {
 	Blank,
 	Data(NodeIter<PredStateCase<PredParamId<P>, M>>),
 	Branches {
-		branch_iter: std::vec::IntoIter<Box<dyn PredNodeBranch<P, M>>>,
+		branch_iter: std::vec::IntoIter<
+			Box<dyn Iterator<Item = PredStateCase<PredParamId<P>, M>>>
+		>,
 		branch: Box<dyn Iterator<Item = PredStateCase<PredParamId<P>, M>>>,
 	}
 }
@@ -720,8 +721,8 @@ impl<P: PredParam, M: PredId> Iterator for PredNodeIter<P, M> {
 			Self::Branches { branch_iter, branch } => {
 				if let Some(case) = branch.next() {
 					Some(case)
-				} else if let Some(mut next_branch) = branch_iter.next() {
-					*branch = next_branch.case_iter();
+				} else if let Some(next_branch) = branch_iter.next() {
+					*branch = next_branch;
 					self.next()
 				} else {
 					None
@@ -735,6 +736,24 @@ impl<P: PredParam, M: PredId> Iterator for PredNodeIter<P, M> {
 			Self::Data(iter) => iter.size_hint(),
 			Self::Branches { branch, .. } => (branch.size_hint().0, None),
 		}
+	}
+}
+
+/// ...
+pub trait PredNodeBranches<P: PredParam, M: PredId> {
+	fn into_branch_iter(&mut self) -> std::vec::IntoIter<Box<dyn Iterator<Item = PredStateCase<PredParamId<P>, M>>>>;
+}
+
+impl<P: PredParam, M: PredId, T> PredNodeBranches<P, M> for Vec<T>
+where
+	T: PredNodeBranch<P, M>
+{
+	fn into_branch_iter(&mut self) -> std::vec::IntoIter<Box<dyn Iterator<Item = PredStateCase<PredParamId<P>, M>>>> {
+		let vec = std::mem::replace(self, Vec::new());
+		vec.into_iter()
+			.map(|mut x| x.case_iter())
+			.collect::<Vec<_>>()
+			.into_iter()
 	}
 }
 
