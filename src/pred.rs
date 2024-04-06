@@ -607,6 +607,95 @@ impl<I: PredId, M: PredId> PredStateCase<I, M> {
 	}
 }
 
+/// ...
+pub enum PredNode<P: PredParam, M> {
+	Blank,
+	Data(Node<PredStateCase<PredParamId<'static, P>, M>>),
+	Branches(Vec<Box<dyn PredNodeBranch<P, M>>>),
+}
+
+impl<'w, P: PredParam, M: PredId> IntoIterator for PredNode<P, M> {
+	type Item = PredStateCase<PredParamId<'static, P>, M>;
+	type IntoIter = PredNodeIter<P, M>;
+	fn into_iter(self) -> Self::IntoIter {
+		match self {
+			Self::Blank => PredNodeIter::Blank,
+			Self::Data(node) => PredNodeIter::Data(node.into_iter()),
+			Self::Branches(branches) => {
+				let mut branch_iter = branches.into_iter();
+				if let Some(mut branch) = branch_iter.next() {
+					PredNodeIter::Branches {
+						branch_iter,
+						branch: branch.case_iter(),
+					}
+				} else {
+					PredNodeIter::Blank
+				}
+			},
+		}
+	}
+}
+
+/// ...
+pub enum PredNodeIter<P: PredParam, M> {
+	Blank,
+	Data(NodeIter<PredStateCase<PredParamId<'static, P>, M>>),
+	Branches {
+		branch_iter: std::vec::IntoIter<Box<dyn PredNodeBranch<P, M>>>,
+		branch: Box<dyn Iterator<Item = PredStateCase<PredParamId<'static, P>, M>>>,
+	}
+}
+
+impl<P: PredParam, M: PredId> Iterator for PredNodeIter<P, M> {
+	type Item = PredStateCase<PredParamId<'static, P>, M>;
+	fn next(&mut self) -> Option<Self::Item> {
+		match self {
+			Self::Blank => None,
+			Self::Data(iter) => iter.next(),
+			Self::Branches { branch_iter, branch } => {
+				if let Some(case) = branch.next() {
+					Some(case)
+				} else if let Some(mut next_branch) = branch_iter.next() {
+					*branch = next_branch.case_iter();
+					self.next()
+				} else {
+					None
+				}
+			},
+		}
+	}
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		match self {
+			Self::Blank => (0, Some(0)),
+			Self::Data(iter) => iter.size_hint(),
+			Self::Branches { branch, .. } => (branch.size_hint().0, None),
+		}
+	}
+}
+
+/// ...
+pub trait PredNodeBranch<P: PredParam, M: PredId> {
+	fn case_iter(&mut self) -> Box<dyn Iterator<Item = PredStateCase<PredParamId<'static, P>, M>>>;
+}
+
+impl<P, M> PredNodeBranch<P, M> for (PredParamId<'static, P::Head>, PredNode<P::Tail, M>)
+where
+	P: PredParamVec,
+	P::Tail: 'static,
+	M: PredId,
+{
+	fn case_iter(&mut self) -> Box<dyn Iterator<Item = PredStateCase<PredParamId<'static, P>, M>>> {
+		let id = self.0;
+		let node = std::mem::replace(&mut self.1, PredNode::Blank);
+		Box::new(node.into_iter()
+			.map(move |mut case| PredStateCase::<PredParamId<'static, P>, M> {
+				id: P::join_id(id, case.id),
+				misc: case.misc,
+				times: case.times,
+			}))
+	}
+}
+
 /// Types that can be used to query for a specific entity.
 pub trait PredQueryData {
 	type Id: PredId;
