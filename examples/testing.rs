@@ -276,9 +276,10 @@ fn outlier_func_b(query: PredQuery<&mut Pos>, time: Res<Time>) {
 fn when_func_c(pred: PredState<[Query<&Pos>; 2]>) {
 	// let mut n = 0;
 	// let a_time = Instant::now();
-	for (case, [pos, b_pos]) in pred {
+	for (case, pos) in pred.iter_step() {
 		let time = pos.max_base_time();
 		let pos_poly_vec = pos.poly_vec(time);
+		for (case, b_pos) in case {
 			// !!! This kind of thing could be optimized by organizing entities
 			// into grid zones, and only making predictions with entities in
 			// adjacent zones. Use a prediction case for updating the zones.
@@ -353,6 +354,7 @@ fn when_func_c(pred: PredState<[Query<&Pos>; 2]>) {
 			// 		break
 			// 	}
 			// }
+		}
 		// n += 1;
 	}
 	// println!("  when_func_c ({n}): {:?}", Instant::now().duration_since(a_time));
