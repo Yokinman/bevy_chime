@@ -154,9 +154,7 @@ where
 		let capacity = comb_iter.size_hint().1.expect("should always work")
 			+ inv_comb_iter.size_hint().1.expect("should always work");
 		
-		let mut branches = state.node
-			.init_branches(Node::with_capacity(capacity));
-		
+		let mut branches = state.node.init_branches(capacity);
 		let mut vec = Vec::with_capacity(capacity);
 		
 		for case in comb_iter {
@@ -747,13 +745,13 @@ impl<'s, P: PredParam + 's, M: PredId> PredNode<'s, P, M> {
 		}
 	}
 	
-	fn init_branches<'n>(&'n mut self, branches: Node<PredNodeBranch<'s, P, M>>)
+	fn init_branches<'n>(&'n mut self, capacity: usize)
 		-> NodeWriter<'n, PredNodeBranch<'s, P, M>>
 	where
 		P: PredParamVec
 	{
 		if let Self::Blank = self {
-			*self = Self::Branches(Box::new(branches));
+			*self = Self::Branches(Box::new(Node::with_capacity(capacity)));
 			if let Self::Branches(branches) = self {
 				branches.as_writer()
 			} else {
