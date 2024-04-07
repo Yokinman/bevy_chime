@@ -607,7 +607,7 @@ where
 			curr,
 			misc_state: self.misc_state,
 			misc_index: 0,
-			node: NodeWriter::new(node),
+			node,
 		}
 	}
 }
@@ -734,13 +734,15 @@ pub enum PredNode<'s, P: PredParam + 's, M> {
 }
 
 impl<'s, P: PredParam + 's, M: PredId> PredNode<'s, P, M> {
-	fn init_data(&mut self, c: usize) -> &mut Node<PredStateCase<PredParamId<P>, M>> {
+	fn init_data<'n>(&'n mut self, c: usize)
+		-> NodeWriter<'n, PredStateCase<PredParamId<P>, M>>
+	{
 		if let Self::Blank = self {
 			let mut node = Node::default();
 			node.reserve(c);
 			*self = Self::Data(node);
 			if let Self::Data(node) = self {
-				node
+				NodeWriter::new(node)
 			} else {
 				unreachable!()
 			}
