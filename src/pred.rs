@@ -154,10 +154,8 @@ where
 		let capacity = comb_iter.size_hint().1.expect("should always work")
 			+ inv_comb_iter.size_hint().1.expect("should always work");
 		
-		let mut node = Node::<(PredParamId<Self::Head>, PredNode<'s, Self::Tail, M>)>::default();
-		node.reserve(capacity);
-		
-		let mut branches = state.node.init_branches(node);
+		let mut branches = state.node
+			.init_branches(Node::with_capacity(capacity));
 		
 		let mut vec = Vec::with_capacity(capacity);
 		
@@ -734,13 +732,11 @@ pub enum PredNode<'s, P: PredParam + 's, M> {
 }
 
 impl<'s, P: PredParam + 's, M: PredId> PredNode<'s, P, M> {
-	fn init_data<'n>(&'n mut self, c: usize)
+	fn init_data<'n>(&'n mut self, capacity: usize)
 		-> NodeWriter<'n, PredStateCase<PredParamId<P>, M>>
 	{
 		if let Self::Blank = self {
-			let mut node = Node::default();
-			node.reserve(c);
-			*self = Self::Data(node);
+			*self = Self::Data(Node::with_capacity(capacity));
 			if let Self::Data(node) = self {
 				NodeWriter::new(node)
 			} else {
