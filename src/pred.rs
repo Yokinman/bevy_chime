@@ -132,7 +132,7 @@ pub trait PredParamVec: PredParam {
 
 impl<P: PredParam> PredParamVec for [P; 2]
 where
-	PredParamId<P>: Ord,
+	P::Id: Ord,
 {
 	type Head = P;
 	type Tail = P;
@@ -236,7 +236,7 @@ where
 	K: CombKind,
 {
 	type Item = (
-		&'p mut PredStateCase<PredParamId<P>, M>,
+		&'p mut PredStateCase<P::Id, M>,
 		<PredParamItem<'p, P> as PredItem>::Ref
 	);
 	fn next(&mut self) -> Option<Self::Item> {
@@ -433,7 +433,7 @@ impl<A: PredParam, B: PredParam> PredParam for (A, B) {
 
 impl<P: PredParam, const N: usize> PredParam for [P; N]
 where
-	PredParamId<P>: Ord,
+	P::Id: Ord,
 {
 	type Param = P::Param;
 	type Id = [P::Id; N];
@@ -725,7 +725,7 @@ impl<I: PredId, M: PredId> PredStateCase<I, M> {
 /// ...
 pub enum PredNode<'s, P: PredParam + 's, M> {
 	Blank,
-	Data(Node<PredStateCase<PredParamId<P>, M>>),
+	Data(Node<PredStateCase<P::Id, M>>),
 	Branches(Box<dyn PredNodeBranches<'s, P, M> + 's>),
 }
 
@@ -761,7 +761,7 @@ impl<'s, P: PredParam + 's, M: PredId> PredNode<'s, P, M> {
 }
 
 impl<'s, P: PredParam, M: PredId> IntoIterator for PredNode<'s, P, M> {
-	type Item = PredStateCase<PredParamId<P>, M>;
+	type Item = PredStateCase<P::Id, M>;
 	type IntoIter = PredNodeIter<P, M>;
 	fn into_iter(self) -> Self::IntoIter {
 		match self {
@@ -782,15 +782,15 @@ impl<'s, P: PredParam, M: PredId> IntoIterator for PredNode<'s, P, M> {
 /// ...
 pub enum PredNodeIter<P: PredParam, M> {
 	Blank,
-	Data(NodeIter<PredStateCase<PredParamId<P>, M>>),
+	Data(NodeIter<PredStateCase<P::Id, M>>),
 	Branches {
-		branch_iter: std::vec::IntoIter<std::vec::IntoIter<PredStateCase<PredParamId<P>, M>>>,
-		branch: std::vec::IntoIter<PredStateCase<PredParamId<P>, M>>,
+		branch_iter: std::vec::IntoIter<std::vec::IntoIter<PredStateCase<P::Id, M>>>,
+		branch: std::vec::IntoIter<PredStateCase<P::Id, M>>,
 	}
 }
 
 impl<P: PredParam, M: PredId> Iterator for PredNodeIter<P, M> {
-	type Item = PredStateCase<PredParamId<P>, M>;
+	type Item = PredStateCase<P::Id, M>;
 	fn next(&mut self) -> Option<Self::Item> {
 		match self {
 			Self::Blank => None,
@@ -829,7 +829,7 @@ pub trait PredNodeBranches<'s, P: PredParam, M: PredId> {
 		P: PredParamVec;
 	
 	fn into_branch_iter(&mut self)
-		-> std::vec::IntoIter<std::vec::IntoIter<PredStateCase<PredParamId<P>, M>>>;
+		-> std::vec::IntoIter<std::vec::IntoIter<PredStateCase<P::Id, M>>>;
 }
 
 impl<'s, P, M> PredNodeBranches<'s, P, M> for Node<PredNodeBranch<'s, P, M>>
@@ -845,7 +845,7 @@ where
 	}
 	
 	fn into_branch_iter(&mut self)
-		-> std::vec::IntoIter<std::vec::IntoIter<PredStateCase<PredParamId<P>, M>>>
+		-> std::vec::IntoIter<std::vec::IntoIter<PredStateCase<P::Id, M>>>
 	{
 		let node = std::mem::replace(self, Node::default());
 		node.into_iter()
@@ -1482,7 +1482,7 @@ pub struct PredCombinator<'p, P: PredParam, M: PredId, K: CombKind> {
 	curr: Option<<<P::Comb<'p> as PredComb>::WithKind<K> as IntoIterator>::Item>,
 	misc_state: Box<[M]>,
 	misc_index: usize,
-	node: NodeWriter<'p, PredStateCase<PredParamId<P>, M>>,
+	node: NodeWriter<'p, PredStateCase<P::Id, M>>,
 }
 
 impl<'p, P, M, K> Iterator for PredCombinator<'p, P, M, K>
@@ -1492,7 +1492,7 @@ where
 	K: CombKind,
 {
 	type Item = (
-		&'p mut PredStateCase<PredParamId<P>, M>,
+		&'p mut PredStateCase<P::Id, M>,
 		<PredParamItem<'p, P> as PredItem>::Ref
 	);
 	fn next(&mut self) -> Option<Self::Item> {
