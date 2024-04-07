@@ -7,7 +7,6 @@ mod pred;
 mod node;
 
 use pred::*;
-use node::*;
 
 pub use pred::{PredState, PredQuery};
 
