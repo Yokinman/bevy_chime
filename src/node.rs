@@ -18,6 +18,14 @@ impl<T> Default for Node<T> {
 }
 
 impl<T> Node<T> {
+	pub fn with_capacity(capacity: usize) -> Self {
+		Self {
+			data: Vec::with_capacity(capacity),
+			len: 0,
+			next: None,
+		}
+	}
+	
 	pub fn reserve(&mut self, additional: usize) {
 		self.data.reserve(additional);
 	}
