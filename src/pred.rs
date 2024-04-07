@@ -730,11 +730,9 @@ pub enum PredNode<'s, P: PredParam + 's, M> {
 }
 
 impl<'s, P: PredParam + 's, M: PredId> PredNode<'s, P, M> {
-	fn init_data<'n>(&'n mut self, capacity: usize)
-		-> NodeWriter<'n, PredStateCase<PredParamId<P>, M>>
-	{
+	fn init_data(&mut self, cap: usize) -> NodeWriter<PredStateCase<P::Id, M>> {
 		if let Self::Blank = self {
-			*self = Self::Data(Node::with_capacity(capacity));
+			*self = Self::Data(Node::with_capacity(cap));
 			if let Self::Data(node) = self {
 				NodeWriter::new(node)
 			} else {
@@ -745,13 +743,12 @@ impl<'s, P: PredParam + 's, M: PredId> PredNode<'s, P, M> {
 		}
 	}
 	
-	fn init_branches<'n>(&'n mut self, capacity: usize)
-		-> NodeWriter<'n, PredNodeBranch<'s, P, M>>
+	fn init_branches(&mut self, cap: usize) -> NodeWriter<PredNodeBranch<'s, P, M>>
 	where
 		P: PredParamVec
 	{
 		if let Self::Blank = self {
-			*self = Self::Branches(Box::new(Node::with_capacity(capacity)));
+			*self = Self::Branches(Box::new(Node::with_capacity(cap)));
 			if let Self::Branches(branches) = self {
 				branches.as_writer()
 			} else {
