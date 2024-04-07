@@ -847,7 +847,7 @@ where
 	fn into_branch_iter(&mut self)
 		-> std::vec::IntoIter<std::vec::IntoIter<PredStateCase<P::Id, M>>>
 	{
-		let node = std::mem::replace(self, Node::default());
+		let node = std::mem::take(self);
 		node.into_iter()
 			.map(|(id, node)| {
 				node.into_iter()
