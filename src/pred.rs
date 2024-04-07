@@ -124,7 +124,7 @@ pub trait PredParamVec: PredParam {
 		b: PredParamItem<'p, Self::Tail>,
 	) -> PredParamItem<'p, Self>;
 	
-	fn join_id<'p>(
+	fn join_id(
 		a: PredParamId<Self::Head>,
 		b: PredParamId<Self::Tail>,
 	) -> PredParamId<Self>;
@@ -184,7 +184,7 @@ where
 		[a, b]
 	}
 	
-	fn join_id<'p>(
+	fn join_id(
 		a: PredParamId<Self::Head>,
 		b: PredParamId<Self::Tail>,
 	) -> PredParamId<Self> {
