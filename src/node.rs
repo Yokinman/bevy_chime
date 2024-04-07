@@ -25,10 +25,6 @@ impl<T> Node<T> {
 			next: None,
 		}
 	}
-	
-	pub fn reserve(&mut self, additional: usize) {
-		self.data.reserve(additional);
-	}
 }
 
 impl<T> IntoIterator for Node<T> {
