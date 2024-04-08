@@ -121,30 +121,6 @@ pub trait PredParamVec: PredParam {
 	) -> Self::Id;
 }
 
-impl<P: PredParam> PredParamVec for [P; 2]
-where
-	P::Id: Ord,
-{
-	type Head = P;
-	type Tail = P;
-	
-	fn split<'p, 'w, 's>(
-		state: &'p SystemParamItem<'w, 's, Self::Param>
-	) -> (
-		&'p SystemParamItem<'w, 's, <Self::Head as PredParam>::Param>,
-		&'p SystemParamItem<'w, 's, <Self::Tail as PredParam>::Param>,
-	) {
-		(state, state)
-	}
-	
-	fn join_id(
-		a: <Self::Head as PredParam>::Id,
-		b: <Self::Tail as PredParam>::Id,
-	) -> Self::Id {
-		[a, b]
-	}
-}
-
 impl<A: PredParam, B: PredParam> PredParamVec for (A, B) {
 	type Head = A;
 	type Tail = B;
@@ -165,6 +141,41 @@ impl<A: PredParam, B: PredParam> PredParamVec for (A, B) {
 		(a, b)
 	}
 }
+
+macro_rules! impl_pred_param_vec_for_array {
+	($size:literal) => {
+		impl<P: PredParam> PredParamVec for [P; $size]
+		where
+			P::Id: Ord,
+		{
+			type Head = P;
+			type Tail = [P; { $size - 1 }];
+			
+			fn split<'p, 'w, 's>(
+				state: &'p SystemParamItem<'w, 's, Self::Param>
+			) -> (
+				&'p SystemParamItem<'w, 's, <Self::Head as PredParam>::Param>,
+				&'p SystemParamItem<'w, 's, <Self::Tail as PredParam>::Param>,
+			) {
+				(state, state)
+			}
+			
+			fn join_id(
+				a: <Self::Head as PredParam>::Id,
+				b: <Self::Tail as PredParam>::Id,
+			) -> Self::Id {
+				let mut array = [a; $size];
+				array[1..].copy_from_slice(&b);
+				array
+			}
+		}
+	};
+	($($size:literal),+) => {
+		$(impl_pred_param_vec_for_array!($size);)+
+	};
+}
+
+impl_pred_param_vec_for_array!(2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12);
 
 /// Iterator of [`PredSubState::iter_step`].
 pub struct PredSubStateSplitIter<'p, 'w, 's, P, M, K>
