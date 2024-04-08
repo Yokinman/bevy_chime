@@ -119,11 +119,6 @@ pub trait PredParamVec: PredParam {
 	where
 		Self: Sized;
 	
-	fn join_item<'p>(
-		a: PredParamItem<'p, Self::Head>,
-		b: PredParamItem<'p, Self::Tail>,
-	) -> PredParamItem<'p, Self>;
-	
 	fn join_id(
 		a: <Self::Head as PredParam>::Id,
 		b: <Self::Tail as PredParam>::Id,
@@ -156,13 +151,6 @@ where
 			iter,
 			inv_iter,
 		}
-	}
-	
-	fn join_item<'p>(
-		a: PredParamItem<'p, Self::Head>,
-		b: PredParamItem<'p, Self::Tail>,
-	) -> PredParamItem<'p, Self> {
-		[a, b]
 	}
 	
 	fn join_id(
