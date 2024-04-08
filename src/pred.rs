@@ -161,6 +161,40 @@ where
 	}
 }
 
+impl<A: PredParam, B: PredParam> PredParamVec for (A, B) {
+	type Head = A;
+	type Tail = B;
+	
+	type Split<'p, 'w: 'p, 's: 'p, M: PredId, K: CombKind>
+		= PredSubStateSplitIter<'p, 'w, 's, Self, M, K> where Self: 's;
+	
+	fn split<'p, 'w: 'p, 's: 'p, M: PredId, K: CombKind>(
+		state: PredSubState<'p, 'w, 's, Self, M, K>
+	) -> Self::Split<'p, 'w, 's, M, K>
+	where
+		Self: Sized
+	{
+		let (head_state, tail_state) = &state.state;
+		let iter = Self::Head::comb::<K>(head_state).into_iter();
+		let inv_iter = Self::Head::comb::<K::Inv>(head_state).into_iter();
+		let capacity = 4 * (iter.size_hint().0 + inv_iter.size_hint().0).max(1);
+		PredSubStateSplitIter {
+			state: tail_state,
+			misc_state: state.misc_state,
+			branches: state.node.init_branches(capacity),
+			iter,
+			inv_iter,
+		}
+	}
+	
+	fn join_id(
+		a: <Self::Head as PredParam>::Id,
+		b: <Self::Tail as PredParam>::Id,
+	) -> Self::Id {
+		(a, b)
+	}
+}
+
 /// Iterator of [`PredParamVec::split`].
 pub struct PredSubStateSplitIter<'p, 'w, 's, P, M, K>
 where
