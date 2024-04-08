@@ -103,7 +103,7 @@ impl CombKind for CombStatic {
 	const HAS_SAME: bool = true;
 }
 
-/// ...
+/// Linear collections of [`PredParam`] types.
 pub trait PredParamVec: PredParam {
 	type Head: PredParam;
 	type Tail: PredParam;
@@ -192,7 +192,7 @@ where
 	}
 }
 
-/// ...
+/// Nested state of each [`PredParamVec::Split`].
 pub enum PredSubStateSplit<'p, 'w, 's, P, M, K>
 where
 	'w: 'p,
@@ -223,7 +223,7 @@ where
 	}
 }
 
-/// ...
+/// Iterator of [`PredSubStateSplit`].
 pub enum PredCombinatorSplit<'p, P: PredParam, M: PredId, K: CombKind> {
 	Main(PredCombinator<'p, P, M, K::Pal>),
 	Pal(PredCombinator<'p, P, M, <<K::Inv as CombKind>::Pal as CombKind>::Inv>),
@@ -247,7 +247,7 @@ where
 	}
 }
 
-/// ...
+/// Item of a [`PredComb`]'s iterator.
 pub trait CombinatorCase: Copy + Clone {
 	type Item: PredItem;
 	type Id: PredId;
@@ -373,13 +373,13 @@ pub trait PredParam {
 	/// The equivalent [`bevy_ecs::system::SystemParam`].
 	type Param: ReadOnlySystemParam + 'static;
 	
-	/// ...
+	/// Unique identifier for each of [`Self::Param`]'s items.
 	type Id: PredId;
 	
-	/// Creates iterators over `Param`'s items with their IDs and updated state.
+	/// Creates combinator iterators over [`Self::Param`]'s items.
 	type Comb<'w>: PredComb<Id=Self::Id>;
 	
-	/// Produces `Self::Comb`.
+	/// Produces [`Self::Comb`].
 	fn comb<'w, K: CombKind>(param: &'w SystemParamItem<Self::Param>)
 		-> <Self::Comb<'w> as PredComb>::WithKind<K>;
 }
@@ -722,7 +722,8 @@ impl<I: PredId, M: PredId> PredStateCase<I, M> {
 	}
 }
 
-/// ...
+/// A one-way node that either stores an arbitrary amount of data or branches
+/// into sub-nodes.
 pub enum PredNode<'s, P: PredParam + 's, M> {
 	Blank,
 	Data(Node<PredStateCase<P::Id, M>>),
@@ -779,7 +780,7 @@ impl<'s, P: PredParam, M: PredId> IntoIterator for PredNode<'s, P, M> {
 	}
 }
 
-/// ...
+/// Iterator of [`PredNode`]'s items.
 pub enum PredNodeIter<P: PredParam, M> {
 	Blank,
 	Data(NodeIter<PredStateCase<P::Id, M>>),
@@ -816,13 +817,14 @@ impl<P: PredParam, M: PredId> Iterator for PredNodeIter<P, M> {
 	}
 }
 
-/// ...
+/// Individual branch of a [`PredNodeBranches`] type.
 type PredNodeBranch<'s, P, M> = (
 	PredParamId<<P as PredParamVec>::Head>,
 	PredNode<'s, <P as PredParamVec>::Tail, M>,
 );
 
-/// ...
+/// Used to define a trait object for dynamic branching in [`PredNode`], as not
+/// all [`PredParam`] types implement [`PredParamVec`].
 pub trait PredNodeBranches<'s, P: PredParam, M: PredId> {
 	fn as_writer<'n>(&'n mut self) -> NodeWriter<'n, PredNodeBranch<'s, P, M>>
 	where
