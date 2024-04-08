@@ -125,9 +125,9 @@ pub trait PredParamVec: PredParam {
 	) -> PredParamItem<'p, Self>;
 	
 	fn join_id(
-		a: PredParamId<Self::Head>,
-		b: PredParamId<Self::Tail>,
-	) -> PredParamId<Self>;
+		a: <Self::Head as PredParam>::Id,
+		b: <Self::Tail as PredParam>::Id,
+	) -> Self::Id;
 }
 
 impl<P: PredParam> PredParamVec for [P; 2]
@@ -185,9 +185,9 @@ where
 	}
 	
 	fn join_id(
-		a: PredParamId<Self::Head>,
-		b: PredParamId<Self::Tail>,
-	) -> PredParamId<Self> {
+		a: <Self::Head as PredParam>::Id,
+		b: <Self::Tail as PredParam>::Id,
+	) -> Self::Id {
 		[a, b]
 	}
 }
@@ -352,7 +352,7 @@ impl<K, C, const N: usize> PredComb for PredArrayComb<K, C, N>
 where
 	K: CombKind,
 	C: PredComb,
-	<C::Case as CombinatorCase>::Id: Ord,
+	C::Id: Ord,
 {
 	type WithKind<Kind: CombKind> = PredArrayComb<Kind, C, N>;
 	type Id = [C::Id; N];
@@ -364,9 +364,6 @@ pub type PredParamItem<'w, P> = <<<P
 	as PredParam>::Comb<'w>
 	as PredComb>::Case
 	as CombinatorCase>::Item;
-
-/// Shortcut for accessing `PredParam::Id`.
-pub type PredParamId<P> = <P as PredParam>::Id;
 
 /// A set of [`PredItem`] values used to predict & schedule events.
 pub trait PredParam {
@@ -819,7 +816,7 @@ impl<P: PredParam, M: PredId> Iterator for PredNodeIter<P, M> {
 
 /// Individual branch of a [`PredNodeBranches`] type.
 type PredNodeBranch<'s, P, M> = (
-	PredParamId<<P as PredParamVec>::Head>,
+	<<P as PredParamVec>::Head as PredParam>::Id,
 	PredNode<'s, <P as PredParamVec>::Tail, M>,
 );
 
@@ -1297,7 +1294,7 @@ impl<K, C, const N: usize> PredArrayComb<K, C, N>
 where
 	K: CombKind,
 	C: PredComb,
-	<C::Case as CombinatorCase>::Id: Ord,
+	C::Id: Ord,
 {
 	fn new<'p, P: PredParam<Comb<'p> = C>>(param: &'p SystemParamItem<P::Param>) -> Self {
 		let mut vec = P::comb::<K::Pal>(param).into_iter()
@@ -1331,7 +1328,7 @@ impl<K, C, const N: usize> IntoIterator for PredArrayComb<K, C, N>
 where
 	K: CombKind,
 	C: PredComb,
-	<C::Case as CombinatorCase>::Id: Ord,
+	C::Id: Ord,
 {
 	type Item = <Self::IntoIter as Iterator>::Item;
 	type IntoIter = PredArrayCombIter<K, C, N>;
@@ -1375,7 +1372,7 @@ impl<K, C, const N: usize> PredArrayCombIter<K, C, N>
 where
 	K: CombKind,
 	C: PredComb,
-	<C::Case as CombinatorCase>::Id: Ord,
+	C::Id: Ord,
 {
 	fn step_index(&mut self, i: usize) -> bool {
 		let index = self.index[i] + 1;
@@ -1422,7 +1419,7 @@ impl<K, C, const N: usize> Iterator for PredArrayCombIter<K, C, N>
 where
 	K: CombKind,
 	C: PredComb,
-	<C::Case as CombinatorCase>::Id: Ord,
+	C::Id: Ord,
 {
 	type Item = <PredArrayComb<K, C, N> as PredComb>::Case;
 	fn next(&mut self) -> Option<Self::Item> {
