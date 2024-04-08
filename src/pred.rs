@@ -108,16 +108,12 @@ pub trait PredParamVec: PredParam {
 	type Head: PredParam;
 	type Tail: PredParam;
 	
-	type Split<'p, 'w: 'p, 's: 'p, M: PredId, K: CombKind>: Iterator<Item = (
-		PredSubStateSplit<'p, 'w, 's, Self::Tail, M, K>,
-		<PredParamItem<'p, Self::Head> as PredItem>::Ref,
-	)> where Self: 's;
-	
-	fn split<'p, 'w: 'p, 's: 'p, M: PredId, K: CombKind>(
-		state: PredSubState<'p, 'w, 's, Self, M, K>
-	) -> Self::Split<'p, 'w, 's, M, K>
-	where
-		Self: Sized;
+	fn split<'p, 'w, 's>(
+		state: &'p SystemParamItem<'w, 's, Self::Param>
+	) -> (
+		&'p SystemParamItem<'w, 's, <Self::Head as PredParam>::Param>,
+		&'p SystemParamItem<'w, 's, <Self::Tail as PredParam>::Param>,
+	);
 	
 	fn join_id(
 		a: <Self::Head as PredParam>::Id,
@@ -132,25 +128,13 @@ where
 	type Head = P;
 	type Tail = P;
 	
-	type Split<'p, 'w: 'p, 's: 'p, M: PredId, K: CombKind>
-		= PredSubStateSplitIter<'p, 'w, 's, Self, M, K> where Self: 's;
-	
-	fn split<'p, 'w: 'p, 's: 'p, M: PredId, K: CombKind>(
-		state: PredSubState<'p, 'w, 's, Self, M, K>
-	) -> Self::Split<'p, 'w, 's, M, K>
-	where
-		Self: Sized
-	{
-		let iter = Self::Head::comb::<K>(state.state).into_iter();
-		let inv_iter = Self::Head::comb::<K::Inv>(state.state).into_iter();
-		let capacity = 4 * (iter.size_hint().0 + inv_iter.size_hint().0).max(1);
-		PredSubStateSplitIter {
-			state: state.state,
-			misc_state: state.misc_state,
-			branches: state.node.init_branches(capacity),
-			iter,
-			inv_iter,
-		}
+	fn split<'p, 'w, 's>(
+		state: &'p SystemParamItem<'w, 's, Self::Param>
+	) -> (
+		&'p SystemParamItem<'w, 's, <Self::Head as PredParam>::Param>,
+		&'p SystemParamItem<'w, 's, <Self::Tail as PredParam>::Param>,
+	) {
+		(state, state)
 	}
 	
 	fn join_id(
@@ -165,26 +149,13 @@ impl<A: PredParam, B: PredParam> PredParamVec for (A, B) {
 	type Head = A;
 	type Tail = B;
 	
-	type Split<'p, 'w: 'p, 's: 'p, M: PredId, K: CombKind>
-		= PredSubStateSplitIter<'p, 'w, 's, Self, M, K> where Self: 's;
-	
-	fn split<'p, 'w: 'p, 's: 'p, M: PredId, K: CombKind>(
-		state: PredSubState<'p, 'w, 's, Self, M, K>
-	) -> Self::Split<'p, 'w, 's, M, K>
-	where
-		Self: Sized
-	{
-		let (head_state, tail_state) = &state.state;
-		let iter = Self::Head::comb::<K>(head_state).into_iter();
-		let inv_iter = Self::Head::comb::<K::Inv>(head_state).into_iter();
-		let capacity = 4 * (iter.size_hint().0 + inv_iter.size_hint().0).max(1);
-		PredSubStateSplitIter {
-			state: tail_state,
-			misc_state: state.misc_state,
-			branches: state.node.init_branches(capacity),
-			iter,
-			inv_iter,
-		}
+	fn split<'p, 'w, 's>(
+		(a, b): &'p SystemParamItem<'w, 's, Self::Param>
+	) -> (
+		&'p SystemParamItem<'w, 's, <Self::Head as PredParam>::Param>,
+		&'p SystemParamItem<'w, 's, <Self::Tail as PredParam>::Param>,
+	) {
+		(a, b)
 	}
 	
 	fn join_id(
@@ -195,7 +166,7 @@ impl<A: PredParam, B: PredParam> PredParamVec for (A, B) {
 	}
 }
 
-/// Iterator of [`PredParamVec::split`].
+/// Iterator of [`PredSubState::iter_step`].
 pub struct PredSubStateSplitIter<'p, 'w, 's, P, M, K>
 where
 	'w: 'p,
@@ -244,7 +215,7 @@ where
 	}
 }
 
-/// Nested state of each [`PredParamVec::Split`].
+/// Nested state of each [`PredSubState::iter_step`].
 pub enum PredSubStateSplit<'p, 'w, 's, P, M, K>
 where
 	'w: 'p,
@@ -628,8 +599,24 @@ where
 	M: PredId,
 	K: CombKind,
 {
-	pub fn iter_step(self) -> P::Split<'p, 'w, 's, M, K> {
-		P::split(self)
+	pub fn iter_step(self) -> PredSubStateSplitIter<'p, 'w, 's, P, M, K> {
+		let PredSubState {
+			state,
+			misc_state,
+			node,
+			..
+		} = self;
+		let (head_state, tail_state) = P::split(state);
+		let iter = P::Head::comb::<K>(head_state).into_iter();
+		let inv_iter = P::Head::comb::<K::Inv>(head_state).into_iter();
+		let capacity = 4 * (iter.size_hint().0 + inv_iter.size_hint().0).max(1);
+		PredSubStateSplitIter {
+			state: tail_state,
+			misc_state,
+			branches: node.init_branches(capacity),
+			iter,
+			inv_iter,
+		}
 	}
 }
 
@@ -693,7 +680,7 @@ where
 	P: PredParamVec,
 	M: PredId,
 {
-	pub fn iter_step(self) -> P::Split<'p, 'w, 's, M, CombUpdated> {
+	pub fn iter_step(self) -> PredSubStateSplitIter<'p, 'w, 's, P, M, CombUpdated> {
 		self.inner.iter_step()
 	}
 }
