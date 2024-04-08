@@ -248,7 +248,7 @@ where
 }
 
 /// Item of a [`PredComb`]'s iterator.
-pub trait CombinatorCase: Copy + Clone {
+pub trait PredCombinatorCase: Copy + Clone {
 	type Item: PredItem;
 	type Id: PredId;
 	fn item(&self) -> <Self::Item as PredItem>::Ref;
@@ -258,14 +258,14 @@ pub trait CombinatorCase: Copy + Clone {
 	}
 }
 
-impl CombinatorCase for () {
+impl PredCombinatorCase for () {
 	type Item = ();
 	type Id = ();
 	fn item(&self) -> <Self::Item as PredItem>::Ref {}
 	fn id(&self) -> Self::Id {}
 }
 
-impl<P: PredItem, I: PredId> CombinatorCase for PredCombCase<P, I> {
+impl<P: PredItem, I: PredId> PredCombinatorCase for PredCombCase<P, I> {
 	type Item = P;
 	type Id = I;
 	fn item(&self) -> <Self::Item as PredItem>::Ref {
@@ -276,7 +276,7 @@ impl<P: PredItem, I: PredId> CombinatorCase for PredCombCase<P, I> {
 	}
 }
 
-impl<C: CombinatorCase, const N: usize> CombinatorCase for [C; N] {
+impl<C: PredCombinatorCase, const N: usize> PredCombinatorCase for [C; N] {
 	type Item = [C::Item; N];
 	type Id = [C::Id; N];
 	fn item(&self) -> <Self::Item as PredItem>::Ref {
@@ -287,10 +287,10 @@ impl<C: CombinatorCase, const N: usize> CombinatorCase for [C; N] {
 	}
 }
 
-impl<A, B> CombinatorCase for (A, B)
+impl<A, B> PredCombinatorCase for (A, B)
 where
-	A: CombinatorCase,
-	B: CombinatorCase,
+	A: PredCombinatorCase,
+	B: PredCombinatorCase,
 {
 	type Item = (A::Item, B::Item);
 	type Id = (A::Id, B::Id);
@@ -317,7 +317,7 @@ impl<P: PredItem, I: PredId> Clone for PredCombCase<P, I> {
 pub trait PredComb: Clone {
 	type WithKind<Kind: CombKind>: PredComb + IntoIterator<Item=Self::Case>;
 	type Id: PredId;
-	type Case: CombinatorCase<Id=Self::Id>;
+	type Case: PredCombinatorCase<Id=Self::Id>;
 }
 
 impl<T: PredItem> PredComb for Option<PredCombCase<T, ()>> {
@@ -363,7 +363,7 @@ where
 pub type PredParamItem<'w, P> = <<<P
 	as PredParam>::Comb<'w>
 	as PredComb>::Case
-	as CombinatorCase>::Item;
+	as PredCombinatorCase>::Item;
 
 /// A set of [`PredItem`] values used to predict & schedule events.
 pub trait PredParam {
