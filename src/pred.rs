@@ -359,7 +359,7 @@ where
 	type Case = [C::Case; N];
 }
 
-/// Shortcut for accessing `PredParam::Comb::Item`.
+/// Shortcut for accessing `PredParam::Comb::Case::Item`.
 pub type PredParamItem<'w, P> = <<<P
 	as PredParam>::Comb<'w>
 	as PredComb>::Case
