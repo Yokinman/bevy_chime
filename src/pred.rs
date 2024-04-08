@@ -45,7 +45,7 @@ pub trait CombKind {
 	const HAS_DIFF: bool;
 	const HAS_SAME: bool;
 	
-	fn wrap<T, I>((item, id): (T, I)) -> Option<CombCase<T, I>>
+	fn wrap<T, I>((item, id): (T, I)) -> Option<PredCombCase<T, I>>
 	where
 		T: PredItem,
 		I: PredId,
@@ -53,10 +53,10 @@ pub trait CombKind {
 		if Self::HAS_DIFF || Self::HAS_SAME {
 			if T::is_updated(&item) {
 				if Self::HAS_DIFF {
-					return Some(CombCase(T::into_ref(item), id))
+					return Some(PredCombCase(T::into_ref(item), id))
 				}
 			} else if Self::HAS_SAME {
-				return Some(CombCase(T::into_ref(item), id))
+				return Some(PredCombCase(T::into_ref(item), id))
 			}
 		}
 		None
@@ -265,7 +265,7 @@ impl CombinatorCase for () {
 	fn id(&self) -> Self::Id {}
 }
 
-impl<P: PredItem, I: PredId> CombinatorCase for CombCase<P, I> {
+impl<P: PredItem, I: PredId> CombinatorCase for PredCombCase<P, I> {
 	type Item = P;
 	type Id = I;
 	fn item(&self) -> <Self::Item as PredItem>::Ref {
@@ -303,11 +303,11 @@ where
 }
 
 /// An item & ID pair of a `PredParam`, with their updated state.
-pub struct CombCase<P: PredItem, I: PredId>(P::Ref, I);
+pub struct PredCombCase<P: PredItem, I: PredId>(P::Ref, I);
 
-impl<P: PredItem, I: PredId> Copy for CombCase<P, I> {}
+impl<P: PredItem, I: PredId> Copy for PredCombCase<P, I> {}
 
-impl<P: PredItem, I: PredId> Clone for CombCase<P, I> {
+impl<P: PredItem, I: PredId> Clone for PredCombCase<P, I> {
 	fn clone(&self) -> Self {
 		*self
 	}
@@ -320,10 +320,10 @@ pub trait PredComb: Clone {
 	type Case: CombinatorCase<Id=Self::Id>;
 }
 
-impl<T: PredItem> PredComb for Option<CombCase<T, ()>> {
+impl<T: PredItem> PredComb for Option<PredCombCase<T, ()>> {
 	type WithKind<Kind: CombKind> = Self;
 	type Id = ();
-	type Case = CombCase<T, ()>;
+	type Case = PredCombCase<T, ()>;
 }
 
 impl<'w, K, T, F> PredComb for QueryComb<'w, K, T, F>
@@ -334,7 +334,7 @@ where
 {
 	type WithKind<Kind: CombKind> = QueryComb<'w, Kind, T, F>;
 	type Id = Entity;
-	type Case = CombCase<Ref<'w, T>, Entity>;
+	type Case = PredCombCase<Ref<'w, T>, Entity>;
 }
 
 impl<'w, K, A, B> PredComb for PredPairComb<'w, K, A, B>
@@ -398,7 +398,7 @@ impl<T: Component, F: ArchetypeFilter + 'static> PredParam for Query<'_, '_, &T,
 impl<R: Resource> PredParam for Res<'_, R> {
 	type Param = Res<'static, R>;
 	type Id = ();
-	type Comb<'w> = Option<CombCase<Res<'w, R>, ()>>;
+	type Comb<'w> = Option<PredCombCase<Res<'w, R>, ()>>;
 	fn comb<'w, K: CombKind>(param: &'w SystemParamItem<Self::Param>)
 		-> <Self::Comb<'w> as PredComb>::WithKind<K>
 	{
@@ -409,7 +409,7 @@ impl<R: Resource> PredParam for Res<'_, R> {
 impl PredParam for () {
 	type Param = ();
 	type Id = ();
-	type Comb<'w> = Option<CombCase<(), ()>>;
+	type Comb<'w> = Option<PredCombCase<(), ()>>;
 	fn comb<'w, K: CombKind>(param: &'w SystemParamItem<Self::Param>)
 		-> <Self::Comb<'w> as PredComb>::WithKind<K>
 	{
@@ -1053,7 +1053,7 @@ where
 	T: Component,
 	F: ArchetypeFilter + 'static,
 {
-	type Item = CombCase<Ref<'w, T>, Entity>;
+	type Item = PredCombCase<Ref<'w, T>, Entity>;
 	fn next(&mut self) -> Option<Self::Item> {
 		for next in self.iter.by_ref() {
 			let wrap = K::wrap(next);
