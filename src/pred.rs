@@ -137,10 +137,8 @@ where
 	type Head = P;
 	type Tail = P;
 	
-	type Split<'p, 'w: 'p, 's: 'p, M: PredId, K: CombKind> = std::vec::IntoIter<(
-		PredSubStateSplit<'p, 'w, 's, Self::Tail, M, K>,
-		<PredParamItem<'p, Self::Head> as PredItem>::Ref,
-	)> where Self: 's;
+	type Split<'p, 'w: 'p, 's: 'p, M: PredId, K: CombKind>
+		= PredSubStateSplitIter<'p, 'w, 's, Self, M, K> where Self: 's;
 	
 	fn split<'p, 'w: 'p, 's: 'p, M: PredId, K: CombKind>(
 		state: PredSubState<'p, 'w, 's, Self, M, K>
@@ -148,33 +146,16 @@ where
 	where
 		Self: Sized
 	{
-		let comb_iter = Self::Head::comb::<K>(state.state).into_iter();
-		let inv_comb_iter = Self::Head::comb::<K::Inv>(state.state).into_iter();
-		
-		let capacity = comb_iter.size_hint().1.expect("should always work")
-			+ inv_comb_iter.size_hint().1.expect("should always work");
-		
-		let mut branches = state.node.init_branches(capacity);
-		let mut vec = Vec::with_capacity(capacity);
-		
-		for case in comb_iter {
-			let sub_state = PredSubStateSplit::Main(PredSubState::new(
-				state.state,
-				state.misc_state.clone(),
-				&mut branches.write((case.id(), PredNode::Blank)).1,
-			));
-			vec.push((sub_state, case.item()));
+		let iter = Self::Head::comb::<K>(state.state).into_iter();
+		let inv_iter = Self::Head::comb::<K::Inv>(state.state).into_iter();
+		let capacity = 4 * (iter.size_hint().0 + inv_iter.size_hint().0).max(1);
+		PredSubStateSplitIter {
+			state: state.state,
+			misc_state: state.misc_state,
+			branches: state.node.init_branches(capacity),
+			iter,
+			inv_iter,
 		}
-		for case in inv_comb_iter {
-			let sub_state = PredSubStateSplit::Pal(PredSubState::new(
-				state.state,
-				state.misc_state.clone(),
-				&mut branches.write((case.id(), PredNode::Blank)).1,
-			));
-			vec.push((sub_state, case.item()));
-		}
-		
-		vec.into_iter()
 	}
 	
 	fn join_item<'p>(
@@ -189,6 +170,55 @@ where
 		b: <Self::Tail as PredParam>::Id,
 	) -> Self::Id {
 		[a, b]
+	}
+}
+
+/// Iterator of [`PredParamVec::split`].
+pub struct PredSubStateSplitIter<'p, 'w, 's, P, M, K>
+where
+	'w: 'p,
+	's: 'p,
+	P: PredParamVec,
+	M: PredId,
+	K: CombKind,
+{
+	state: &'p SystemParamItem<'w, 's, <P::Tail as PredParam>::Param>,
+	misc_state: Box<[M]>,
+	branches: NodeWriter<'p, PredNodeBranch<'s, P, M>>,
+	iter: <<<P::Head as PredParam>::Comb<'p> as PredComb>::WithKind<K> as IntoIterator>::IntoIter,
+	inv_iter: <<<P::Head as PredParam>::Comb<'p> as PredComb>::WithKind<K::Inv> as IntoIterator>::IntoIter,
+}
+
+impl<'p, 'w, 's, P, M, K> Iterator for PredSubStateSplitIter<'p, 'w, 's, P, M, K>
+where
+	'w: 'p,
+	's: 'p,
+	P: PredParamVec,
+	M: PredId,
+	K: CombKind,
+{
+	type Item = (
+		PredSubStateSplit<'p, 'w, 's, P::Tail, M, K>,
+		<PredParamItem<'p, P::Head> as PredItem>::Ref,
+	);
+	fn next(&mut self) -> Option<Self::Item> {
+		if let Some(case) = self.iter.next() {
+			let sub_state = PredSubStateSplit::Main(PredSubState::new(
+				self.state,
+				self.misc_state.clone(),
+				&mut self.branches.write((case.id(), PredNode::Blank)).1,
+			));
+			return Some((sub_state, case.item()))
+		}
+		if let Some(case) = self.inv_iter.next() {
+			let sub_state = PredSubStateSplit::Pal(PredSubState::new(
+				self.state,
+				self.misc_state.clone(),
+				&mut self.branches.write((case.id(), PredNode::Blank)).1,
+			));
+			return Some((sub_state, case.item()))
+		}
+		None
 	}
 }
 
