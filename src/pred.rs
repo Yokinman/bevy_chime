@@ -354,8 +354,8 @@ impl<P: PredItem, I: PredId> Clone for PredCombCase<P, I> {
 }
 
 /// Combinator type produced by `PredParam::comb`.
-pub trait PredComb<K: CombKind = CombAll>: Clone {
-	type WithKind<Kind: CombKind>: PredComb<Kind> + IntoIterator<Item=Self::Case>;
+pub trait PredComb<K: CombKind = CombAll>: Clone + IntoIterator<Item=Self::Case> {
+	type WithKind<Kind: CombKind>: PredComb<Kind, Case=Self::Case>;
 	type Id: PredId;
 	type Case: PredCombinatorCase<Id=Self::Id>;
 	
