@@ -374,7 +374,7 @@ impl<K: CombKind, T: PredItem> PredComb<K> for Option<PredCombCase<T, ()>> {
 	}
 }
 
-impl<'w, K, T, F> PredComb<K> for QueryComb<'w, K, T, F>
+impl<'w, T, F, K> PredComb<K> for QueryComb<'w, T, F, K>
 where
 	K: CombKind,
 	T: Component,
@@ -383,7 +383,7 @@ where
 	type Id = Entity;
 	type Case = PredCombCase<Ref<'w, T>, Entity>;
 	
-	type IntoKind<Kind: CombKind> = QueryComb<'w, Kind, T, F>;
+	type IntoKind<Kind: CombKind> = QueryComb<'w, T, F, Kind>;
 	
 	fn into_kind<Kind: CombKind>(self) -> Self::IntoKind<Kind> {
 		QueryComb {
@@ -458,7 +458,7 @@ pub trait PredParam {
 impl<T: Component, F: ArchetypeFilter + 'static> PredParam for Query<'_, '_, &T, F> {
 	type Param = Query<'static, 'static, (Ref<'static, T>, Entity), F>;
 	type Id = Entity;
-	type Comb<'w> = QueryComb<'w, CombAll, T, F>;
+	type Comb<'w> = QueryComb<'w, T, F>;
 	fn comb<'w>(param: &'w SystemParamItem<Self::Param>) -> Self::Comb<'w> {
 		QueryComb {
 			inner: param,
@@ -1065,7 +1065,7 @@ unsafe impl<D: PredQueryData, M: PredId> SystemParam for PredQuery<'_, '_, D, M>
 }
 
 /// Combinator for `PredParam` `Query` implementation.
-pub struct QueryComb<'w, K, T, F>
+pub struct QueryComb<'w, T, F, K = CombAll>
 where
 	T: Component,
 	F: ArchetypeFilter + 'static,
@@ -1074,13 +1074,13 @@ where
 	kind: PhantomData<K>,
 }
 
-impl<K, T, F> Copy for QueryComb<'_, K, T, F>
+impl<T, F, K> Copy for QueryComb<'_, T, F, K>
 where
 	T: Component,
 	F: ArchetypeFilter + 'static,
 {}
 
-impl<K, T, F> Clone for QueryComb<'_, K, T, F>
+impl<T, F, K> Clone for QueryComb<'_, T, F, K>
 where
 	T: Component,
 	F: ArchetypeFilter + 'static,
@@ -1090,14 +1090,14 @@ where
 	}
 }
 
-impl<'w, K, T, F> IntoIterator for QueryComb<'w, K, T, F>
+impl<'w, T, F, K> IntoIterator for QueryComb<'w, T, F, K>
 where
 	K: CombKind,
 	T: Component,
 	F: ArchetypeFilter + 'static,
 {
 	type Item = <Self::IntoIter as Iterator>::Item;
-	type IntoIter = QueryCombIter<'w, K, T, F>;
+	type IntoIter = QueryCombIter<'w, T, F, K>;
 	fn into_iter(self) -> Self::IntoIter {
 		QueryCombIter {
 			iter: self.inner.iter_inner(),
@@ -1107,7 +1107,7 @@ where
 }
 
 /// `Iterator` of `QueryComb`'s `IntoIterator` implementation.
-pub struct QueryCombIter<'w, K, T, F>
+pub struct QueryCombIter<'w, T, F, K>
 where
 	T: Component,
 	F: ArchetypeFilter + 'static,
@@ -1116,7 +1116,7 @@ where
 	kind: PhantomData<K>,
 }
 
-impl<'w, K, T, F> Iterator for QueryCombIter<'w, K, T, F>
+impl<'w, T, F, K> Iterator for QueryCombIter<'w, T, F, K>
 where
 	K: CombKind,
 	T: Component,
