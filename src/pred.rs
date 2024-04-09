@@ -1146,8 +1146,7 @@ where
 {
 	a_comb: A,
 	b_comb: B,
-	a_inv_comb: A::IntoKind<K::Inv>,
-	b_inv_comb: B::IntoKind<<<K::Inv as CombKind>::Pal as CombKind>::Inv>,
+	kind: PhantomData<K>,
 }
 
 impl<K, A, B> Clone for PredPairComb<K, A, B>
@@ -1160,8 +1159,7 @@ where
 		Self {
 			a_comb: self.a_comb.clone(),
 			b_comb: self.b_comb.clone(),
-			a_inv_comb: self.a_inv_comb.clone(),
-			b_inv_comb: self.b_inv_comb.clone(),
+			kind: PhantomData,
 		}
 	}
 }
@@ -1172,14 +1170,11 @@ where
 	A: PredComb<K>,
 	B: PredComb<K::Pal>,
 {
-	fn new(a_comb: A, b_comb: B,) -> Self {
-		let a_inv_comb = a_comb.clone().into_kind();
-		let b_inv_comb = b_comb.clone().into_kind();
+	fn new(a_comb: A, b_comb: B) -> Self {
 		Self {
 			a_comb,
 			b_comb,
-			a_inv_comb,
-			b_inv_comb,
+			kind: PhantomData
 		}
 	}
 }
@@ -1193,12 +1188,9 @@ where
 	type Item = <Self::IntoIter as Iterator>::Item;
 	type IntoIter = PredPairCombIter<K, A, B>;
 	fn into_iter(self) -> Self::IntoIter {
-		let Self {
-			a_comb,
-			b_comb,
-			a_inv_comb,
-			b_inv_comb,
-		} = self;
+		let Self { a_comb, b_comb, .. } = self;
+		let a_inv_comb = a_comb.clone().into_kind();
+		let b_inv_comb = b_comb.clone().into_kind();
 		PredPairCombIter::primary_next(
 			a_comb.into_iter(),
 			b_comb,
