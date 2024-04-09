@@ -354,15 +354,15 @@ impl<P: PredItem, I: PredId> Clone for PredCombCase<P, I> {
 }
 
 /// Combinator type produced by `PredParam::comb`.
-pub trait PredComb: Clone {
-	type WithKind<Kind: CombKind>: PredComb + IntoIterator<Item=Self::Case>;
+pub trait PredComb<K: CombKind = CombAll>: Clone {
+	type WithKind<Kind: CombKind>: PredComb<Kind> + IntoIterator<Item=Self::Case>;
 	type Id: PredId;
 	type Case: PredCombinatorCase<Id=Self::Id>;
 	
 	fn with_kind<Kind: CombKind>(self) -> Self::WithKind<Kind>;
 }
 
-impl<T: PredItem> PredComb for Option<PredCombCase<T, ()>> {
+impl<K: CombKind, T: PredItem> PredComb<K> for Option<PredCombCase<T, ()>> {
 	type WithKind<Kind: CombKind> = Self;
 	type Id = ();
 	type Case = PredCombCase<T, ()>;
@@ -372,7 +372,7 @@ impl<T: PredItem> PredComb for Option<PredCombCase<T, ()>> {
 	}
 }
 
-impl<'w, K, T, F> PredComb for QueryComb<'w, K, T, F>
+impl<'w, K, T, F> PredComb<K> for QueryComb<'w, K, T, F>
 where
 	K: CombKind,
 	T: Component,
@@ -390,7 +390,7 @@ where
 	}
 }
 
-impl<K, A, B> PredComb for PredPairComb<K, A, B>
+impl<K, A, B> PredComb<K> for PredPairComb<K, A, B>
 where
 	K: CombKind,
 	A: PredComb,
@@ -411,7 +411,7 @@ where
 	}
 }
 
-impl<K, C, const N: usize> PredComb for PredArrayComb<K, C, N>
+impl<K, C, const N: usize> PredComb<K> for PredArrayComb<K, C, N>
 where
 	K: CombKind,
 	C: PredComb,
@@ -452,7 +452,7 @@ pub trait PredParam {
 impl<T: Component, F: ArchetypeFilter + 'static> PredParam for Query<'_, '_, &T, F> {
 	type Param = Query<'static, 'static, (Ref<'static, T>, Entity), F>;
 	type Id = Entity;
-	type Comb<'w> = QueryComb<'w, CombNone, T, F>;
+	type Comb<'w> = QueryComb<'w, CombAll, T, F>;
 	fn comb<'w>(param: &'w SystemParamItem<Self::Param>) -> Self::Comb<'w> {
 		QueryComb {
 			inner: param,
@@ -482,7 +482,7 @@ impl PredParam for () {
 impl<A: PredParam, B: PredParam> PredParam for (A, B) {
 	type Param = (A::Param, B::Param);
 	type Id = (A::Id, B::Id);
-	type Comb<'w> = PredPairComb<CombNone, A::Comb<'w>, B::Comb<'w>>;
+	type Comb<'w> = PredPairComb<CombAll, A::Comb<'w>, B::Comb<'w>>;
 	fn comb<'w>((a, b): &'w SystemParamItem<Self::Param>) -> Self::Comb<'w> {
 		PredPairComb::new::<A, B>(a, b)
 	}
@@ -494,7 +494,7 @@ where
 {
 	type Param = P::Param;
 	type Id = [P::Id; N];
-	type Comb<'w> = PredArrayComb<CombNone, P::Comb<'w>, N>;
+	type Comb<'w> = PredArrayComb<CombAll, P::Comb<'w>, N>;
 	fn comb<'w>(param: &'w SystemParamItem<Self::Param>) -> Self::Comb<'w> {
 		PredArrayComb::new::<P>(param)
 	}
@@ -1274,7 +1274,7 @@ where
 	A: PredComb,
 	B: PredComb,
 {
-	type Item = <PredPairComb<K, A, B> as PredComb>::Case;
+	type Item = <PredPairComb<K, A, B> as PredComb<K>>::Case;
 	fn next(&mut self) -> Option<Self::Item> {
 		// !!! Put A/B in order of ascending size to reduce redundancy.
 		match std::mem::replace(self, Self::Empty) {
@@ -1484,7 +1484,7 @@ where
 	C: PredComb,
 	C::Id: Ord,
 {
-	type Item = <PredArrayComb<K, C, N> as PredComb>::Case;
+	type Item = <PredArrayComb<K, C, N> as PredComb<K>>::Case;
 	fn next(&mut self) -> Option<Self::Item> {
 		if N == 0 || self.index[N-1] >= self.slice.len() {
 			return None
