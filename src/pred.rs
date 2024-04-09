@@ -240,7 +240,6 @@ pub enum PredSubStateSplit<'p, 's, P, M, K>
 where
 	's: 'p,
 	P: PredParam,
-	M: PredId,
 	K: CombKind,
 {
 	Main(PredSubState<'p, 's, P, M, K::Pal>),
@@ -563,7 +562,6 @@ pub struct PredSubState<'p, 's, P, M, K>
 where
 	's: 'p,
 	P: PredParam,
-	M: PredId,
 	K: CombKind,
 {
 	comb: <P::Comb<'p> as PredComb>::WithKind<K>,
@@ -1523,7 +1521,7 @@ where
 
 /// Produces all case combinations in need of a new prediction, alongside a
 /// [`PredStateCase`] for scheduling.
-pub struct PredCombinator<'p, P: PredParam, M: PredId, K: CombKind> {
+pub struct PredCombinator<'p, P: PredParam, M, K: CombKind> {
 	iter: <<P::Comb<'p> as PredComb>::WithKind<K> as IntoIterator>::IntoIter,
 	curr: Option<<<P::Comb<'p> as PredComb>::WithKind<K> as IntoIterator>::Item>,
 	misc_state: Box<[M]>,
