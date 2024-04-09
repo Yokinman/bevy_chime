@@ -115,14 +115,13 @@ pub trait PredParamVec: PredParam {
 		&'p SystemParamItem<'w, 's, <Self::Tail as PredParam>::Param>,
 	);
 	
-	// type Split<'p, 'w, 's>: Iterator<Item = (
-	// 	PredSubStateSplit<'p, 'w, 's, Self::Tail, M, K>,
+	// type Split<'p, K: CombKind>: Iterator<Item = (
 	// 	<PredParamItem<'p, Self::Head> as PredItem>::Ref,
+	// 	<<Self::Tail as PredParam>::Comb<'p> as PredComb>::IntoKind<K>,
 	// )>;
 	// 
-	// fn split<'p, K: CombKind>(
-	// 	comb: <Self::Comb<'p> as PredComb>::WithKind<K>
-	// ) -> <Self::Split<'p> as PredComb>::WithKind<K>;
+	// fn split2<K: CombKind>(comb: <Self::Comb<'_> as PredComb>::IntoKind<K>)
+	// 	-> Self::Split<'_, K>;
 	
 	fn join_id(
 		a: <Self::Head as PredParam>::Id,
@@ -198,8 +197,8 @@ where
 	state: &'p SystemParamItem<'w, 's, <P::Tail as PredParam>::Param>,
 	misc_state: Box<[M]>,
 	branches: NodeWriter<'p, PredNodeBranch<'s, P, M>>,
-	iter: <<<P::Head as PredParam>::Comb<'p> as PredComb>::WithKind<K> as IntoIterator>::IntoIter,
-	inv_iter: <<<P::Head as PredParam>::Comb<'p> as PredComb>::WithKind<K::Inv> as IntoIterator>::IntoIter,
+	iter: <<<P::Head as PredParam>::Comb<'p> as PredComb>::IntoKind<K> as IntoIterator>::IntoIter,
+	inv_iter: <<<P::Head as PredParam>::Comb<'p> as PredComb>::IntoKind<K::Inv> as IntoIterator>::IntoIter,
 }
 
 impl<'p, 'w, 's, P, M, K> Iterator for PredSubStateSplitIter<'p, 'w, 's, P, M, K>
@@ -217,7 +216,7 @@ where
 	fn next(&mut self) -> Option<Self::Item> {
 		if let Some(case) = self.iter.next() {
 			let sub_state = PredSubStateSplit::Main(PredSubState::new(
-				P::Tail::comb(self.state).with_kind(),
+				P::Tail::comb(self.state).into_kind(),
 				self.misc_state.clone(),
 				&mut self.branches.write((case.id(), PredNode::Blank)).1,
 			));
@@ -225,7 +224,7 @@ where
 		}
 		if let Some(case) = self.inv_iter.next() {
 			let sub_state = PredSubStateSplit::Pal(PredSubState::new(
-				P::Tail::comb(self.state).with_kind(),
+				P::Tail::comb(self.state).into_kind(),
 				self.misc_state.clone(),
 				&mut self.branches.write((case.id(), PredNode::Blank)).1,
 			));
@@ -358,19 +357,19 @@ pub trait PredComb<K: CombKind = CombAll>: Clone + IntoIterator<Item=Self::Case>
 	type Id: PredId;
 	type Case: PredCombinatorCase<Id=Self::Id>;
 	
-	type WithKind<Kind: CombKind>:
+	type IntoKind<Kind: CombKind>:
 		PredComb<Kind, Case=Self::Case, Id=Self::Id>;
 	
-	fn with_kind<Kind: CombKind>(self) -> Self::WithKind<Kind>;
+	fn into_kind<Kind: CombKind>(self) -> Self::IntoKind<Kind>;
 }
 
 impl<K: CombKind, T: PredItem> PredComb<K> for Option<PredCombCase<T, ()>> {
 	type Id = ();
 	type Case = PredCombCase<T, ()>;
 	
-	type WithKind<Kind: CombKind> = Self;
+	type IntoKind<Kind: CombKind> = Self;
 	
-	fn with_kind<Kind: CombKind>(self) -> Self::WithKind<Kind> {
+	fn into_kind<Kind: CombKind>(self) -> Self::IntoKind<Kind> {
 		self
 	}
 }
@@ -384,9 +383,9 @@ where
 	type Id = Entity;
 	type Case = PredCombCase<Ref<'w, T>, Entity>;
 	
-	type WithKind<Kind: CombKind> = QueryComb<'w, Kind, T, F>;
+	type IntoKind<Kind: CombKind> = QueryComb<'w, Kind, T, F>;
 	
-	fn with_kind<Kind: CombKind>(self) -> Self::WithKind<Kind> {
+	fn into_kind<Kind: CombKind>(self) -> Self::IntoKind<Kind> {
 		QueryComb {
 			inner: self.inner,
 			kind: PhantomData,
@@ -403,13 +402,13 @@ where
 	type Id = (A::Id, B::Id);
 	type Case = (A::Case, B::Case);
 	
-	type WithKind<Kind: CombKind> = PredPairComb<Kind, A::WithKind<Kind>, B::WithKind<Kind::Pal>>;
+	type IntoKind<Kind: CombKind> = PredPairComb<Kind, A::IntoKind<Kind>, B::IntoKind<Kind::Pal>>;
 	
-	fn with_kind<Kind: CombKind>(self) -> Self::WithKind<Kind> {
-		let a_comb = self.a_comb.with_kind();
-		let b_comb = self.b_comb.with_kind();
-		let a_inv_comb = a_comb.clone().with_kind();
-		let b_inv_comb = b_comb.clone().with_kind();
+	fn into_kind<Kind: CombKind>(self) -> Self::IntoKind<Kind> {
+		let a_comb = self.a_comb.into_kind();
+		let b_comb = self.b_comb.into_kind();
+		let a_inv_comb = a_comb.clone().into_kind();
+		let b_inv_comb = b_comb.clone().into_kind();
 		PredPairComb {
 			a_comb,
 			b_comb,
@@ -428,9 +427,9 @@ where
 	type Id = [C::Id; N];
 	type Case = [C::Case; N];
 	
-	type WithKind<Kind: CombKind> = PredArrayComb<Kind, C::WithKind<Kind::Pal>, N>;
+	type IntoKind<Kind: CombKind> = PredArrayComb<Kind, C::IntoKind<Kind::Pal>, N>;
 	
-	fn with_kind<Kind: CombKind>(self) -> Self::WithKind<Kind> {
+	fn into_kind<Kind: CombKind>(self) -> Self::IntoKind<Kind> {
 		PredArrayComb {
 			slice: self.slice,
 		}
@@ -591,7 +590,7 @@ where
 	P: PredParam,
 	K: CombKind,
 {
-	comb: <P::Comb<'p> as PredComb>::WithKind<K>,
+	comb: <P::Comb<'p> as PredComb>::IntoKind<K>,
 	misc_state: Box<[M]>,
 	node: &'p mut PredNode<'s, P, M>,
 }
@@ -604,7 +603,7 @@ where
 	K: CombKind,
 {
 	fn new(
-		comb: <P::Comb<'p> as PredComb>::WithKind<K>,
+		comb: <P::Comb<'p> as PredComb>::IntoKind<K>,
 		misc_state: Box<[M]>, 
 		node: &'p mut PredNode<'s, P, M>,
 	) -> Self {
@@ -699,7 +698,7 @@ where
 	M: PredId,
 {
 	pub(crate) fn new(
-		comb: <P::Comb<'p> as PredComb>::WithKind<CombUpdated>,
+		comb: <P::Comb<'p> as PredComb>::IntoKind<CombUpdated>,
 		misc_state: Box<[M]>, 
 		node: &'p mut PredNode<'s, P, M>,
 	) -> Self {
@@ -1153,8 +1152,8 @@ where
 {
 	a_comb: A,
 	b_comb: B,
-	a_inv_comb: A::WithKind<K::Inv>,
-	b_inv_comb: B::WithKind<<<K::Inv as CombKind>::Pal as CombKind>::Inv>,
+	a_inv_comb: A::IntoKind<K::Inv>,
+	b_inv_comb: B::IntoKind<<<K::Inv as CombKind>::Pal as CombKind>::Inv>,
 }
 
 impl<K, A, B> Clone for PredPairComb<K, A, B>
@@ -1186,8 +1185,8 @@ where
 		Self {
 			a_comb: ParamA::comb(a_param),
 			b_comb: ParamB::comb(b_param),
-			a_inv_comb: ParamA::comb(a_param).with_kind(),
-			b_inv_comb: ParamB::comb(b_param).with_kind(),
+			a_inv_comb: ParamA::comb(a_param).into_kind(),
+			b_inv_comb: ParamB::comb(b_param).into_kind(),
 		}
 	}
 }
@@ -1229,14 +1228,14 @@ where
 		a_case: A::Case,
 		b_comb: B,
 		b_iter: B::IntoIter,
-		a_inv_comb: A::WithKind<K::Inv>,
-		b_inv_comb: B::WithKind<<<K::Inv as CombKind>::Pal as CombKind>::Inv>,
+		a_inv_comb: A::IntoKind<K::Inv>,
+		b_inv_comb: B::IntoKind<<<K::Inv as CombKind>::Pal as CombKind>::Inv>,
 	},
 	Secondary {
-		b_iter: <B::WithKind<<<K::Inv as CombKind>::Pal as CombKind>::Inv> as IntoIterator>::IntoIter,
-		b_case: <B::WithKind<<<K::Inv as CombKind>::Pal as CombKind>::Inv> as IntoIterator>::Item,
-		a_comb: A::WithKind<K::Inv>,
-		a_iter: <A::WithKind<K::Inv> as IntoIterator>::IntoIter,
+		b_iter: <B::IntoKind<<<K::Inv as CombKind>::Pal as CombKind>::Inv> as IntoIterator>::IntoIter,
+		b_case: <B::IntoKind<<<K::Inv as CombKind>::Pal as CombKind>::Inv> as IntoIterator>::Item,
+		a_comb: A::IntoKind<K::Inv>,
+		a_iter: <A::IntoKind<K::Inv> as IntoIterator>::IntoIter,
 	},
 }
 
@@ -1249,8 +1248,8 @@ where
 	fn primary_next(
 		mut a_iter: A::IntoIter,
 		b_comb: B,
-		a_inv_comb: A::WithKind<K::Inv>,
-		b_inv_comb: B::WithKind<<<K::Inv as CombKind>::Pal as CombKind>::Inv>,
+		a_inv_comb: A::IntoKind<K::Inv>,
+		b_inv_comb: B::IntoKind<<<K::Inv as CombKind>::Pal as CombKind>::Inv>,
 	) -> Self {
 		if let Some(a_case) = a_iter.next() {
 			let b_iter = b_comb.clone().into_iter();
@@ -1264,8 +1263,8 @@ where
 	}
 	
 	fn secondary_next(
-		mut b_iter: <B::WithKind<<<K::Inv as CombKind>::Pal as CombKind>::Inv> as IntoIterator>::IntoIter,
-		a_comb: A::WithKind<K::Inv>,
+		mut b_iter: <B::IntoKind<<<K::Inv as CombKind>::Pal as CombKind>::Inv> as IntoIterator>::IntoIter,
+		a_comb: A::IntoKind<K::Inv>,
 	) -> Self {
 		if let Some(b_case) = b_iter.next() {
 			let a_iter = a_comb.clone().into_iter();
@@ -1366,13 +1365,13 @@ where
 	C::Id: Ord,
 {
 	fn new<'p, P: PredParam<Comb<'p> = C>>(param: &'p SystemParamItem<P::Param>) -> Self {
-		let mut vec = P::comb(param).with_kind::<K::Pal>().into_iter()
+		let mut vec = P::comb(param).into_kind::<K::Pal>().into_iter()
 			.map(|x| (x, usize::MAX))
 			.collect::<Vec<_>>();
 		
 		vec.sort_unstable_by_key(|(x, _)| x.id());
 		
-		for item in P::comb(param).with_kind::<K>() {
+		for item in P::comb(param).into_kind::<K>() {
 			if let Ok(target) = vec.binary_search_by(|(x, _)| x.id().cmp(&item.id())) {
 				vec[target].1 = target;
 				let mut i = target;
@@ -1385,7 +1384,7 @@ where
 				}
 			}
 		}
-		// !!! If `P::comb(param).with_kind::<K>()` returns empty, there's nothing to do.
+		// !!! If `P::comb(param).into_kind::<K>()` returns empty, there's nothing to do.
 		
 		Self {
 			slice: vec.into_boxed_slice()
@@ -1543,8 +1542,8 @@ where
 /// Produces all case combinations in need of a new prediction, alongside a
 /// [`PredStateCase`] for scheduling.
 pub struct PredCombinator<'p, P: PredParam, M, K: CombKind> {
-	iter: <<P::Comb<'p> as PredComb>::WithKind<K> as IntoIterator>::IntoIter,
-	curr: Option<<<P::Comb<'p> as PredComb>::WithKind<K> as IntoIterator>::Item>,
+	iter: <<P::Comb<'p> as PredComb>::IntoKind<K> as IntoIterator>::IntoIter,
+	curr: Option<<<P::Comb<'p> as PredComb>::IntoKind<K> as IntoIterator>::Item>,
 	misc_state: Box<[M]>,
 	misc_index: usize,
 	node: NodeWriter<'p, PredStateCase<P::Id, M>>,
