@@ -115,6 +115,15 @@ pub trait PredParamVec: PredParam {
 		&'p SystemParamItem<'w, 's, <Self::Tail as PredParam>::Param>,
 	);
 	
+	// type Split<'p, 'w, 's>: Iterator<Item = (
+	// 	PredSubStateSplit<'p, 'w, 's, Self::Tail, M, K>,
+	// 	<PredParamItem<'p, Self::Head> as PredItem>::Ref,
+	// )>;
+	// 
+	// fn split<'p, K: CombKind>(
+	// 	comb: <Self::Comb<'p> as PredComb>::WithKind<K>
+	// ) -> <Self::Split<'p> as PredComb>::WithKind<K>;
+	
 	fn join_id(
 		a: <Self::Head as PredParam>::Id,
 		b: <Self::Tail as PredParam>::Id,
@@ -208,7 +217,7 @@ where
 	fn next(&mut self) -> Option<Self::Item> {
 		if let Some(case) = self.iter.next() {
 			let sub_state = PredSubStateSplit::Main(PredSubState::new(
-				self.state,
+				P::Tail::comb(self.state),
 				self.misc_state.clone(),
 				&mut self.branches.write((case.id(), PredNode::Blank)).1,
 			));
@@ -216,7 +225,7 @@ where
 		}
 		if let Some(case) = self.inv_iter.next() {
 			let sub_state = PredSubStateSplit::Pal(PredSubState::new(
-				self.state,
+				P::Tail::comb(self.state),
 				self.misc_state.clone(),
 				&mut self.branches.write((case.id(), PredNode::Blank)).1,
 			));
@@ -560,7 +569,6 @@ where
 	comb: <P::Comb<'p> as PredComb>::WithKind<K>,
 	misc_state: Box<[M]>,
 	node: &'p mut PredNode<'s, P, M>,
-	kind: PhantomData<K>,
 }
 
 impl<'p, 's, P, M, K> PredSubState<'p, 's, P, M, K>
@@ -570,16 +578,15 @@ where
 	M: PredId,
 	K: CombKind,
 {
-	fn new<'w: 'p>(
-		state: &'p SystemParamItem<'w, 's, P::Param>,
+	fn new(
+		comb: <P::Comb<'p> as PredComb>::WithKind<K>,
 		misc_state: Box<[M]>, 
 		node: &'p mut PredNode<'s, P, M>,
 	) -> Self {
 		Self {
-			comb: P::comb::<K>(state),
+			comb,
 			misc_state,
-			node,
-			kind: PhantomData,
+			node
 		}
 	}
 	
@@ -666,13 +673,13 @@ where
 	P: PredParam,
 	M: PredId,
 {
-	pub(crate) fn new<'w: 'p>(
-		state: &'p SystemParamItem<'w, 's, P::Param>,
+	pub(crate) fn new(
+		comb: <P::Comb<'p> as PredComb>::WithKind<CombUpdated>,
 		misc_state: Box<[M]>, 
 		node: &'p mut PredNode<'s, P, M>,
 	) -> Self {
 		Self {
-			inner: PredSubState::new(state, misc_state, node),
+			inner: PredSubState::new(comb, misc_state, node),
 		}
 	}
 }
