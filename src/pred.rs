@@ -405,16 +405,10 @@ where
 	type IntoKind<Kind: CombKind> = PredPairComb<Kind, A::IntoKind<Kind>, B::IntoKind<Kind::Pal>>;
 	
 	fn into_kind<Kind: CombKind>(self) -> Self::IntoKind<Kind> {
-		let a_comb = self.a_comb.into_kind();
-		let b_comb = self.b_comb.into_kind();
-		let a_inv_comb = a_comb.clone().into_kind();
-		let b_inv_comb = b_comb.clone().into_kind();
-		PredPairComb {
-			a_comb,
-			b_comb,
-			a_inv_comb,
-			b_inv_comb,
-		}
+		PredPairComb::new(
+			self.a_comb.into_kind(),
+			self.b_comb.into_kind(),
+		)
 	}
 }
 
@@ -492,7 +486,7 @@ impl<A: PredParam, B: PredParam> PredParam for (A, B) {
 	type Id = (A::Id, B::Id);
 	type Comb<'w> = PredPairComb<CombAll, A::Comb<'w>, B::Comb<'w>>;
 	fn comb<'w>((a, b): &'w SystemParamItem<Self::Param>) -> Self::Comb<'w> {
-		PredPairComb::new::<A, B>(a, b)
+		PredPairComb::new(A::comb(a), B::comb(b))
 	}
 }
 
@@ -1178,15 +1172,14 @@ where
 	A: PredComb<K>,
 	B: PredComb<K::Pal>,
 {
-	fn new<'p, ParamA: PredParam<Comb<'p> = A>, ParamB: PredParam<Comb<'p> = B>>(
-		a_param: &'p SystemParamItem<ParamA::Param>,
-		b_param: &'p SystemParamItem<ParamB::Param>,
-	) -> Self {
+	fn new(a_comb: A, b_comb: B,) -> Self {
+		let a_inv_comb = a_comb.clone().into_kind();
+		let b_inv_comb = b_comb.clone().into_kind();
 		Self {
-			a_comb: ParamA::comb(a_param),
-			b_comb: ParamB::comb(b_param),
-			a_inv_comb: ParamA::comb(a_param).into_kind(),
-			b_inv_comb: ParamB::comb(b_param).into_kind(),
+			a_comb,
+			b_comb,
+			a_inv_comb,
+			b_inv_comb,
 		}
 	}
 }
