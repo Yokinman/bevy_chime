@@ -393,7 +393,7 @@ where
 	}
 }
 
-impl<K, A, B> PredComb<K> for PredPairComb<K, A, B>
+impl<A, B, K> PredComb<K> for PredPairComb<A, B, K>
 where
 	K: CombKind,
 	A: PredComb<K>,
@@ -402,7 +402,11 @@ where
 	type Id = (A::Id, B::Id);
 	type Case = (A::Case, B::Case);
 	
-	type IntoKind<Kind: CombKind> = PredPairComb<Kind, A::IntoKind<Kind>, B::IntoKind<Kind::Pal>>;
+	type IntoKind<Kind: CombKind> = PredPairComb<
+		A::IntoKind<Kind>,
+		B::IntoKind<Kind::Pal>,
+		Kind
+	>;
 	
 	fn into_kind<Kind: CombKind>(self) -> Self::IntoKind<Kind> {
 		PredPairComb::new(
@@ -484,7 +488,7 @@ impl PredParam for () {
 impl<A: PredParam, B: PredParam> PredParam for (A, B) {
 	type Param = (A::Param, B::Param);
 	type Id = (A::Id, B::Id);
-	type Comb<'w> = PredPairComb<CombAll, A::Comb<'w>, B::Comb<'w>>;
+	type Comb<'w> = PredPairComb<A::Comb<'w>, B::Comb<'w>>;
 	fn comb<'w>((a, b): &'w SystemParamItem<Self::Param>) -> Self::Comb<'w> {
 		PredPairComb::new(A::comb(a), B::comb(b))
 	}
@@ -1138,7 +1142,7 @@ where
 }
 
 /// Combinator for `PredParam` tuple implementation.
-pub struct PredPairComb<K, A, B>
+pub struct PredPairComb<A, B, K = CombAll>
 where
 	K: CombKind,
 	A: PredComb<K>,
@@ -1149,7 +1153,7 @@ where
 	kind: PhantomData<K>,
 }
 
-impl<K, A, B> Clone for PredPairComb<K, A, B>
+impl<A, B, K> Clone for PredPairComb<A, B, K>
 where
 	K: CombKind,
 	A: PredComb<K>,
@@ -1164,7 +1168,7 @@ where
 	}
 }
 
-impl<K, A, B> PredPairComb<K, A, B>
+impl<A, B, K> PredPairComb<A, B, K>
 where
 	K: CombKind,
 	A: PredComb<K>,
@@ -1179,14 +1183,14 @@ where
 	}
 }
 
-impl<K, A, B> IntoIterator for PredPairComb<K, A, B>
+impl<A, B, K> IntoIterator for PredPairComb<A, B, K>
 where
 	K: CombKind,
 	A: PredComb<K>,
 	B: PredComb<K::Pal>,
 {
 	type Item = <Self::IntoIter as Iterator>::Item;
-	type IntoIter = PredPairCombIter<K, A, B>;
+	type IntoIter = PredPairCombIter<A, B, K>;
 	fn into_iter(self) -> Self::IntoIter {
 		let Self { a_comb, b_comb, .. } = self;
 		let a_inv_comb = a_comb.clone().into_kind();
@@ -1201,7 +1205,7 @@ where
 }
 
 /// Iterator for 2-tuple [`PredParam`] types.
-pub enum PredPairCombIter<K, A, B>
+pub enum PredPairCombIter<A, B, K>
 where
 	K: CombKind,
 	A: PredComb<K>,
@@ -1224,7 +1228,7 @@ where
 	},
 }
 
-impl<K, A, B> PredPairCombIter<K, A, B>
+impl<A, B, K> PredPairCombIter<A, B, K>
 where
 	K: CombKind,
 	A: PredComb<K>,
@@ -1261,13 +1265,13 @@ where
 	}
 }
 
-impl<K, A, B> Iterator for PredPairCombIter<K, A, B>
+impl<A, B, K> Iterator for PredPairCombIter<A, B, K>
 where
 	K: CombKind,
 	A: PredComb<K>,
 	B: PredComb<K::Pal>,
 {
-	type Item = <PredPairComb<K, A, B> as PredComb<K>>::Case;
+	type Item = <PredPairComb<A, B, K> as PredComb<K>>::Case;
 	fn next(&mut self) -> Option<Self::Item> {
 		// !!! Put A/B in order of ascending size to reduce redundancy.
 		match std::mem::replace(self, Self::Empty) {
