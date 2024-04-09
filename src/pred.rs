@@ -602,34 +602,34 @@ where
 	}
 }
 
-impl<'p, 'w, 's, P, M, K> PredSubState<'p, 'w, 's, P, M, K>
-where
-	'w: 'p,
-	's: 'p,
-	P: PredParamVec,
-	M: PredId,
-	K: CombKind,
-{
-	pub fn iter_step(self) -> PredSubStateSplitIter<'p, 'w, 's, P, M, K> {
-		let PredSubState {
-			state,
-			misc_state,
-			node,
-			..
-		} = self;
-		let (head_state, tail_state) = P::split(state);
-		let iter = P::Head::comb::<K>(head_state).into_iter();
-		let inv_iter = P::Head::comb::<K::Inv>(head_state).into_iter();
-		let capacity = 4 * (iter.size_hint().0 + inv_iter.size_hint().0).max(1);
-		PredSubStateSplitIter {
-			state: tail_state,
-			misc_state,
-			branches: node.init_branches(capacity),
-			iter,
-			inv_iter,
-		}
-	}
-}
+// impl<'p, 'w, 's, P, M, K> PredSubState<'p, 'w, 's, P, M, K>
+// where
+// 	'w: 'p,
+// 	's: 'p,
+// 	P: PredParamVec,
+// 	M: PredId,
+// 	K: CombKind,
+// {
+// 	pub fn iter_step(self) -> PredSubStateSplitIter<'p, 'w, 's, P, M, K> {
+// 		let PredSubState {
+// 			state,
+// 			misc_state,
+// 			node,
+// 			..
+// 		} = self;
+// 		let (head_state, tail_state) = P::split(state);
+// 		let iter = P::Head::comb::<K>(head_state).into_iter();
+// 		let inv_iter = P::Head::comb::<K::Inv>(head_state).into_iter();
+// 		let capacity = 4 * (iter.size_hint().0 + inv_iter.size_hint().0).max(1);
+// 		PredSubStateSplitIter {
+// 			state: tail_state,
+// 			misc_state,
+// 			branches: node.init_branches(capacity),
+// 			iter,
+// 			inv_iter,
+// 		}
+// 	}
+// }
 
 impl<'p, 'w, 's, P, M, K> IntoIterator for PredSubState<'p, 'w, 's, P, M, K>
 where
@@ -684,17 +684,17 @@ where
 	}
 }
 
-impl<'p, 'w, 's, P, M> PredState<'p, 'w, 's, P, M>
-where
-	'w: 'p,
-	's: 'p,
-	P: PredParamVec,
-	M: PredId,
-{
-	pub fn iter_step(self) -> PredSubStateSplitIter<'p, 'w, 's, P, M, CombUpdated> {
-		self.inner.iter_step()
-	}
-}
+// impl<'p, 'w, 's, P, M> PredState<'p, 'w, 's, P, M>
+// where
+// 	'w: 'p,
+// 	's: 'p,
+// 	P: PredParamVec,
+// 	M: PredId,
+// {
+// 	pub fn iter_step(self) -> PredSubStateSplitIter<'p, 'w, 's, P, M, CombUpdated> {
+// 		self.inner.iter_step()
+// 	}
+// }
 
 impl<'p, 'w, 's, P, M> IntoIterator for PredState<'p, 'w, 's, P, M>
 where
