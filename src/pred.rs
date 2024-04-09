@@ -130,61 +130,61 @@ pub trait PredParamVec: PredParam {
 	) -> Self::Id;
 }
 
-impl<A: PredParam, B: PredParam> PredParamVec for (A, B) {
-	type Head = A;
-	type Tail = B;
-	
-	fn split<'p, 'w, 's>(
-		(a, b): &'p SystemParamItem<'w, 's, Self::Param>
-	) -> (
-		&'p SystemParamItem<'w, 's, <Self::Head as PredParam>::Param>,
-		&'p SystemParamItem<'w, 's, <Self::Tail as PredParam>::Param>,
-	) {
-		(a, b)
-	}
-	
-	fn join_id(
-		a: <Self::Head as PredParam>::Id,
-		b: <Self::Tail as PredParam>::Id,
-	) -> Self::Id {
-		(a, b)
-	}
-}
+// impl<A: PredParam, B: PredParam> PredParamVec for (A, B) {
+// 	type Head = A;
+// 	type Tail = B;
+// 	
+// 	fn split<'p, 'w, 's>(
+// 		(a, b): &'p SystemParamItem<'w, 's, Self::Param>
+// 	) -> (
+// 		&'p SystemParamItem<'w, 's, <Self::Head as PredParam>::Param>,
+// 		&'p SystemParamItem<'w, 's, <Self::Tail as PredParam>::Param>,
+// 	) {
+// 		(a, b)
+// 	}
+// 	
+// 	fn join_id(
+// 		a: <Self::Head as PredParam>::Id,
+// 		b: <Self::Tail as PredParam>::Id,
+// 	) -> Self::Id {
+// 		(a, b)
+// 	}
+// }
 
-macro_rules! impl_pred_param_vec_for_array {
-	($size:literal) => {
-		impl<P: PredParam> PredParamVec for [P; $size]
-		where
-			P::Id: Ord,
-		{
-			type Head = P;
-			type Tail = [P; { $size - 1 }];
-			
-			fn split<'p, 'w, 's>(
-				state: &'p SystemParamItem<'w, 's, Self::Param>
-			) -> (
-				&'p SystemParamItem<'w, 's, <Self::Head as PredParam>::Param>,
-				&'p SystemParamItem<'w, 's, <Self::Tail as PredParam>::Param>,
-			) {
-				(state, state)
-			}
-			
-			fn join_id(
-				a: <Self::Head as PredParam>::Id,
-				b: <Self::Tail as PredParam>::Id,
-			) -> Self::Id {
-				let mut array = [a; $size];
-				array[1..].copy_from_slice(&b);
-				array
-			}
-		}
-	};
-	($($size:literal),+) => {
-		$(impl_pred_param_vec_for_array!($size);)+
-	};
-}
-
-impl_pred_param_vec_for_array!(2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12);
+// macro_rules! impl_pred_param_vec_for_array {
+// 	($size:literal) => {
+// 		impl<P: PredParam> PredParamVec for [P; $size]
+// 		where
+// 			P::Id: Ord,
+// 		{
+// 			type Head = P;
+// 			type Tail = [P; { $size - 1 }];
+// 			
+// 			fn split<'p, 'w, 's>(
+// 				state: &'p SystemParamItem<'w, 's, Self::Param>
+// 			) -> (
+// 				&'p SystemParamItem<'w, 's, <Self::Head as PredParam>::Param>,
+// 				&'p SystemParamItem<'w, 's, <Self::Tail as PredParam>::Param>,
+// 			) {
+// 				(state, state)
+// 			}
+// 			
+// 			fn join_id(
+// 				a: <Self::Head as PredParam>::Id,
+// 				b: <Self::Tail as PredParam>::Id,
+// 			) -> Self::Id {
+// 				let mut array = [a; $size];
+// 				array[1..].copy_from_slice(&b);
+// 				array
+// 			}
+// 		}
+// 	};
+// 	($($size:literal),+) => {
+// 		$(impl_pred_param_vec_for_array!($size);)+
+// 	};
+// }
+// 
+// impl_pred_param_vec_for_array!(2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12);
 
 /// Iterator of [`PredSubState::iter_step`].
 pub struct PredSubStateSplitIter<'p, 'w, 's, P, M, K>
@@ -390,17 +390,23 @@ where
 	}
 }
 
-impl<'w, K, A, B> PredComb for PredPairComb<'w, K, A, B>
+impl<K, A, B> PredComb for PredPairComb<K, A, B>
 where
 	K: CombKind,
-	A: PredParam,
-	B: PredParam,
+	A: PredComb,
+	B: PredComb,
 {
-	type WithKind<Kind: CombKind> = PredPairComb<'w, Kind, A, B>;
-	type Id = (<A::Comb<'w> as PredComb>::Id, <B::Comb<'w> as PredComb>::Id);
-	type Case = (<A::Comb<'w> as PredComb>::Case, <B::Comb<'w> as PredComb>::Case);
+	type WithKind<Kind: CombKind> = PredPairComb<Kind, A, B>;
+	type Id = (A::Id, B::Id);
+	type Case = (A::Case, B::Case);
 	
 	fn with_kind<Kind: CombKind>(self) -> Self::WithKind<Kind> {
+		// PredPairComb {
+		// 	a_comb: self.a_comb.with_kind(),
+		// 	b_comb: self.b_comb.with_kind(),
+		// 	a_inv_comb: self.a_inv_comb.with_kind(),
+		// 	b_inv_comb: self.b_inv_comb.with_kind(),
+		// }
 		todo!()
 	}
 }
@@ -476,9 +482,9 @@ impl PredParam for () {
 impl<A: PredParam, B: PredParam> PredParam for (A, B) {
 	type Param = (A::Param, B::Param);
 	type Id = (A::Id, B::Id);
-	type Comb<'w> = PredPairComb<'w, CombNone, A, B>;
+	type Comb<'w> = PredPairComb<CombNone, A::Comb<'w>, B::Comb<'w>>;
 	fn comb<'w>((a, b): &'w SystemParamItem<Self::Param>) -> Self::Comb<'w> {
-		PredPairComb::new(a, b)
+		PredPairComb::new::<A, B>(a, b)
 	}
 }
 
@@ -1130,23 +1136,23 @@ where
 }
 
 /// Combinator for `PredParam` tuple implementation.
-pub struct PredPairComb<'w, K, A, B>
+pub struct PredPairComb<K, A, B>
 where
 	K: CombKind,
-	A: PredParam,
-	B: PredParam,
+	A: PredComb,
+	B: PredComb,
 {
-	a_comb: <A::Comb<'w> as PredComb>::WithKind<K>,
-	b_comb: <B::Comb<'w> as PredComb>::WithKind<K::Pal>,
-	a_inv_comb: <A::Comb<'w> as PredComb>::WithKind<K::Inv>,
-	b_inv_comb: <B::Comb<'w> as PredComb>::WithKind<<<K::Inv as CombKind>::Pal as CombKind>::Inv>,
+	a_comb: A::WithKind<K>,
+	b_comb: B::WithKind<K::Pal>,
+	a_inv_comb: A::WithKind<K::Inv>,
+	b_inv_comb: B::WithKind<<<K::Inv as CombKind>::Pal as CombKind>::Inv>,
 }
 
-impl<K, A, B> Clone for PredPairComb<'_, K, A, B>
+impl<K, A, B> Clone for PredPairComb<K, A, B>
 where
 	K: CombKind,
-	A: PredParam,
-	B: PredParam,
+	A: PredComb,
+	B: PredComb,
 {
 	fn clone(&self) -> Self {
 		Self {
@@ -1158,33 +1164,33 @@ where
 	}
 }
 
-impl<'p, K, A, B> PredPairComb<'p, K, A, B>
+impl<K, A, B> PredPairComb<K, A, B>
 where
 	K: CombKind,
-	A: PredParam,
-	B: PredParam,
+	A: PredComb,
+	B: PredComb,
 {
-	fn new(
-		a_param: &'p SystemParamItem<A::Param>,
-		b_param: &'p SystemParamItem<B::Param>,
+	fn new<'p, ParamA: PredParam<Comb<'p> = A>, ParamB: PredParam<Comb<'p> = B>>(
+		a_param: &'p SystemParamItem<ParamA::Param>,
+		b_param: &'p SystemParamItem<ParamB::Param>,
 	) -> Self {
 		Self {
-			a_comb: A::comb(a_param).with_kind(),
-			b_comb: B::comb(b_param).with_kind(),
-			a_inv_comb: A::comb(a_param).with_kind(),
-			b_inv_comb: B::comb(b_param).with_kind(),
+			a_comb: ParamA::comb(a_param).with_kind(),
+			b_comb: ParamB::comb(b_param).with_kind(),
+			a_inv_comb: ParamA::comb(a_param).with_kind(),
+			b_inv_comb: ParamB::comb(b_param).with_kind(),
 		}
 	}
 }
 
-impl<'w, K, A, B> IntoIterator for PredPairComb<'w, K, A, B>
+impl<K, A, B> IntoIterator for PredPairComb<K, A, B>
 where
 	K: CombKind,
-	A: PredParam,
-	B: PredParam,
+	A: PredComb,
+	B: PredComb,
 {
 	type Item = <Self::IntoIter as Iterator>::Item;
-	type IntoIter = PredPairCombIter<'w, K, A, B>;
+	type IntoIter = PredPairCombIter<K, A, B>;
 	fn into_iter(self) -> Self::IntoIter {
 		let Self {
 			a_comb,
@@ -1202,40 +1208,40 @@ where
 }
 
 /// Iterator for 2-tuple [`PredParam`] types.
-pub enum PredPairCombIter<'w, K, A, B>
+pub enum PredPairCombIter<K, A, B>
 where
 	K: CombKind,
-	A: PredParam,
-	B: PredParam,
+	A: PredComb,
+	B: PredComb,
 {
 	Empty,
 	Primary {
-		a_iter: <<A::Comb<'w> as PredComb>::WithKind<K> as IntoIterator>::IntoIter,
-		a_case: <<A::Comb<'w> as PredComb>::WithKind<K> as IntoIterator>::Item,
-		b_comb: <B::Comb<'w> as PredComb>::WithKind<K::Pal>,
-		b_iter: <<B::Comb<'w> as PredComb>::WithKind<K::Pal> as IntoIterator>::IntoIter,
-		a_inv_comb: <A::Comb<'w> as PredComb>::WithKind<K::Inv>,
-		b_inv_comb: <B::Comb<'w> as PredComb>::WithKind<<<K::Inv as CombKind>::Pal as CombKind>::Inv>,
+		a_iter: <A::WithKind<K> as IntoIterator>::IntoIter,
+		a_case: <A::WithKind<K> as IntoIterator>::Item,
+		b_comb: B::WithKind<K::Pal>,
+		b_iter: <B::WithKind<K::Pal> as IntoIterator>::IntoIter,
+		a_inv_comb: A::WithKind<K::Inv>,
+		b_inv_comb: B::WithKind<<<K::Inv as CombKind>::Pal as CombKind>::Inv>,
 	},
 	Secondary {
-		b_iter: <<B::Comb<'w> as PredComb>::WithKind<<<K::Inv as CombKind>::Pal as CombKind>::Inv> as IntoIterator>::IntoIter,
-		b_case: <<B::Comb<'w> as PredComb>::WithKind<<<K::Inv as CombKind>::Pal as CombKind>::Inv> as IntoIterator>::Item,
-		a_comb: <A::Comb<'w> as PredComb>::WithKind<K::Inv>,
-		a_iter: <<A::Comb<'w> as PredComb>::WithKind<K::Inv> as IntoIterator>::IntoIter,
+		b_iter: <B::WithKind<<<K::Inv as CombKind>::Pal as CombKind>::Inv> as IntoIterator>::IntoIter,
+		b_case: <B::WithKind<<<K::Inv as CombKind>::Pal as CombKind>::Inv> as IntoIterator>::Item,
+		a_comb: A::WithKind<K::Inv>,
+		a_iter: <A::WithKind<K::Inv> as IntoIterator>::IntoIter,
 	},
 }
 
-impl<'w, K, A, B> PredPairCombIter<'w, K, A, B>
+impl<K, A, B> PredPairCombIter<K, A, B>
 where
 	K: CombKind,
-	A: PredParam,
-	B: PredParam,
+	A: PredComb,
+	B: PredComb,
 {
 	fn primary_next(
-		mut a_iter: <<A::Comb<'w> as PredComb>::WithKind<K> as IntoIterator>::IntoIter,
-		b_comb: <B::Comb<'w> as PredComb>::WithKind<K::Pal>,
-		a_inv_comb: <A::Comb<'w> as PredComb>::WithKind<K::Inv>,
-		b_inv_comb: <B::Comb<'w> as PredComb>::WithKind<<<K::Inv as CombKind>::Pal as CombKind>::Inv>,
+		mut a_iter: <A::WithKind<K> as IntoIterator>::IntoIter,
+		b_comb: B::WithKind<K::Pal>,
+		a_inv_comb: A::WithKind<K::Inv>,
+		b_inv_comb: B::WithKind<<<K::Inv as CombKind>::Pal as CombKind>::Inv>,
 	) -> Self {
 		if let Some(a_case) = a_iter.next() {
 			let b_iter = b_comb.clone().into_iter();
@@ -1249,8 +1255,8 @@ where
 	}
 	
 	fn secondary_next(
-		mut b_iter: <<B::Comb<'w> as PredComb>::WithKind<<<K::Inv as CombKind>::Pal as CombKind>::Inv> as IntoIterator>::IntoIter,
-		a_comb: <A::Comb<'w> as PredComb>::WithKind<K::Inv>,
+		mut b_iter: <B::WithKind<<<K::Inv as CombKind>::Pal as CombKind>::Inv> as IntoIterator>::IntoIter,
+		a_comb: A::WithKind<K::Inv>,
 	) -> Self {
 		if let Some(b_case) = b_iter.next() {
 			let a_iter = a_comb.clone().into_iter();
@@ -1262,13 +1268,13 @@ where
 	}
 }
 
-impl<'w, K, A, B> Iterator for PredPairCombIter<'w, K, A, B>
+impl<K, A, B> Iterator for PredPairCombIter<K, A, B>
 where
 	K: CombKind,
-	A: PredParam,
-	B: PredParam,
+	A: PredComb,
+	B: PredComb,
 {
-	type Item = <PredPairComb<'w, K, A, B> as PredComb>::Case;
+	type Item = <PredPairComb<K, A, B> as PredComb>::Case;
 	fn next(&mut self) -> Option<Self::Item> {
 		// !!! Put A/B in order of ascending size to reduce redundancy.
 		match std::mem::replace(self, Self::Empty) {
