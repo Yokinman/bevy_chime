@@ -355,19 +355,20 @@ impl<P: PredItem, I: PredId> Clone for PredCombCase<P, I> {
 
 /// Combinator type produced by `PredParam::comb`.
 pub trait PredComb<K: CombKind = CombAll>: Clone + IntoIterator<Item=Self::Case> {
-	type WithKind<Kind: CombKind>:
-		PredComb<Kind, Case=Self::Case, Id=Self::Id>;
-	
 	type Id: PredId;
 	type Case: PredCombinatorCase<Id=Self::Id>;
+	
+	type WithKind<Kind: CombKind>:
+		PredComb<Kind, Case=Self::Case, Id=Self::Id>;
 	
 	fn with_kind<Kind: CombKind>(self) -> Self::WithKind<Kind>;
 }
 
 impl<K: CombKind, T: PredItem> PredComb<K> for Option<PredCombCase<T, ()>> {
-	type WithKind<Kind: CombKind> = Self;
 	type Id = ();
 	type Case = PredCombCase<T, ()>;
+	
+	type WithKind<Kind: CombKind> = Self;
 	
 	fn with_kind<Kind: CombKind>(self) -> Self::WithKind<Kind> {
 		self
@@ -380,9 +381,10 @@ where
 	T: Component,
 	F: ArchetypeFilter + 'static,
 {
-	type WithKind<Kind: CombKind> = QueryComb<'w, Kind, T, F>;
 	type Id = Entity;
 	type Case = PredCombCase<Ref<'w, T>, Entity>;
+	
+	type WithKind<Kind: CombKind> = QueryComb<'w, Kind, T, F>;
 	
 	fn with_kind<Kind: CombKind>(self) -> Self::WithKind<Kind> {
 		QueryComb {
@@ -398,9 +400,10 @@ where
 	A: PredComb<K>,
 	B: PredComb<K::Pal>,
 {
-	type WithKind<Kind: CombKind> = PredPairComb<Kind, A::WithKind<Kind>, B::WithKind<Kind::Pal>>;
 	type Id = (A::Id, B::Id);
 	type Case = (A::Case, B::Case);
+	
+	type WithKind<Kind: CombKind> = PredPairComb<Kind, A::WithKind<Kind>, B::WithKind<Kind::Pal>>;
 	
 	fn with_kind<Kind: CombKind>(self) -> Self::WithKind<Kind> {
 		let a_comb = self.a_comb.with_kind();
@@ -422,9 +425,10 @@ where
 	C: PredComb<K::Pal>,
 	C::Id: Ord,
 {
-	type WithKind<Kind: CombKind> = PredArrayComb<Kind, C::WithKind<Kind::Pal>, N>;
 	type Id = [C::Id; N];
 	type Case = [C::Case; N];
+	
+	type WithKind<Kind: CombKind> = PredArrayComb<Kind, C::WithKind<Kind::Pal>, N>;
 	
 	fn with_kind<Kind: CombKind>(self) -> Self::WithKind<Kind> {
 		PredArrayComb {
