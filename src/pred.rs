@@ -403,13 +403,16 @@ where
 	type Case = (A::Case, B::Case);
 	
 	fn with_kind<Kind: CombKind>(self) -> Self::WithKind<Kind> {
-		// PredPairComb {
-		// 	a_comb: self.a_comb.with_kind(),
-		// 	b_comb: self.b_comb.with_kind(),
-		// 	a_inv_comb: self.a_inv_comb.with_kind(),
-		// 	b_inv_comb: self.b_inv_comb.with_kind(),
-		// }
-		todo!()
+		let a_comb = self.a_comb.with_kind();
+		let b_comb = self.b_comb.with_kind();
+		let a_inv_comb = a_comb.clone().with_kind();
+		let b_inv_comb = b_comb.clone().with_kind();
+		PredPairComb {
+			a_comb,
+			b_comb,
+			a_inv_comb,
+			b_inv_comb,
+		}
 	}
 }
 
