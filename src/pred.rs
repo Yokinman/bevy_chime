@@ -217,7 +217,7 @@ where
 	fn next(&mut self) -> Option<Self::Item> {
 		if let Some(case) = self.iter.next() {
 			let sub_state = PredSubStateSplit::Main(PredSubState::new(
-				P::Tail::comb(self.state),
+				P::Tail::comb(self.state).with_kind(),
 				self.misc_state.clone(),
 				&mut self.branches.write((case.id(), PredNode::Blank)).1,
 			));
@@ -225,7 +225,7 @@ where
 		}
 		if let Some(case) = self.inv_iter.next() {
 			let sub_state = PredSubStateSplit::Pal(PredSubState::new(
-				P::Tail::comb(self.state),
+				P::Tail::comb(self.state).with_kind(),
 				self.misc_state.clone(),
 				&mut self.branches.write((case.id(), PredNode::Blank)).1,
 			));
@@ -440,17 +440,14 @@ pub trait PredParam {
 	type Comb<'w>: PredComb<Id=Self::Id>;
 	
 	/// Produces [`Self::Comb`].
-	fn comb<'w, K: CombKind>(param: &'w SystemParamItem<Self::Param>)
-		-> <Self::Comb<'w> as PredComb>::WithKind<K>;
+	fn comb<'w>(param: &'w SystemParamItem<Self::Param>) -> Self::Comb<'w>;
 }
 
 impl<T: Component, F: ArchetypeFilter + 'static> PredParam for Query<'_, '_, &T, F> {
 	type Param = Query<'static, 'static, (Ref<'static, T>, Entity), F>;
 	type Id = Entity;
 	type Comb<'w> = QueryComb<'w, CombNone, T, F>;
-	fn comb<'w, K: CombKind>(param: &'w SystemParamItem<Self::Param>)
-		-> <Self::Comb<'w> as PredComb>::WithKind<K>
-	{
+	fn comb<'w>(param: &'w SystemParamItem<Self::Param>) -> Self::Comb<'w> {
 		QueryComb {
 			inner: param,
 			kind: PhantomData,
@@ -462,10 +459,8 @@ impl<R: Resource> PredParam for Res<'_, R> {
 	type Param = Res<'static, R>;
 	type Id = ();
 	type Comb<'w> = Option<PredCombCase<Res<'w, R>, ()>>;
-	fn comb<'w, K: CombKind>(param: &'w SystemParamItem<Self::Param>)
-		-> <Self::Comb<'w> as PredComb>::WithKind<K>
-	{
-		K::wrap((Res::clone(param), ()))
+	fn comb<'w>(param: &'w SystemParamItem<Self::Param>) -> Self::Comb<'w> {
+		CombAll::wrap((Res::clone(param), ()))
 	}
 }
 
@@ -473,10 +468,8 @@ impl PredParam for () {
 	type Param = ();
 	type Id = ();
 	type Comb<'w> = Option<PredCombCase<(), ()>>;
-	fn comb<'w, K: CombKind>(param: &'w SystemParamItem<Self::Param>)
-		-> <Self::Comb<'w> as PredComb>::WithKind<K>
-	{
-		K::wrap((*param, ()))
+	fn comb<'w>(param: &'w SystemParamItem<Self::Param>) -> Self::Comb<'w> {
+		CombAll::wrap((*param, ()))
 	}
 }
 
@@ -484,10 +477,8 @@ impl<A: PredParam, B: PredParam> PredParam for (A, B) {
 	type Param = (A::Param, B::Param);
 	type Id = (A::Id, B::Id);
 	type Comb<'w> = PredPairComb<'w, CombNone, A, B>;
-	fn comb<'w, K: CombKind>(param: &'w SystemParamItem<Self::Param>)
-		-> <Self::Comb<'w> as PredComb>::WithKind<K>
-	{
-		PredPairComb::<'w, K, A, B>::new(&param.0, &param.1)
+	fn comb<'w>((a, b): &'w SystemParamItem<Self::Param>) -> Self::Comb<'w> {
+		PredPairComb::new(a, b)
 	}
 }
 
@@ -498,10 +489,8 @@ where
 	type Param = P::Param;
 	type Id = [P::Id; N];
 	type Comb<'w> = PredArrayComb<CombNone, P::Comb<'w>, N>;
-	fn comb<'w, K: CombKind>(param: &'w SystemParamItem<Self::Param>)
-		-> <Self::Comb<'w> as PredComb>::WithKind<K>
-	{
-		PredArrayComb::<K, _, N>::new::<P>(param)
+	fn comb<'w>(param: &'w SystemParamItem<Self::Param>) -> Self::Comb<'w> {
+		PredArrayComb::new::<P>(param)
 	}
 }
 
@@ -1180,10 +1169,10 @@ where
 		b_param: &'p SystemParamItem<B::Param>,
 	) -> Self {
 		Self {
-			a_comb: A::comb(a_param),
-			b_comb: B::comb(b_param),
-			a_inv_comb: A::comb(a_param),
-			b_inv_comb: B::comb(b_param),
+			a_comb: A::comb(a_param).with_kind(),
+			b_comb: B::comb(b_param).with_kind(),
+			a_inv_comb: A::comb(a_param).with_kind(),
+			b_inv_comb: B::comb(b_param).with_kind(),
 		}
 	}
 }
@@ -1365,13 +1354,13 @@ where
 	C::Id: Ord,
 {
 	fn new<'p, P: PredParam<Comb<'p> = C>>(param: &'p SystemParamItem<P::Param>) -> Self {
-		let mut vec = P::comb::<K::Pal>(param).into_iter()
+		let mut vec = P::comb(param).with_kind::<K::Pal>().into_iter()
 			.map(|x| (x, usize::MAX))
 			.collect::<Vec<_>>();
 		
 		vec.sort_unstable_by_key(|(x, _)| x.id());
 		
-		for item in P::comb::<K>(param) {
+		for item in P::comb(param).with_kind::<K>() {
 			if let Ok(target) = vec.binary_search_by(|(x, _)| x.id().cmp(&item.id())) {
 				vec[target].1 = target;
 				let mut i = target;
@@ -1384,7 +1373,7 @@ where
 				}
 			}
 		}
-		// !!! If `P::comb::<K>(param)` returns empty, there's nothing to do.
+		// !!! If `P::comb(param).with_kind::<K>()` returns empty, there's nothing to do.
 		
 		Self {
 			slice: vec.into_boxed_slice()
