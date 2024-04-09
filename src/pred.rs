@@ -220,7 +220,7 @@ where
 				self.misc_state.clone(),
 				&mut self.branches.write((case.id(), PredNode::Blank)).1,
 			));
-			return Some((sub_state, case.item()))
+			return Some((sub_state, case.item_ref()))
 		}
 		if let Some(case) = self.inv_iter.next() {
 			let sub_state = PredSubStateSplit::Pal(PredSubState::new(
@@ -228,7 +228,7 @@ where
 				self.misc_state.clone(),
 				&mut self.branches.write((case.id(), PredNode::Blank)).1,
 			));
-			return Some((sub_state, case.item()))
+			return Some((sub_state, case.item_ref()))
 		}
 		None
 	}
@@ -290,24 +290,24 @@ where
 pub trait PredCombinatorCase: Copy + Clone {
 	type Item: PredItem;
 	type Id: PredId;
-	fn item(&self) -> <Self::Item as PredItem>::Ref;
+	fn item_ref(&self) -> <Self::Item as PredItem>::Ref;
 	fn id(&self) -> Self::Id;
 	fn into_parts(self) -> (<Self::Item as PredItem>::Ref, Self::Id) {
-		(self.item(), self.id())
+		(self.item_ref(), self.id())
 	}
 }
 
 impl PredCombinatorCase for () {
 	type Item = ();
 	type Id = ();
-	fn item(&self) -> <Self::Item as PredItem>::Ref {}
+	fn item_ref(&self) -> <Self::Item as PredItem>::Ref {}
 	fn id(&self) -> Self::Id {}
 }
 
 impl<P: PredItem, I: PredId> PredCombinatorCase for PredCombCase<P, I> {
 	type Item = P;
 	type Id = I;
-	fn item(&self) -> <Self::Item as PredItem>::Ref {
+	fn item_ref(&self) -> <Self::Item as PredItem>::Ref {
 		self.0
 	}
 	fn id(&self) -> Self::Id {
@@ -318,8 +318,8 @@ impl<P: PredItem, I: PredId> PredCombinatorCase for PredCombCase<P, I> {
 impl<C: PredCombinatorCase, const N: usize> PredCombinatorCase for [C; N] {
 	type Item = [C::Item; N];
 	type Id = [C::Id; N];
-	fn item(&self) -> <Self::Item as PredItem>::Ref {
-		self.map(|x| x.item())
+	fn item_ref(&self) -> <Self::Item as PredItem>::Ref {
+		self.map(|x| x.item_ref())
 	}
 	fn id(&self) -> Self::Id {
 		self.map(|x| x.id())
@@ -333,8 +333,8 @@ where
 {
 	type Item = (A::Item, B::Item);
 	type Id = (A::Id, B::Id);
-	fn item(&self) -> <Self::Item as PredItem>::Ref {
-		(self.0.item(), self.1.item())
+	fn item_ref(&self) -> <Self::Item as PredItem>::Ref {
+		(self.0.item_ref(), self.1.item_ref())
 	}
 	fn id(&self) -> Self::Id {
 		(self.0.id(), self.1.id())
