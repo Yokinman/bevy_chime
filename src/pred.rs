@@ -109,13 +109,6 @@ pub trait PredParamVec: PredParam {
 	type Head: PredParam;
 	type Tail: PredParam;
 	
-	fn split<'p, 'w, 's>(
-		state: &'p SystemParamItem<'w, 's, Self::Param>
-	) -> (
-		&'p SystemParamItem<'w, 's, <Self::Head as PredParam>::Param>,
-		&'p SystemParamItem<'w, 's, <Self::Tail as PredParam>::Param>,
-	);
-	
 	type Split<'p, K: CombKind>: Iterator<Item = (
 		<<Self::Head as PredParam>::Comb<'p> as IntoIterator>::Item,
 		PredSubComb<<Self::Tail as PredParam>::Comb<'p>, K>,
@@ -134,15 +127,6 @@ pub trait PredParamVec: PredParam {
 impl<A: PredParam, B: PredParam> PredParamVec for (A, B) {
 	type Head = A;
 	type Tail = B;
-	
-	fn split<'p, 'w, 's>(
-		(a, b): &'p SystemParamItem<'w, 's, Self::Param>
-	) -> (
-		&'p SystemParamItem<'w, 's, <Self::Head as PredParam>::Param>,
-		&'p SystemParamItem<'w, 's, <Self::Tail as PredParam>::Param>,
-	) {
-		(a, b)
-	}
 	
 	type Split<'p, K: CombKind> = PredPairCombSplit<
 		<<A::Comb<'p> as PredComb>::IntoKind<K> as IntoIterator>::IntoIter,
