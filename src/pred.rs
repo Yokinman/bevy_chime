@@ -448,6 +448,7 @@ where
 	fn into_kind<Kind: CombKind>(self) -> Self::IntoKind<Kind> {
 		PredArrayComb {
 			slice: self.slice,
+			index: self.index,
 		}
 	}
 }
@@ -1338,6 +1339,7 @@ where
 	C: PredComb<K::Pal>,
 {
 	slice: Rc<[(C::Case, usize)]>,
+	index: usize,
 }
 
 impl<C, const N: usize, K> Clone for PredArrayComb<C, N, K>
@@ -1348,6 +1350,7 @@ where
 	fn clone(&self) -> Self {
 		Self {
 			slice: Rc::clone(&self.slice),
+			index: self.index,
 		}
 	}
 }
@@ -1381,7 +1384,8 @@ where
 		// !!! If `P::comb(param).into_kind::<K>()` returns empty, there's nothing to do.
 		
 		Self {
-			slice: vec.into()
+			slice: vec.into(),
+			index: 0,
 		}
 	}
 }
@@ -1397,15 +1401,16 @@ where
 	fn into_iter(self) -> Self::IntoIter {
 		let mut iter = PredArrayCombIter {
 			slice: self.slice,
-			index: [0; N],
+			index: [self.index; N],
 			layer: 0,
 		};
 		if N == 0 {
 			return iter
 		}
-		if iter.slice.is_empty() || iter.slice[0].1 >= iter.slice.len() {
+		let index = iter.index[0];
+		if index >= iter.slice.len() || iter.slice[index].1 >= iter.slice.len() {
 			iter.index[0] = iter.slice.len();
-		} else if iter.slice[0].1 == 0 {
+		} else if index == iter.slice[index].1 {
 			iter.layer = N - 1;
 		}
 		for i in 1..N {
