@@ -179,40 +179,79 @@ where
 	// }
 }
 
-// macro_rules! impl_pred_param_vec_for_array {
-// 	($size:literal) => {
-// 		impl<P: PredParam> PredParamVec for [P; $size]
-// 		where
-// 			P::Id: Ord,
-// 		{
-// 			type Head = P;
-// 			type Tail = [P; { $size - 1 }];
-// 			
-// 			fn split<'p, 'w, 's>(
-// 				state: &'p SystemParamItem<'w, 's, Self::Param>
-// 			) -> (
-// 				&'p SystemParamItem<'w, 's, <Self::Head as PredParam>::Param>,
-// 				&'p SystemParamItem<'w, 's, <Self::Tail as PredParam>::Param>,
-// 			) {
-// 				(state, state)
-// 			}
-// 			
-// 			fn join_id(
-// 				a: <Self::Head as PredParam>::Id,
-// 				b: <Self::Tail as PredParam>::Id,
-// 			) -> Self::Id {
-// 				let mut array = [a; $size];
-// 				array[1..].copy_from_slice(&b);
-// 				array
-// 			}
-// 		}
-// 	};
-// 	($($size:literal),+) => {
-// 		$(impl_pred_param_vec_for_array!($size);)+
-// 	};
-// }
-// 
-// impl_pred_param_vec_for_array!(2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12);
+macro_rules! impl_pred_param_vec_for_array {
+	($size:literal) => {
+		impl<P: PredParam> PredParamVec for [P; $size]
+		where
+			P::Id: Ord,
+		{
+			type Head = P;
+			type Tail = [P; { $size - 1 }];
+			
+			type Split<'p, K: CombKind>
+				= PredArrayCombSplit<P::Comb<'p>, { $size - 1 }, K>;
+			
+			fn split<K: CombKind>(
+				comb: <Self::Comb<'_> as PredComb>::IntoKind<K>
+			) -> Self::Split<'_, K> {
+				PredArrayCombSplit {
+					slice: comb.slice,
+					index: comb.index,
+					kind: PhantomData,
+				}
+			}
+			
+			fn join_id(
+				a: <Self::Head as PredParam>::Id,
+				b: <Self::Tail as PredParam>::Id,
+			) -> Self::Id {
+				let mut array = [a; $size];
+				array[1..].copy_from_slice(&b);
+				array
+			}
+		}
+	};
+	($($size:literal),+) => {
+		$(impl_pred_param_vec_for_array!($size);)+
+	};
+}
+
+impl_pred_param_vec_for_array!(2/*, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12*/);
+
+/// ...
+pub struct PredArrayCombSplit<C, const N: usize, K>
+where
+	C: PredComb,
+{
+	slice: Rc<[(C::Case, usize)]>,
+	index: usize,
+	kind: PhantomData<K>,
+}
+
+impl<C, const N: usize, K> Iterator for PredArrayCombSplit<C, N, K>
+where
+	K: CombKind,
+	C: PredComb,
+	C::Id: Ord,
+{
+	type Item = (C::Case, PredSubComb<PredArrayComb<C, N>, K>);
+	fn next(&mut self) -> Option<Self::Item> {
+		if let Some((case, _)) = self.slice.get(self.index) {
+			self.index += 1;
+			let comb = PredArrayComb {
+				slice: Rc::clone(&self.slice),
+				index: self.index,
+				kind: PhantomData,
+			};
+			Some((*case, PredSubComb::Diff(comb)))
+		} else {
+			None
+		}
+	}
+	// fn size_hint(&self) -> (usize, Option<usize>) {
+	// 	todo!()
+	// }
+}
 
 /// ...
 pub enum PredSubComb<C: PredComb, K: CombKind> {
