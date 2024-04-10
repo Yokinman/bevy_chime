@@ -437,18 +437,19 @@ where
 impl<C, const N: usize, K> PredComb<K> for PredArrayComb<C, N, K>
 where
 	K: CombKind,
-	C: PredComb<K::Pal>,
+	C: PredComb,
 	C::Id: Ord,
 {
 	type Id = [C::Id; N];
 	type Case = [C::Case; N];
 	
-	type IntoKind<Kind: CombKind> = PredArrayComb<C::IntoKind<Kind::Pal>, N, Kind>;
+	type IntoKind<Kind: CombKind> = PredArrayComb<C, N, Kind>;
 	
 	fn into_kind<Kind: CombKind>(self) -> Self::IntoKind<Kind> {
 		PredArrayComb {
 			slice: self.slice,
 			index: self.index,
+			kind: PhantomData,
 		}
 	}
 }
@@ -1335,22 +1336,22 @@ where
 /// Combinator for `PredParam` array implementation.
 pub struct PredArrayComb<C, const N: usize, K = CombAll>
 where
-	K: CombKind,
-	C: PredComb<K::Pal>,
+	C: PredComb,
 {
 	slice: Rc<[(C::Case, usize)]>,
 	index: usize,
+	kind: PhantomData<K>,
 }
 
 impl<C, const N: usize, K> Clone for PredArrayComb<C, N, K>
 where
-	K: CombKind,
-	C: PredComb<K::Pal>,
+	C: PredComb,
 {
 	fn clone(&self) -> Self {
 		Self {
 			slice: Rc::clone(&self.slice),
 			index: self.index,
+			kind: PhantomData,
 		}
 	}
 }
@@ -1358,7 +1359,7 @@ where
 impl<C, const N: usize, K> PredArrayComb<C, N, K>
 where
 	K: CombKind,
-	C: PredComb<K::Pal>,
+	C: PredComb,
 	C::Id: Ord,
 {
 	fn new<'p, P: PredParam<Comb<'p> = C>>(param: &'p SystemParamItem<P::Param>) -> Self {
@@ -1386,6 +1387,7 @@ where
 		Self {
 			slice: vec.into(),
 			index: 0,
+			kind: PhantomData,
 		}
 	}
 }
@@ -1393,7 +1395,7 @@ where
 impl<C, const N: usize, K> IntoIterator for PredArrayComb<C, N, K>
 where
 	K: CombKind,
-	C: PredComb<K::Pal>,
+	C: PredComb,
 	C::Id: Ord,
 {
 	type Item = <Self::IntoIter as Iterator>::Item;
@@ -1403,6 +1405,7 @@ where
 			slice: self.slice,
 			index: [self.index; N],
 			layer: 0,
+			kind: PhantomData,
 		};
 		if N == 0 {
 			return iter
@@ -1424,18 +1427,17 @@ where
 /// Iterator for array of [`PredParam`] type.
 pub struct PredArrayCombIter<C, const N: usize, K>
 where
-	K: CombKind,
-	C: PredComb<K::Pal>,
+	C: PredComb,
 {
 	slice: Rc<[(C::Case, usize)]>,
 	index: [usize; N],
 	layer: usize,
+	kind: PhantomData<K>,
 }
 
 impl<C, const N: usize, K> PredArrayCombIter<C, N, K>
 where
-	K: CombKind,
-	C: PredComb<K::Pal>,
+	C: PredComb,
 	C::Id: Ord,
 {
 	fn step_index(&mut self, i: usize) -> bool {
@@ -1482,7 +1484,7 @@ where
 impl<C, const N: usize, K> Iterator for PredArrayCombIter<C, N, K>
 where
 	K: CombKind,
-	C: PredComb<K::Pal>,
+	C: PredComb,
 	C::Id: Ord,
 {
 	type Item = <PredArrayComb<C, N, K> as PredComb<K>>::Case;
