@@ -116,12 +116,14 @@ pub trait PredParamVec: PredParam {
 		&'p SystemParamItem<'w, 's, <Self::Tail as PredParam>::Param>,
 	);
 	
-	type Split<'p>: Iterator<Item = (
-		<<Self::Head as PredParam>::Comb<'p> as PredComb>::Case,
-		<Self::Tail as PredParam>::Comb<'p>,
+	type Split<'p, K: CombKind>: Iterator<Item = (
+		<<<Self::Head as PredParam>::Comb<'p> as PredComb>::IntoKind<K> as PredComb<K>>::Case,
+		PredSubComb<<<Self::Tail as PredParam>::Comb<'p> as PredComb>::IntoKind<K>, K>,
 	)>;
 	
-	fn split2(comb: Self::Comb<'_>) -> Self::Split<'_>;
+	fn split2<K: CombKind>(
+		comb: <Self::Comb<'_> as PredComb>::IntoKind<K>
+	) -> Self::Split<'_, K>;
 	
 	fn join_id(
 		a: <Self::Head as PredParam>::Id,
@@ -193,6 +195,12 @@ pub trait PredParamVec: PredParam {
 // }
 // 
 // impl_pred_param_vec_for_array!(2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12);
+
+/// ...
+pub enum PredSubComb<C: PredComb<K>, K: CombKind> {
+	Diff(C::IntoKind<K::Pal>),
+	Same(C::IntoKind<<<K::Inv as CombKind>::Pal as CombKind>::Inv>),
+}
 
 /// Iterator of [`PredSubState::iter_step`].
 pub struct PredSubStateSplitIter<'p, 'w, 's, P, M, K>
@@ -648,21 +656,17 @@ where
 // {
 // 	pub fn iter_step(self) -> PredSubStateSplitIter<'p, 'w, 's, P, M, K> {
 // 		let PredSubState {
-// 			state,
+// 			comb,
 // 			misc_state,
 // 			node,
 // 			..
 // 		} = self;
-// 		let (head_state, tail_state) = P::split(state);
-// 		let iter = P::Head::comb::<K>(head_state).into_iter();
-// 		let inv_iter = P::Head::comb::<K::Inv>(head_state).into_iter();
-// 		let capacity = 4 * (iter.size_hint().0 + inv_iter.size_hint().0).max(1);
+// 		let iter = P::split(comb);
+// 		let capacity = 4 * iter.size_hint().0.max(1);
 // 		PredSubStateSplitIter {
-// 			state: tail_state,
+// 			iter,
 // 			misc_state,
 // 			branches: node.init_branches(capacity),
-// 			iter,
-// 			inv_iter,
 // 		}
 // 	}
 // }
