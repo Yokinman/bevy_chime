@@ -1,6 +1,7 @@
 use std::hash::Hash;
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
+use std::rc::Rc;
 use std::time::Duration;
 use bevy_ecs::change_detection::{DetectChanges, Ref, Res};
 use bevy_ecs::component::{Component, Tick};
@@ -1344,7 +1345,7 @@ where
 	K: CombKind,
 	C: PredComb<K::Pal>,
 {
-	slice: Box<[(C::Case, usize)]>,
+	slice: Rc<[(C::Case, usize)]>,
 }
 
 impl<C, const N: usize, K> Clone for PredArrayComb<C, N, K>
@@ -1354,7 +1355,7 @@ where
 {
 	fn clone(&self) -> Self {
 		Self {
-			slice: self.slice.clone(),
+			slice: Rc::clone(&self.slice),
 		}
 	}
 }
@@ -1388,7 +1389,7 @@ where
 		// !!! If `P::comb(param).into_kind::<K>()` returns empty, there's nothing to do.
 		
 		Self {
-			slice: vec.into_boxed_slice()
+			slice: vec.into()
 		}
 	}
 }
@@ -1429,7 +1430,7 @@ where
 	K: CombKind,
 	C: PredComb<K::Pal>,
 {
-	slice: Box<[(C::Case, usize)]>,
+	slice: Rc<[(C::Case, usize)]>,
 	index: [usize; N],
 	layer: usize,
 }
