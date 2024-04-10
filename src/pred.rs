@@ -233,7 +233,7 @@ where
 	fn next(&mut self) -> Option<Self::Item> {
 		if let Some(case) = self.iter.next() {
 			let sub_state = PredSubStateSplit::Main(PredSubState::new(
-				P::Tail::comb(self.state),
+				P::Tail::comb(self.state).into_kind(),
 				self.misc_state.clone(),
 				&mut self.branches.write((case.id(), PredNode::Blank)).1,
 			));
@@ -241,7 +241,7 @@ where
 		}
 		if let Some(case) = self.inv_iter.next() {
 			let sub_state = PredSubStateSplit::Pal(PredSubState::new(
-				P::Tail::comb(self.state),
+				P::Tail::comb(self.state).into_kind(),
 				self.misc_state.clone(),
 				&mut self.branches.write((case.id(), PredNode::Blank)).1,
 			));
@@ -605,10 +605,9 @@ where
 	P: PredParam,
 	K: CombKind,
 {
-	comb: P::Comb<'p>,
+	comb: <P::Comb<'p> as PredComb>::IntoKind<K>,
 	misc_state: Box<[M]>,
 	node: &'p mut PredNode<'s, P, M>,
-	kind: PhantomData<K>,
 }
 
 impl<'p, 's, P, M, K> PredSubState<'p, 's, P, M, K>
@@ -619,15 +618,14 @@ where
 	K: CombKind,
 {
 	fn new(
-		comb: P::Comb<'p>,
+		comb: <P::Comb<'p> as PredComb>::IntoKind<K>,
 		misc_state: Box<[M]>, 
 		node: &'p mut PredNode<'s, P, M>,
 	) -> Self {
 		Self {
 			comb,
 			misc_state,
-			node,
-			kind: PhantomData,
+			node
 		}
 	}
 	
@@ -681,7 +679,7 @@ where
 	type Item = <Self::IntoIter as IntoIterator>::Item;
 	type IntoIter = PredCombinator<'p, P, M, K>;
 	fn into_iter(self) -> Self::IntoIter {
-		let mut iter = self.comb.into_kind().into_iter();
+		let mut iter = self.comb.into_iter();
 		let node = self.node.init_data(4 * iter.size_hint().0.max(1));
 		let curr = iter.next();
 		PredCombinator {
@@ -711,7 +709,7 @@ where
 	M: PredId,
 {
 	pub(crate) fn new(
-		comb: P::Comb<'p>,
+		comb: <P::Comb<'p> as PredComb>::IntoKind<CombUpdated>,
 		misc_state: Box<[M]>, 
 		node: &'p mut PredNode<'s, P, M>,
 	) -> Self {
