@@ -115,13 +115,12 @@ pub trait PredParamVec: PredParam {
 		&'p SystemParamItem<'w, 's, <Self::Tail as PredParam>::Param>,
 	);
 	
-	// type Split<'p, K: CombKind>: Iterator<Item = (
-	// 	<PredParamItem<'p, Self::Head> as PredItem>::Ref,
-	// 	<<Self::Tail as PredParam>::Comb<'p> as PredComb>::IntoKind<K>,
-	// )>;
-	// 
-	// fn split2<K: CombKind>(comb: <Self::Comb<'_> as PredComb>::IntoKind<K>)
-	// 	-> Self::Split<'_, K>;
+	type Split<'p>: Iterator<Item = (
+		<<Self::Head as PredParam>::Comb<'p> as PredComb>::Case,
+		<Self::Tail as PredParam>::Comb<'p>,
+	)>;
+	
+	fn split2(comb: Self::Comb<'_>) -> Self::Split<'_>;
 	
 	fn join_id(
 		a: <Self::Head as PredParam>::Id,
@@ -140,6 +139,15 @@ pub trait PredParamVec: PredParam {
 // 		&'p SystemParamItem<'w, 's, <Self::Tail as PredParam>::Param>,
 // 	) {
 // 		(a, b)
+// 	}
+// 	
+// 	type Split<'p> = Iterator<(
+// 		<<Self::Head as PredParam>::Comb<'p> as PredComb>::Case,
+// 		<Self::Tail as PredParam>::Comb<'p>,
+// 	)>;
+// 	
+// 	fn split2(comb: Self::Comb<'_>) -> Self::Split<'_> {
+// 		todo!()
 // 	}
 // 	
 // 	fn join_id(
