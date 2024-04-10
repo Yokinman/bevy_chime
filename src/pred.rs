@@ -114,7 +114,7 @@ pub trait PredParamVec: PredParam {
 		PredSubComb<<Self::Tail as PredParam>::Comb<'p>, K>,
 	)>;
 	
-	fn split2<K: CombKind>(
+	fn split<K: CombKind>(
 		comb: <Self::Comb<'_> as PredComb>::IntoKind<K>
 	) -> Self::Split<'_, K>;
 	
@@ -134,7 +134,7 @@ impl<A: PredParam, B: PredParam> PredParamVec for (A, B) {
 		K,
 	>;
 	
-	fn split2<K: CombKind>(
+	fn split<K: CombKind>(
 		comb: <Self::Comb<'_> as PredComb>::IntoKind<K>
 	) -> Self::Split<'_, K> {
 		PredPairCombSplit {
@@ -654,7 +654,7 @@ where
 {
 	pub fn iter_step(self) -> PredSubStateSplitIter<'p, 's, P, M, K> {
 		let PredSubState { comb, misc_state, node } = self;
-		let iter = P::split2(comb);
+		let iter = P::split(comb);
 		let capacity = 4 * iter.size_hint().0.max(1);
 		PredSubStateSplitIter {
 			iter,
