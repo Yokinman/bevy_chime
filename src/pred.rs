@@ -431,14 +431,32 @@ pub trait PredComb<K: CombKind = CombNone>: Clone + IntoIterator<Item=Self::Case
 	fn into_kind<Kind: CombKind>(self) -> Self::IntoKind<Kind>;
 }
 
-impl<K: CombKind, T: PredItem> PredComb<K> for Option<PredCombCase<T, ()>> {
+impl<K: CombKind> PredComb<K> for std::iter::Empty<PredCombCase<(), ()>> {
 	type Id = ();
-	type Case = PredCombCase<T, ()>;
+	type Case = PredCombCase<(), ()>;
 	
 	type IntoKind<Kind: CombKind> = Self;
 	
 	fn into_kind<Kind: CombKind>(self) -> Self::IntoKind<Kind> {
 		self
+	}
+}
+
+impl<'w, R, K> PredComb<K> for ResComb<'w, R, K>
+where
+	K: CombKind,
+	R: Resource,
+{
+	type Id = ();
+	type Case = PredCombCase<Res<'w, R>, ()>;
+	
+	type IntoKind<Kind: CombKind> = ResComb<'w, R, Kind>;
+	
+	fn into_kind<Kind: CombKind>(self) -> Self::IntoKind<Kind> {
+		ResComb {
+			inner: Res::clone(&self.inner),
+			kind: PhantomData,
+		}
 	}
 }
 
@@ -529,18 +547,21 @@ impl<T: Component, F: ArchetypeFilter + 'static> PredParam for Query<'_, '_, &T,
 impl<R: Resource> PredParam for Res<'_, R> {
 	type Param = Res<'static, R>;
 	type Id = ();
-	type Comb<'w> = Option<PredCombCase<Res<'w, R>, ()>>;
+	type Comb<'w> = ResComb<'w, R>;
 	fn comb<'w>(param: &'w SystemParamItem<Self::Param>) -> Self::Comb<'w> {
-		CombNone::wrap((Res::clone(param), ()))
+		ResComb {
+			inner: Res::clone(param),
+			kind: PhantomData,
+		}
 	}
 }
 
 impl PredParam for () {
 	type Param = ();
 	type Id = ();
-	type Comb<'w> = Option<PredCombCase<(), ()>>;
-	fn comb<'w>(param: &'w SystemParamItem<Self::Param>) -> Self::Comb<'w> {
-		CombNone::wrap((*param, ()))
+	type Comb<'w> = std::iter::Empty<PredCombCase<(), ()>>;
+	fn comb<'w>(_param: &'w SystemParamItem<Self::Param>) -> Self::Comb<'w> {
+		std::iter::empty()
 	}
 }
 
@@ -1109,6 +1130,75 @@ unsafe impl<D: PredQueryData, M: PredId> SystemParam for PredQuery<'_, '_, D, M>
 	// }
 	unsafe fn get_param<'world, 'state>(state: &'state mut Self::State, _system_meta: &SystemMeta, world: UnsafeWorldCell<'world>, _change_tick: Tick) -> Self::Item<'world, 'state> {
 		PredQuery { world, state }
+	}
+}
+
+/// Combinator for `PredParam` `Res` implementation.
+pub struct ResComb<'w, T, K = CombNone>
+where
+	T: Resource,
+{
+	inner: Res<'w, T>,
+	kind: PhantomData<K>,
+}
+
+impl<T, K> Clone for ResComb<'_, T, K>
+where
+	T: Resource,
+{
+	fn clone(&self) -> Self {
+		Self {
+			inner: Res::clone(&self.inner),
+			kind: PhantomData,
+		}
+	}
+}
+
+impl<'w, T, K> IntoIterator for ResComb<'w, T, K>
+where
+	K: CombKind,
+	T: Resource,
+{
+	type Item = <Self::IntoIter as Iterator>::Item;
+	type IntoIter = ResCombIter<'w, T, K>;
+	fn into_iter(self) -> Self::IntoIter {
+		ResCombIter {
+			iter: std::iter::once((self.inner, ())),
+			kind: PhantomData,
+		}
+	}
+}
+
+/// `Iterator` of `ResComb`'s `IntoIterator` implementation.
+pub struct ResCombIter<'w, T, K>
+where
+	T: Resource,
+{
+	iter: std::iter::Once<(Res<'w, T>, ())>,
+	kind: PhantomData<K>,
+}
+
+impl<'w, T, K> Iterator for ResCombIter<'w, T, K>
+where
+	K: CombKind,
+	T: Resource,
+{
+	type Item = PredCombCase<Res<'w, T>, ()>;
+	fn next(&mut self) -> Option<Self::Item> {
+		for next in self.iter.by_ref() {
+			let wrap = K::wrap(next);
+			if wrap.is_some() {
+				return wrap
+			}
+		}
+		None
+	}
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		match (K::HAS_DIFF, K::HAS_SAME) {
+			(false, false) => (0, Some(0)),
+			(true, true) => self.iter.size_hint(),
+			_ => (0, self.iter.size_hint().1)
+		}
 	}
 }
 
