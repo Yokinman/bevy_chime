@@ -300,6 +300,9 @@ where
 			None
 		}
 	}
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		self.iter.size_hint()
+	}
 }
 
 /// Nested state of each [`PredSubState::iter_step`].
