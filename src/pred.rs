@@ -174,9 +174,9 @@ where
 			None
 		}
 	}
-	// fn size_hint(&self) -> (usize, Option<usize>) {
-	// 	todo!()
-	// }
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		self.a_iter.size_hint()
+	}
 }
 
 macro_rules! impl_pred_param_vec_for_array {
@@ -251,9 +251,10 @@ where
 			None
 		}
 	}
-	// fn size_hint(&self) -> (usize, Option<usize>) {
-	// 	todo!()
-	// }
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		let num = self.slice.len() - self.index;
+		(num, Some(num))
+	}
 }
 
 /// ...
