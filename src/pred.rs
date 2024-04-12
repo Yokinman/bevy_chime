@@ -431,14 +431,16 @@ pub trait PredComb<K: CombKind = CombNone>: Clone + IntoIterator<Item=Self::Case
 	fn into_kind<Kind: CombKind>(self) -> Self::IntoKind<Kind>;
 }
 
-impl<K: CombKind> PredComb<K> for std::iter::Empty<PredCombCase<(), ()>> {
+impl<K: CombKind> PredComb<K> for EmptyComb<K> {
 	type Id = ();
 	type Case = PredCombCase<(), ()>;
 	
-	type IntoKind<Kind: CombKind> = Self;
+	type IntoKind<Kind: CombKind> = EmptyComb<Kind>;
 	
 	fn into_kind<Kind: CombKind>(self) -> Self::IntoKind<Kind> {
-		self
+		EmptyComb {
+			kind: PhantomData,
+		}
 	}
 }
 
@@ -559,9 +561,11 @@ impl<R: Resource> PredParam for Res<'_, R> {
 impl PredParam for () {
 	type Param = ();
 	type Id = ();
-	type Comb<'w> = std::iter::Empty<PredCombCase<(), ()>>;
+	type Comb<'w> = EmptyComb;
 	fn comb<'w>(_param: &'w SystemParamItem<Self::Param>) -> Self::Comb<'w> {
-		std::iter::empty()
+		EmptyComb {
+			kind: PhantomData,
+		}
 	}
 }
 
@@ -1130,6 +1134,30 @@ unsafe impl<D: PredQueryData, M: PredId> SystemParam for PredQuery<'_, '_, D, M>
 	// }
 	unsafe fn get_param<'world, 'state>(state: &'state mut Self::State, _system_meta: &SystemMeta, world: UnsafeWorldCell<'world>, _change_tick: Tick) -> Self::Item<'world, 'state> {
 		PredQuery { world, state }
+	}
+}
+
+/// Combinator for `PredParam` `()` implementation.
+pub struct EmptyComb<K = CombNone> {
+	kind: PhantomData<K>,
+}
+
+impl<K> Clone for EmptyComb<K> {
+	fn clone(&self) -> Self {
+		Self {
+			kind: PhantomData,
+		}
+	}
+}
+
+impl<K> IntoIterator for EmptyComb<K>
+where
+	K: CombKind
+{
+	type Item = <Self::IntoIter as Iterator>::Item;
+	type IntoIter = CombIter<std::iter::Once<((), ())>, K>;
+	fn into_iter(self) -> Self::IntoIter {
+		CombIter::new(std::iter::once(((), ())))
 	}
 }
 
