@@ -238,6 +238,19 @@ where
 {
 	type Item = (C::Case, PredSubComb<PredArrayComb<C, N>, K>);
 	fn next(&mut self) -> Option<Self::Item> {
+		if let Some(mut max_index) = self.slice.len().checked_sub(N + 1) {
+			if let Some(index) = self.slice[..=max_index].iter()
+				.map(|(_, i)| *i)
+				.rfind(|i| *i < self.slice.len())
+			{
+				max_index = max_index.min(index);
+			}
+			if self.index > max_index {
+				return None
+			}
+		} else {
+			return None
+		};
 		if let Some((case, _)) = self.slice.get(self.index) {
 			self.index += 1;
 			let comb = PredArrayComb {
@@ -252,8 +265,18 @@ where
 		}
 	}
 	fn size_hint(&self) -> (usize, Option<usize>) {
-		let num = self.slice.len() - self.index;
-		(num, Some(num))
+		if let Some(mut max_index) = self.slice.len().checked_sub(N + 1) {
+			if let Some(index) = self.slice[..=max_index].iter()
+				.map(|(_, i)| *i)
+				.rfind(|i| *i < self.slice.len())
+			{
+				max_index = max_index.min(index);
+			}
+			let num = (max_index + 1) - self.index;
+			(num, Some(num))
+		} else {
+			(0, Some(0))
+		}
 	}
 }
 
