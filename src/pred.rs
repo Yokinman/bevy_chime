@@ -1160,45 +1160,9 @@ where
 	T: Resource,
 {
 	type Item = <Self::IntoIter as Iterator>::Item;
-	type IntoIter = ResCombIter<'w, T, K>;
+	type IntoIter = CombIter<std::iter::Once<(Res<'w, T>, ())>, K>;
 	fn into_iter(self) -> Self::IntoIter {
-		ResCombIter {
-			iter: std::iter::once((self.inner, ())),
-			kind: PhantomData,
-		}
-	}
-}
-
-/// `Iterator` of `ResComb`'s `IntoIterator` implementation.
-pub struct ResCombIter<'w, T, K>
-where
-	T: Resource,
-{
-	iter: std::iter::Once<(Res<'w, T>, ())>,
-	kind: PhantomData<K>,
-}
-
-impl<'w, T, K> Iterator for ResCombIter<'w, T, K>
-where
-	K: CombKind,
-	T: Resource,
-{
-	type Item = PredCombCase<Res<'w, T>, ()>;
-	fn next(&mut self) -> Option<Self::Item> {
-		for next in self.iter.by_ref() {
-			let wrap = K::wrap(next);
-			if wrap.is_some() {
-				return wrap
-			}
-		}
-		None
-	}
-	fn size_hint(&self) -> (usize, Option<usize>) {
-		match (K::HAS_DIFF, K::HAS_SAME) {
-			(false, false) => (0, Some(0)),
-			(true, true) => self.iter.size_hint(),
-			_ => (0, self.iter.size_hint().1)
-		}
+		CombIter::new(std::iter::once((self.inner, ())))
 	}
 }
 
@@ -1235,32 +1199,35 @@ where
 	F: ArchetypeFilter + 'static,
 {
 	type Item = <Self::IntoIter as Iterator>::Item;
-	type IntoIter = QueryCombIter<'w, T, F, K>;
+	type IntoIter = CombIter<QueryIter<'w, 'w, (Ref<'static, T>, Entity), F>, K>;
 	fn into_iter(self) -> Self::IntoIter {
-		QueryCombIter {
-			iter: self.inner.iter_inner(),
+		CombIter::new(self.inner.iter_inner())
+	}
+}
+
+/// `Iterator` of `ResComb`'s `IntoIterator` implementation.
+pub struct CombIter<T, K> {
+	iter: T,
+	kind: PhantomData<K>,
+}
+
+impl<T, K> CombIter<T, K> {
+	fn new(iter: T) -> Self {
+		Self {
+			iter,
 			kind: PhantomData,
 		}
 	}
 }
 
-/// `Iterator` of `QueryComb`'s `IntoIterator` implementation.
-pub struct QueryCombIter<'w, T, F, K>
+impl<P, I, T, K> Iterator for CombIter<T, K>
 where
-	T: Component,
-	F: ArchetypeFilter + 'static,
-{
-	iter: QueryIter<'w, 'w, (Ref<'static, T>, Entity), F>,
-	kind: PhantomData<K>,
-}
-
-impl<'w, T, F, K> Iterator for QueryCombIter<'w, T, F, K>
-where
+	P: PredItem,
+	I: PredId,
+	T: Iterator<Item = (P, I)>,
 	K: CombKind,
-	T: Component,
-	F: ArchetypeFilter + 'static,
 {
-	type Item = PredCombCase<Ref<'w, T>, Entity>;
+	type Item = PredCombCase<P, I>;
 	fn next(&mut self) -> Option<Self::Item> {
 		for next in self.iter.by_ref() {
 			let wrap = K::wrap(next);
