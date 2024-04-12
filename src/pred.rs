@@ -195,6 +195,7 @@ macro_rules! impl_pred_param_vec_for_array {
 				comb: <Self::Comb<'_> as PredComb>::IntoKind<K>
 			) -> Self::Split<'_, K> {
 				PredArrayCombSplit {
+					comb: comb.comb,
 					slice: comb.slice,
 					index: comb.index,
 					kind: PhantomData,
@@ -223,6 +224,7 @@ pub struct PredArrayCombSplit<C, const N: usize, K>
 where
 	C: PredComb,
 {
+	comb: C,
 	slice: Rc<[(C::Case, usize)]>,
 	index: usize,
 	kind: PhantomData<K>,
@@ -239,6 +241,7 @@ where
 		if let Some((case, _)) = self.slice.get(self.index) {
 			self.index += 1;
 			let comb = PredArrayComb {
+				comb: self.comb.clone(),
 				slice: Rc::clone(&self.slice),
 				index: self.index,
 				kind: PhantomData,
@@ -485,11 +488,7 @@ where
 	type IntoKind<Kind: CombKind> = PredArrayComb<C, N, Kind>;
 	
 	fn into_kind<Kind: CombKind>(self) -> Self::IntoKind<Kind> {
-		PredArrayComb {
-			slice: self.slice,
-			index: self.index,
-			kind: PhantomData,
-		}
+		PredArrayComb::new(self.comb)
 	}
 }
 
@@ -561,7 +560,7 @@ where
 	type Id = [P::Id; N];
 	type Comb<'w> = PredArrayComb<P::Comb<'w>, N>;
 	fn comb<'w>(param: &'w SystemParamItem<Self::Param>) -> Self::Comb<'w> {
-		PredArrayComb::new::<P>(param)
+		PredArrayComb::new(P::comb(param))
 	}
 }
 
@@ -1377,6 +1376,7 @@ pub struct PredArrayComb<C, const N: usize, K = CombAll>
 where
 	C: PredComb,
 {
+	comb: C,
 	slice: Rc<[(C::Case, usize)]>,
 	index: usize,
 	kind: PhantomData<K>,
@@ -1388,6 +1388,7 @@ where
 {
 	fn clone(&self) -> Self {
 		Self {
+			comb: self.comb.clone(),
 			slice: Rc::clone(&self.slice),
 			index: self.index,
 			kind: PhantomData,
@@ -1401,14 +1402,14 @@ where
 	C: PredComb,
 	C::Id: Ord,
 {
-	fn new<'p, P: PredParam<Comb<'p> = C>>(param: &'p SystemParamItem<P::Param>) -> Self {
-		let mut vec = P::comb(param).into_kind::<K::Pal>().into_iter()
+	fn new(comb: C) -> Self {
+		let mut vec = comb.clone().into_kind::<K::Pal>().into_iter()
 			.map(|x| (x, usize::MAX))
 			.collect::<Vec<_>>();
 		
 		vec.sort_unstable_by_key(|(x, _)| x.id());
 		
-		for item in P::comb(param).into_kind::<K>() {
+		for item in comb.clone().into_kind::<K>() {
 			if let Ok(target) = vec.binary_search_by(|(x, _)| x.id().cmp(&item.id())) {
 				vec[target].1 = target;
 				let mut i = target;
@@ -1424,6 +1425,7 @@ where
 		// !!! If `P::comb(param).into_kind::<K>()` returns empty, there's nothing to do.
 		
 		Self {
+			comb,
 			slice: vec.into(),
 			index: 0,
 			kind: PhantomData,
@@ -1449,11 +1451,11 @@ where
 		if N == 0 {
 			return iter
 		}
-		let index = iter.index[0];
+		let index = iter.index[N-1];
 		if index >= iter.slice.len() || iter.slice[index].1 >= iter.slice.len() {
-			iter.index[0] = iter.slice.len();
+			iter.index[N-1] = iter.slice.len();
 		} else if index == iter.slice[index].1 {
-			iter.layer = N - 1;
+			iter.layer = N-1;
 		}
 		for i in 1..N {
 			iter.index[N-i - 1] = iter.index[N-i];
