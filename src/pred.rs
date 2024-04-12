@@ -1511,7 +1511,10 @@ where
 				}
 			}
 		}
-		// !!! If `P::comb(param).into_kind::<K>()` returns empty, there's nothing to do.
+		
+		if vec.is_empty() || vec[0].1 == usize::MAX {
+			vec.clear();
+		}
 		
 		Self {
 			comb,
