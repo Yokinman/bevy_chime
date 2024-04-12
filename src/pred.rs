@@ -421,7 +421,7 @@ impl<P: PredItem, I: PredId> Clone for PredCombCase<P, I> {
 }
 
 /// Combinator type produced by `PredParam::comb`.
-pub trait PredComb<K: CombKind = CombAll>: Clone + IntoIterator<Item=Self::Case> {
+pub trait PredComb<K: CombKind = CombNone>: Clone + IntoIterator<Item=Self::Case> {
 	type Id: PredId;
 	type Case: PredCombinatorCase<Id=Self::Id>;
 	
@@ -531,7 +531,7 @@ impl<R: Resource> PredParam for Res<'_, R> {
 	type Id = ();
 	type Comb<'w> = Option<PredCombCase<Res<'w, R>, ()>>;
 	fn comb<'w>(param: &'w SystemParamItem<Self::Param>) -> Self::Comb<'w> {
-		CombAll::wrap((Res::clone(param), ()))
+		CombNone::wrap((Res::clone(param), ()))
 	}
 }
 
@@ -540,7 +540,7 @@ impl PredParam for () {
 	type Id = ();
 	type Comb<'w> = Option<PredCombCase<(), ()>>;
 	fn comb<'w>(param: &'w SystemParamItem<Self::Param>) -> Self::Comb<'w> {
-		CombAll::wrap((*param, ()))
+		CombNone::wrap((*param, ()))
 	}
 }
 
@@ -1113,7 +1113,7 @@ unsafe impl<D: PredQueryData, M: PredId> SystemParam for PredQuery<'_, '_, D, M>
 }
 
 /// Combinator for `PredParam` `Query` implementation.
-pub struct QueryComb<'w, T, F, K = CombAll>
+pub struct QueryComb<'w, T, F, K = CombNone>
 where
 	T: Component,
 	F: ArchetypeFilter + 'static,
@@ -1190,7 +1190,7 @@ where
 }
 
 /// Combinator for `PredParam` tuple implementation.
-pub struct PredPairComb<A, B, K = CombAll> {
+pub struct PredPairComb<A, B, K = CombNone> {
 	a_comb: A,
 	b_comb: B,
 	kind: PhantomData<K>,
@@ -1373,7 +1373,7 @@ where
 }
 
 /// Combinator for `PredParam` array implementation.
-pub struct PredArrayComb<C, const N: usize, K = CombAll>
+pub struct PredArrayComb<C, const N: usize, K = CombNone>
 where
 	C: PredComb,
 {
