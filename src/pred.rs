@@ -169,7 +169,12 @@ where
 	type Item = (A::Item, PredSubComb<B, K>);
 	fn next(&mut self) -> Option<Self::Item> {
 		if let Some(case) = self.a_iter.next() {
-			Some((case, PredSubComb::Diff(self.b_comb.clone().into_kind())))
+			let sub_comb = if case.is_diff() {
+				PredSubComb::Diff(self.b_comb.clone().into_kind())
+			} else {
+				PredSubComb::Same(self.b_comb.clone().into_kind())
+			};
+			Some((case, sub_comb))
 		} else {
 			None
 		}
@@ -253,13 +258,25 @@ where
 		};
 		if let Some((case, _)) = self.slice.get(self.index) {
 			self.index += 1;
-			let comb = PredArrayComb {
-				comb: self.comb.clone(),
-				slice: Rc::clone(&self.slice),
-				index: self.index,
-				kind: PhantomData,
+			let comb = self.comb.clone();
+			let slice = Rc::clone(&self.slice);
+			let index = self.index;
+			let sub_comb = if case.is_diff() {
+				PredSubComb::Diff(PredArrayComb {
+					comb,
+					slice,
+					index,
+					kind: PhantomData,
+				})
+			} else {
+				PredSubComb::Same(PredArrayComb {
+					comb,
+					slice,
+					index,
+					kind: PhantomData,
+				})
 			};
-			Some((*case, PredSubComb::Diff(comb)))
+			Some((*case, sub_comb))
 		} else {
 			None
 		}
