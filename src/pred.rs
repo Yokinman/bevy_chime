@@ -54,10 +54,10 @@ pub trait CombKind {
 		if Self::HAS_DIFF || Self::HAS_SAME {
 			if T::is_updated(&item) {
 				if Self::HAS_DIFF {
-					return Some(PredCombCase(T::into_ref(item), id))
+					return Some(PredCombCase::Diff(T::into_ref(item), id))
 				}
 			} else if Self::HAS_SAME {
-				return Some(PredCombCase(T::into_ref(item), id))
+				return Some(PredCombCase::Same(T::into_ref(item), id))
 			}
 		}
 		None
@@ -402,10 +402,12 @@ impl<P: PredItem, I: PredId> PredCombinatorCase for PredCombCase<P, I> {
 	type Item = P;
 	type Id = I;
 	fn item_ref(&self) -> <Self::Item as PredItem>::Ref {
-		self.0
+		let (PredCombCase::Diff(item, _) | PredCombCase::Same(item, _)) = self;
+		*item
 	}
 	fn id(&self) -> Self::Id {
-		self.1
+		let (PredCombCase::Diff(_, id) | PredCombCase::Same(_, id)) = self;
+		*id
 	}
 }
 
@@ -436,7 +438,10 @@ where
 }
 
 /// An item & ID pair of a `PredParam`, with their updated state.
-pub struct PredCombCase<P: PredItem, I: PredId>(P::Ref, I);
+pub enum PredCombCase<P: PredItem, I: PredId> {
+	Diff(P::Ref, I),
+	Same(P::Ref, I),
+}
 
 impl<P: PredItem, I: PredId> Copy for PredCombCase<P, I> {}
 
