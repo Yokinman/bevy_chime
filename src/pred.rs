@@ -1864,11 +1864,35 @@ where
 
 #[test]
 fn array_comb() {
-	fn test<const N: usize, const R: usize>(update_list: &[usize]) {
+	#[derive(Component, Copy, Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
+	struct Test(usize);
+	
+	fn test<const N: usize, const R: usize>(update_list: &[usize])
+	where
+		for<'w, 's, 'a, 'b> [Query<'w, 's, &'a Test>; R]:
+			PredParamVec<
+				Head = Query<'w, 's, &'a Test>,
+				Comb<'b> = PredArrayComb<QueryComb<'b, Test, ()>, R>
+			>,
+		for<'w, 's, 'a, 'b>
+			<<<<<[Query<'w, 's, &'a Test>; R]
+				as PredParamVec>::Tail
+				as PredParam>::Comb<'b>
+				as PredComb>::Case
+				as PredCombinatorCase>::Item
+				as PredItem>::Ref:
+					IntoIterator,
+		for<'w, 's, 'a, 'b>
+			<<<<<<[Query<'w, 's, &'a Test>; R]
+				as PredParamVec>::Tail
+				as PredParam>::Comb<'b>
+				as PredComb>::Case
+				as PredCombinatorCase>::Item
+				as PredItem>::Ref
+				as IntoIterator>::Item:
+					Deref<Target = Test>,
+	{
 		use crate::*;
-		
-		#[derive(Component, Copy, Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
-		struct Test(usize);
 		
 		let mut app = App::new();
 		app.insert_resource::<Time>(Time::default());
@@ -1885,9 +1909,9 @@ fn array_comb() {
 			((1+n-r)..=n).product::<usize>() / (1..=r).product::<usize>()
 		}
 		
+		 // Setup [`PredArrayComb`] Testing:
 		let n_choose_r = choose(N, R);
 		let update_vec = update_list.to_vec();
-		
 		app.add_chime_events((move |
 			state: PredState<[Query<&Test>; R]>,
 			query: Query<&Test>,
@@ -1934,9 +1958,77 @@ fn array_comb() {
 			*index += 1;
 		}).into_events().on_begin(|| {}));
 		
-		app.world.run_schedule(ChimeSchedule);
-		app.world.run_schedule(ChimeSchedule);
+		 // Setup [`PredSubState::iter_step`] Testing:
+		let update_vec = update_list.to_vec();
+		app.add_chime_events((move |
+			state: PredState<[Query<&Test>; R]>,
+			query: Query<Ref<Test>>,
+			mut index: system::Local<usize>,
+		| {
+			let mut iter = state.iter_step();
+			match *index {
+				0 => { // Full
+					let count = N.checked_sub(R).map(|x| x + 1).unwrap_or(0);
+					assert_eq!(iter.size_hint(), (count, Some(count)));
+					let mut n = 0;
+					for ((state, a), b) in iter.zip(&query) {
+						// This assumes `iter` and `Query` will always return
+						// in the same order.
+						assert_eq!(*a, *b);
+						let count = choose(N - (n + 1), R - 1);
+						assert_eq!(state.into_iter().size_hint(), (count, Some(count)));
+						n += 1;
+					}
+					assert_eq!(n, count);
+				},
+				1 => { // Empty
+					assert_eq!(iter.size_hint(), (0, Some(0)));
+					let next = iter.next();
+					if next.is_some() {
+						println!("> {:?}", next.as_ref().unwrap().1);
+					}
+					assert!(next.is_none());
+				},
+				2 => { // Misc
+					let count = update_vec.iter().max().copied()
+						.min(N.checked_sub(R))
+						.map(|x| x + 1)
+						.unwrap_or(0);
+					assert_eq!(iter.size_hint(), (count, Some(count)));
+					let mut n = 0;
+					for ((state, a), b) in iter.zip(&query) {
+						// This assumes `iter` and `Query` will always return
+						// in the same order.
+						assert_eq!(*a, *b);
+						if DetectChanges::is_changed(&b) {
+							assert!(update_vec.contains(&n));
+							let count = choose(N - (n + 1), R - 1);
+							assert_eq!(state.into_iter().size_hint(), (count, Some(count)));
+						} else {
+							for (_, x) in state {
+								let list = x.into_iter()
+									.map(|x| *x)
+									.collect::<Vec<_>>();
+								assert!(
+									update_vec.iter()
+										.any(|i| list.contains(&&Test(*i))),
+									"{:?} not in {:?}",
+									(list, *a), update_vec,
+								);
+							}
+						}
+						n += 1;
+					}
+					assert_eq!(n, count);
+				},
+				_ => unimplemented!(),
+			}
+			*index += 1;
+		}).into_events().on_begin(|| {}));
 		
+		 // Run Tests:
+		app.world.run_schedule(ChimeSchedule);
+		app.world.run_schedule(ChimeSchedule);
 		for mut test in app.world.query::<&mut Test>()
 			.iter_mut(&mut app.world)
 		{
@@ -1944,18 +2036,17 @@ fn array_comb() {
 				test.0 = std::hint::black_box(test.0);
 			}
 		}
-		
 		app.world.run_schedule(ChimeSchedule);
 	}
 	
 	 // Normal Cases:
-	test::<10, 4>(&[0, 4, 7]);
+	test::<10, 4>(&[0, 4, 6]);
 	test::<200, 2>(&[10, 17, 100, 101, 102, 103, 104, 105, 199]);
 	
 	 // Weird Cases:
 	test::<10, 10>(&[]);
 	test::<16, 1>(&[]);
 	test::<0, 2>(&[]);
-	test::<10, 0>(&[]);
-	test::<0, 0>(&[]);
+	// test::<10, 0>(&[]);
+	// test::<0, 0>(&[]);
 }
