@@ -279,7 +279,7 @@ fn when_func_c(pred: PredState<[Query<&Pos>; 2]>) {
 	for (case, pos) in pred.iter_step() {
 		let time = pos.max_base_time();
 		let pos_poly_vec = pos.poly_vec(time);
-		for (case, b_pos) in case {
+		for (case, [b_pos]) in case {
 			// !!! This kind of thing could be optimized by organizing entities
 			// into grid zones, and only making predictions with entities in
 			// adjacent zones. Use a prediction case for updating the zones.
