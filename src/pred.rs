@@ -385,6 +385,12 @@ where
 			Self::Same(iter) => iter.next(),
 		}
 	}
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		match self {
+			Self::Diff(iter) => iter.size_hint(),
+			Self::Same(iter) => iter.size_hint(),
+		}
+	}
 }
 
 /// Item of a [`PredComb`]'s iterator.
