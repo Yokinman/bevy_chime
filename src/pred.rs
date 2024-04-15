@@ -42,26 +42,8 @@ where
 pub trait CombKind {
 	type Pal: CombKind;
 	type Inv: CombKind;
-	
 	const HAS_DIFF: bool;
 	const HAS_SAME: bool;
-	
-	fn wrap<T, I>((item, id): (T, I)) -> Option<PredCombCase<T, I>>
-	where
-		T: PredItem,
-		I: PredId,
-	{
-		if Self::HAS_DIFF || Self::HAS_SAME {
-			if T::is_updated(&item) {
-				if Self::HAS_DIFF {
-					return Some(PredCombCase::Diff(T::into_ref(item), id))
-				}
-			} else if Self::HAS_SAME {
-				return Some(PredCombCase::Same(T::into_ref(item), id))
-			}
-		}
-		None
-	}
 }
 
 /// No combinations.
