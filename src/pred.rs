@@ -1862,12 +1862,14 @@ where
 	}
 }
 
-#[test]
-fn array_comb() {
+#[cfg(test)]
+mod testing {
+	use super::*;
+	
 	#[derive(Component, Copy, Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
 	struct Test(usize);
 	
-	fn test<const N: usize, const R: usize>(update_list: &[usize])
+	fn test_array<const N: usize, const R: usize>(update_list: &[usize])
 	where
 		for<'w, 's, 'a, 'b> [Query<'w, 's, &'a Test>; R]:
 			PredParamVec<
@@ -2039,14 +2041,17 @@ fn array_comb() {
 		app.world.run_schedule(ChimeSchedule);
 	}
 	
-	 // Normal Cases:
-	test::<10, 4>(&[0, 4, 6]);
-	test::<200, 2>(&[10, 17, 100, 101, 102, 103, 104, 105, 199]);
-	
-	 // Weird Cases:
-	test::<10, 10>(&[]);
-	test::<16, 1>(&[]);
-	test::<0, 2>(&[]);
-	// test::<10, 0>(&[]);
-	// test::<0, 0>(&[]);
+	#[test]
+	fn array_comb() {
+		 // Normal Cases:
+		test_array::<10, 4>(&[0, 4, 6]);
+		test_array::<200, 2>(&[10, 17, 100, 101, 102, 103, 104, 105, 199]);
+		
+		 // Weird Cases:
+		test_array::<10, 10>(&[]);
+		test_array::<16, 1>(&[]);
+		test_array::<0, 2>(&[]);
+		// test_array::<10, 0>(&[]);
+		// test_array::<0, 0>(&[]);
+	}
 }
