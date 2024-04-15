@@ -200,10 +200,16 @@ macro_rules! impl_pred_param_vec_for_array {
 				comb: <Self::Comb<'_> as PredComb>::IntoKind<K>
 			) -> Self::Split<'_, K> {
 				PredArrayCombSplit {
-					comb: comb.comb,
-					slice: comb.slice,
-					index: comb.index,
-					kind: PhantomData,
+					inner: PredArrayComb {
+						comb: comb.comb,
+						slice: comb.slice,
+						index: comb.index,
+						min_diff_index: comb.min_diff_index,
+						min_same_index: comb.min_same_index,
+						max_diff_index: comb.max_diff_index,
+						max_same_index: comb.max_same_index,
+						kind: PhantomData,
+					}
 				}
 			}
 			
@@ -229,10 +235,7 @@ pub struct PredArrayCombSplit<C, const N: usize, K>
 where
 	C: PredComb,
 {
-	comb: C,
-	slice: Rc<[(C::Case, usize)]>,
-	index: usize,
-	kind: PhantomData<K>,
+	inner: PredArrayComb<C, N, K>,
 }
 
 impl<C, const N: usize, K> Iterator for PredArrayCombSplit<C, N, K>
@@ -243,38 +246,25 @@ where
 {
 	type Item = (C::Case, PredSubComb<PredArrayComb<C, N>, K>);
 	fn next(&mut self) -> Option<Self::Item> {
-		if let Some(mut max_index) = self.slice.len().checked_sub(N + 1) {
-			if let Some(index) = self.slice[..=max_index].iter()
-				.map(|(_, i)| *i)
-				.rfind(|i| *i < self.slice.len())
-			{
-				max_index = max_index.min(index);
-			}
-			if self.index > max_index {
+		if let Some(mut max_index) = self.inner.slice.len().checked_sub(N) {
+			max_index = max_index.min(match (K::HAS_DIFF, K::HAS_SAME) {
+				(true, true) => self.inner.slice.len(),
+				(false, false) => 0,
+				(true, false) => self.inner.max_diff_index,
+				(false, true) => self.inner.max_same_index,
+			});
+			if self.inner.index >= max_index {
 				return None
 			}
 		} else {
 			return None
 		};
-		if let Some((case, _)) = self.slice.get(self.index) {
-			self.index += 1;
-			let comb = self.comb.clone();
-			let slice = Rc::clone(&self.slice);
-			let index = self.index;
+		if let Some((case, _)) = self.inner.slice.get(self.inner.index) {
+			self.inner.index += 1;
 			let sub_comb = if case.is_diff() {
-				PredSubComb::Diff(PredArrayComb {
-					comb,
-					slice,
-					index,
-					kind: PhantomData,
-				})
+				PredSubComb::Diff(self.inner.clone().into_kind())
 			} else {
-				PredSubComb::Same(PredArrayComb {
-					comb,
-					slice,
-					index,
-					kind: PhantomData,
-				})
+				PredSubComb::Same(self.inner.clone().into_kind())
 			};
 			Some((*case, sub_comb))
 		} else {
@@ -282,14 +272,14 @@ where
 		}
 	}
 	fn size_hint(&self) -> (usize, Option<usize>) {
-		if let Some(mut max_index) = self.slice.len().checked_sub(N + 1) {
-			if let Some(index) = self.slice[..=max_index].iter()
-				.map(|(_, i)| *i)
-				.rfind(|i| *i < self.slice.len())
-			{
-				max_index = max_index.min(index);
-			}
-			let num = (max_index + 1) - self.index;
+		if let Some(mut max_index) = self.inner.slice.len().checked_sub(N) {
+			max_index = max_index.min(match (K::HAS_DIFF, K::HAS_SAME) {
+				(true, true) => self.inner.slice.len(),
+				(false, false) => 0,
+				(true, false) => self.inner.max_diff_index,
+				(false, true) => self.inner.max_same_index,
+			});
+			let num = max_index - self.inner.index;
 			(num, Some(num))
 		} else {
 			(0, Some(0))
@@ -573,7 +563,22 @@ where
 	type IntoKind<Kind: CombKind> = PredArrayComb<C, N, Kind>;
 	
 	fn into_kind<Kind: CombKind>(self) -> Self::IntoKind<Kind> {
-		PredArrayComb::new(self.comb)
+		if K::Pal::HAS_DIFF == Kind::Pal::HAS_DIFF
+			&& K::Pal::HAS_SAME == Kind::Pal::HAS_SAME
+		{
+			PredArrayComb {
+				comb: self.comb,
+				slice: self.slice,
+				index: self.index,
+				min_diff_index: self.min_diff_index,
+				min_same_index: self.min_same_index,
+				max_diff_index: self.max_diff_index,
+				max_same_index: self.max_same_index,
+				kind: PhantomData,
+			}
+		} else {
+			PredArrayComb::new(self.comb)
+		}
 	}
 }
 
@@ -1529,6 +1534,10 @@ where
 	comb: C,
 	slice: Rc<[(C::Case, usize)]>,
 	index: usize,
+	min_diff_index: usize,
+	min_same_index: usize,
+	max_diff_index: usize,
+	max_same_index: usize,
 	kind: PhantomData<K>,
 }
 
@@ -1541,6 +1550,10 @@ where
 			comb: self.comb.clone(),
 			slice: Rc::clone(&self.slice),
 			index: self.index,
+			min_diff_index: self.min_diff_index,
+			min_same_index: self.min_same_index,
+			max_diff_index: self.max_diff_index,
+			max_same_index: self.max_same_index,
 			kind: PhantomData,
 		}
 	}
@@ -1559,28 +1572,38 @@ where
 		
 		vec.sort_unstable_by_key(|(x, _)| x.id());
 		
-		for item in comb.clone().into_kind::<K>() {
-			if let Ok(target) = vec.binary_search_by(|(x, _)| x.id().cmp(&item.id())) {
-				vec[target].1 = target;
-				let mut i = target;
-				while i != 0 {
-					i -= 1;
-					if vec[i].1 < target {
-						break
-					}
-					vec[i].1 = target;
+		 // Setup Jump Indices:
+		let mut index = vec.len();
+		let mut min_diff_index = index;
+		let mut min_same_index = index;
+		let mut max_diff_index = 0;
+		let mut max_same_index = 0;
+		while index != 0 {
+			index -= 1;
+			let (case, next_alt_index) = &mut vec[index];
+			if case.is_diff() {
+				*next_alt_index = min_diff_index;
+				min_diff_index = index;
+				if max_diff_index == 0 {
+					max_diff_index = index + 1;
+				}
+			} else {
+				*next_alt_index = min_same_index;
+				min_same_index = index;
+				if max_same_index == 0 {
+					max_same_index = index + 1;
 				}
 			}
-		}
-		
-		if vec.is_empty() || vec[0].1 == usize::MAX {
-			vec.clear();
 		}
 		
 		Self {
 			comb,
 			slice: vec.into(),
 			index: 0,
+			min_diff_index,
+			min_same_index,
+			max_diff_index,
+			max_same_index,
 			kind: PhantomData,
 		}
 	}
@@ -1598,22 +1621,38 @@ where
 		let mut iter = PredArrayCombIter {
 			slice: self.slice,
 			index: [self.index; N],
+			min_diff_index: self.min_diff_index,
+			min_same_index: self.min_same_index,
 			layer: 0,
 			kind: PhantomData,
 		};
 		if N == 0 {
 			return iter
 		}
-		let index = iter.index[N-1];
-		if index >= iter.slice.len() || iter.slice[index].1 >= iter.slice.len() {
+		
+		 // Initialize Main Index:
+		if match (K::HAS_DIFF, K::HAS_SAME) {
+			(true, true) => false,
+			(false, false) => true,
+			(true, false) => iter.min_diff_index >= iter.slice.len(),
+			(false, true) => iter.min_same_index >= iter.slice.len(),
+		} {
 			iter.index[N-1] = iter.slice.len();
-		} else if index == iter.slice[index].1 {
-			iter.layer = N-1;
+		} else if iter.index[N-1] < iter.slice.len() {
+			let (case, _) = iter.slice[iter.index[N-1]];
+			if if case.is_diff() { K::HAS_DIFF } else { K::HAS_SAME } {
+				iter.layer = N-1;
+			} else if N == 1 {
+				iter.step_index(N-1);
+			}
 		}
+		
+		 // Initialize Sub-indices:
 		for i in 1..N {
 			iter.index[N-i - 1] = iter.index[N-i];
 			iter.step(N-i - 1);
 		}
+		
 		iter
 	}
 }
@@ -1625,6 +1664,8 @@ where
 {
 	slice: Rc<[(C::Case, usize)]>,
 	index: [usize; N],
+	min_diff_index: usize,
+	min_same_index: usize,
 	layer: usize,
 	kind: PhantomData<K>,
 }
@@ -1633,29 +1674,58 @@ impl<C, const N: usize, K> PredArrayCombIter<C, N, K>
 where
 	C: PredComb,
 	C::Id: Ord,
+	K: CombKind,
 {
 	fn step_index(&mut self, i: usize) -> bool {
-		let index = self.index[i] + 1;
+		let index = self.index[i];
 		if index >= self.slice.len() {
-			self.index[i] = self.slice.len();
 			return true
 		}
 		self.index[i] = match self.layer.cmp(&i) {
-			std::cmp::Ordering::Equal => self.slice[index].1,
-			std::cmp::Ordering::Less => {
-				if index == self.slice[index].1 {
-					self.layer = i;
+			std::cmp::Ordering::Equal => match (K::HAS_DIFF, K::HAS_SAME){
+				(true, true) => index + 1,
+				(false, false) => self.slice.len(),
+				_ => {
+					let (case, next_index) = self.slice[index];
+					
+					 // Jump to Next Matching Case:
+					if if case.is_diff() { K::HAS_DIFF } else { K::HAS_SAME } {
+						next_index
+					}
+					
+					 // Find Next Matching Case:
+					else {
+						let first_index = if K::HAS_DIFF {
+							self.min_diff_index
+						} else {
+							self.min_same_index
+						};
+						if index < first_index {
+							first_index
+						} else {
+							let mut index = index + 1;
+							while let Some((case, _)) = self.slice.get(index) {
+								if if case.is_diff() { K::HAS_DIFF } else { K::HAS_SAME } {
+									break
+								}
+								index += 1;
+							}
+							index
+						}
+					}
 				}
-				index
 			},
-			_ => index
+			std::cmp::Ordering::Less => {
+				if let Some((case, _)) = self.slice.get(index + 1) {
+					if if case.is_diff() { K::HAS_DIFF } else { K::HAS_SAME } {
+						self.layer = i;
+					}
+				}
+				index + 1
+			},
+			_ => index + 1
 		};
-		if self.index[i] >= self.slice.len() {
-			self.index[i] = self.slice.len();
-			true
-		} else {
-			false
-		}
+		self.index[i] >= self.slice.len()
 	}
 	
 	fn step(&mut self, i: usize) {
@@ -1664,9 +1734,10 @@ where
 				self.layer = 0;
 				
 				 // Jump to End:
-				let next = self.index[i + 1] + 1;
-				if next < self.slice.len() && self.slice[next].1 >= self.slice.len() {
-					self.index[i + 1] = self.slice.len();
+				if !K::HAS_DIFF || !K::HAS_SAME {
+					if self.slice[self.index[i + 1]].1 >= self.slice.len() {
+						self.index[i + 1] = self.slice.len();
+					}
 				}
 			}
 			self.step(i + 1);
@@ -1693,7 +1764,10 @@ where
 	fn size_hint(&self) -> (usize, Option<usize>) {
 		// Currently always produces an exact size.
 		
-		if N == 0 || self.index[N-1] >= self.slice.len() {
+		if N == 0
+			|| self.index[N-1] >= self.slice.len()
+			|| (!K::HAS_DIFF && !K::HAS_SAME)
+		{
 			return (0, Some(0))
 		}
 		
@@ -1713,15 +1787,22 @@ where
 			}
 			let mut remaining = self.slice.len() - index;
 			let mut num = falling_factorial(remaining, i + 1);
-			if i >= self.layer {
+			if i >= self.layer && (!K::HAS_DIFF || !K::HAS_SAME) {
+				let first_index = if K::HAS_DIFF {
+					self.min_diff_index
+				} else {
+					self.min_same_index
+				};
 				while index < self.slice.len() {
-					if index == self.slice[index].1 {
+					let (case, next_index) = self.slice[index];
+					index = if if case.is_diff() { K::HAS_DIFF } else { K::HAS_SAME } {
 						remaining -= 1;
-					}
-					index += 1;
-					if index < self.slice.len() {
-						index = self.slice[index].1;
-					}
+						next_index
+					} else if index < first_index {
+						first_index
+					} else {
+						index + 1
+					};
 				}
 				num -= falling_factorial(remaining, i + 1);
 			}
