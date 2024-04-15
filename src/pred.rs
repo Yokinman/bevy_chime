@@ -1332,10 +1332,16 @@ where
 {
 	type Item = PredCombCase<P, I>;
 	fn next(&mut self) -> Option<Self::Item> {
-		for next in self.iter.by_ref() {
-			let wrap = K::wrap(next);
-			if wrap.is_some() {
-				return wrap
+		if !K::HAS_DIFF && !K::HAS_SAME {
+			return None
+		}
+		for (item, id) in self.iter.by_ref() {
+			if P::is_updated(&item) {
+				if K::HAS_DIFF {
+					return Some(PredCombCase::Diff(P::into_ref(item), id))
+				}
+			} else if K::HAS_SAME {
+				return Some(PredCombCase::Same(P::into_ref(item), id))
 			}
 		}
 		None
