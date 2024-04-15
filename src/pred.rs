@@ -210,7 +210,10 @@ macro_rules! impl_pred_param_vec_for_array {
 	};
 }
 
-impl_pred_param_vec_for_array!(2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12);
+// `[P; 2]` splits into `A` and `[B; 1]`, which is kind of awkward/unintuitive.
+// However, I feel like the consistency has generic utility. An alternative
+// method to [`PredSubState::iter_step`] might be worthwhile for convenience.
+impl_pred_param_vec_for_array!(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12);
 
 /// ...
 pub struct PredArrayCombSplit<C, const N: usize, K>
