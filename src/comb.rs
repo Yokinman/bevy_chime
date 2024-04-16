@@ -64,250 +64,6 @@ impl CombKind for CombStatic {
 	const HAS_SAME: bool = true;
 }
 
-/// ...
-pub struct PredArrayCombSplit<C, const N: usize, K>
-where
-	C: PredComb,
-{
-	inner: PredArrayComb<C, N, K>,
-}
-
-impl<C, const N: usize, K> PredArrayCombSplit<C, N, K>
-where
-	C: PredComb,
-{
-	pub fn new<const M: usize>(comb: PredArrayComb<C, M, K>) -> Self {
-		Self {
-			inner: PredArrayComb {
-				comb: comb.comb,
-				slice: comb.slice,
-				index: comb.index,
-				min_diff_index: comb.min_diff_index,
-				min_same_index: comb.min_same_index,
-				max_diff_index: comb.max_diff_index,
-				max_same_index: comb.max_same_index,
-				kind: PhantomData,
-			}
-		}
-	}
-}
-
-impl<C, const N: usize, K> Iterator for PredArrayCombSplit<C, N, K>
-where
-	K: CombKind,
-	C: PredComb,
-	C::Id: Ord,
-{
-	type Item = (C::Case, PredSubComb<PredArrayComb<C, N>, K>);
-	fn next(&mut self) -> Option<Self::Item> {
-		if let Some(mut max_index) = self.inner.slice.len().checked_sub(N) {
-			max_index = max_index.min(match (K::HAS_DIFF, K::HAS_SAME) {
-				(true, true) => self.inner.slice.len(),
-				(false, false) => 0,
-				(true, false) => self.inner.max_diff_index,
-				(false, true) => self.inner.max_same_index,
-			});
-			if self.inner.index >= max_index {
-				return None
-			}
-		} else {
-			return None
-		};
-		if let Some((case, _)) = self.inner.slice.get(self.inner.index) {
-			self.inner.index += 1;
-			let sub_comb = if case.is_diff() {
-				PredSubComb::Diff(self.inner.clone().into_kind())
-			} else {
-				PredSubComb::Same(self.inner.clone().into_kind())
-			};
-			Some((*case, sub_comb))
-		} else {
-			None
-		}
-	}
-	fn size_hint(&self) -> (usize, Option<usize>) {
-		if let Some(mut max_index) = self.inner.slice.len().checked_sub(N) {
-			max_index = max_index.min(match (K::HAS_DIFF, K::HAS_SAME) {
-				(true, true) => self.inner.slice.len(),
-				(false, false) => 0,
-				(true, false) => self.inner.max_diff_index,
-				(false, true) => self.inner.max_same_index,
-			});
-			let num = max_index - self.inner.index;
-			(num, Some(num))
-		} else {
-			(0, Some(0))
-		}
-	}
-}
-
-/// ...
-pub struct PredPairCombSplit<A, B, K> {
-	a_iter: A,
-	b_comb: B,
-	kind: PhantomData<K>,
-}
-
-impl<A, B, K> PredPairCombSplit<A, B, K>
-where
-	K: CombKind,
-{
-	pub fn new<C>(comb: PredPairComb<C, B, K>) -> Self
-	where
-		C: PredComb,
-		C::IntoKind<K::Pal>: IntoIterator<IntoIter=A>,
-	{
-		Self {
-			a_iter: comb.a_comb.into_kind().into_iter(),
-			b_comb: comb.b_comb,
-			kind: PhantomData,
-		}
-	}
-}
-
-impl<A, B, K> Iterator for PredPairCombSplit<A, B, K>
-where
-	K: CombKind,
-	A: Iterator,
-	A::Item: PredCombinatorCase,
-	B: PredComb,
-{
-	type Item = (A::Item, PredSubComb<B, K>);
-	fn next(&mut self) -> Option<Self::Item> {
-		if let Some(case) = self.a_iter.next() {
-			let sub_comb = if case.is_diff() {
-				PredSubComb::Diff(self.b_comb.clone().into_kind())
-			} else {
-				PredSubComb::Same(self.b_comb.clone().into_kind())
-			};
-			Some((case, sub_comb))
-		} else {
-			None
-		}
-	}
-	fn size_hint(&self) -> (usize, Option<usize>) {
-		self.a_iter.size_hint()
-	}
-}
-
-
-/// Iterator of [`PredSubStateSplit`].
-pub enum PredCombinatorSplit<'p, P: PredParam, M: PredId, K: CombKind> {
-	Diff(PredCombinator<'p, P, M, K::Pal>),
-	Same(PredCombinator<'p, P, M, <<K::Inv as CombKind>::Pal as CombKind>::Inv>),
-}
-
-impl<'p, P, M, K> Iterator for PredCombinatorSplit<'p, P, M, K>
-where
-	P: PredParam,
-	M: PredId,
-	K: CombKind,
-{
-	type Item = (
-		&'p mut PredStateCase<P::Id, M>,
-		<PredParamItem<'p, P> as PredItem>::Ref
-	);
-	fn next(&mut self) -> Option<Self::Item> {
-		match self {
-			Self::Diff(iter) => iter.next(),
-			Self::Same(iter) => iter.next(),
-		}
-	}
-	fn size_hint(&self) -> (usize, Option<usize>) {
-		match self {
-			Self::Diff(iter) => iter.size_hint(),
-			Self::Same(iter) => iter.size_hint(),
-		}
-	}
-}
-
-/// Item of a [`PredComb`]'s iterator.
-pub trait PredCombinatorCase: Copy + Clone {
-	type Item: PredItem;
-	type Id: PredId;
-	fn is_diff(&self) -> bool;
-	fn item_ref(&self) -> <Self::Item as PredItem>::Ref;
-	fn id(&self) -> Self::Id;
-	fn into_parts(self) -> (<Self::Item as PredItem>::Ref, Self::Id) {
-		(self.item_ref(), self.id())
-	}
-}
-
-impl PredCombinatorCase for () {
-	type Item = ();
-	type Id = ();
-	fn is_diff(&self) -> bool {
-		true
-	}
-	fn item_ref(&self) -> <Self::Item as PredItem>::Ref {}
-	fn id(&self) -> Self::Id {}
-}
-
-impl<P: PredItem, I: PredId> PredCombinatorCase for PredCombCase<P, I> {
-	type Item = P;
-	type Id = I;
-	fn is_diff(&self) -> bool {
-		match self {
-			PredCombCase::Diff(..) => true,
-			PredCombCase::Same(..) => false,
-		}
-	}
-	fn item_ref(&self) -> <Self::Item as PredItem>::Ref {
-		let (PredCombCase::Diff(item, _) | PredCombCase::Same(item, _)) = self;
-		*item
-	}
-	fn id(&self) -> Self::Id {
-		let (PredCombCase::Diff(_, id) | PredCombCase::Same(_, id)) = self;
-		*id
-	}
-}
-
-impl<C: PredCombinatorCase, const N: usize> PredCombinatorCase for [C; N] {
-	type Item = [C::Item; N];
-	type Id = [C::Id; N];
-	fn is_diff(&self) -> bool {
-		self.iter().any(C::is_diff)
-	}
-	fn item_ref(&self) -> <Self::Item as PredItem>::Ref {
-		self.map(|x| x.item_ref())
-	}
-	fn id(&self) -> Self::Id {
-		self.map(|x| x.id())
-	}
-}
-
-impl<A, B> PredCombinatorCase for (A, B)
-where
-	A: PredCombinatorCase,
-	B: PredCombinatorCase,
-{
-	type Item = (A::Item, B::Item);
-	type Id = (A::Id, B::Id);
-	fn is_diff(&self) -> bool {
-		self.0.is_diff() || self.1.is_diff()
-	}
-	fn item_ref(&self) -> <Self::Item as PredItem>::Ref {
-		(self.0.item_ref(), self.1.item_ref())
-	}
-	fn id(&self) -> Self::Id {
-		(self.0.id(), self.1.id())
-	}
-}
-
-/// An item & ID pair of a `PredParam`, with their updated state.
-pub enum PredCombCase<P: PredItem, I: PredId> {
-	Diff(P::Ref, I),
-	Same(P::Ref, I),
-}
-
-impl<P: PredItem, I: PredId> Copy for PredCombCase<P, I> {}
-
-impl<P: PredItem, I: PredId> Clone for PredCombCase<P, I> {
-	fn clone(&self) -> Self {
-		*self
-	}
-}
-
 /// Combinator type produced by `PredParam::comb`.
 pub trait PredComb<K: CombKind = CombNone>: Clone + IntoIterator<Item=Self::Case> {
 	type Id: PredId;
@@ -600,6 +356,93 @@ where
 	}
 }
 
+/// Item of a [`PredComb`]'s iterator.
+pub trait PredCombinatorCase: Copy + Clone {
+	type Item: PredItem;
+	type Id: PredId;
+	fn is_diff(&self) -> bool;
+	fn item_ref(&self) -> <Self::Item as PredItem>::Ref;
+	fn id(&self) -> Self::Id;
+	fn into_parts(self) -> (<Self::Item as PredItem>::Ref, Self::Id) {
+		(self.item_ref(), self.id())
+	}
+}
+
+impl PredCombinatorCase for () {
+	type Item = ();
+	type Id = ();
+	fn is_diff(&self) -> bool {
+		true
+	}
+	fn item_ref(&self) -> <Self::Item as PredItem>::Ref {}
+	fn id(&self) -> Self::Id {}
+}
+
+impl<P: PredItem, I: PredId> PredCombinatorCase for PredCombCase<P, I> {
+	type Item = P;
+	type Id = I;
+	fn is_diff(&self) -> bool {
+		match self {
+			PredCombCase::Diff(..) => true,
+			PredCombCase::Same(..) => false,
+		}
+	}
+	fn item_ref(&self) -> <Self::Item as PredItem>::Ref {
+		let (PredCombCase::Diff(item, _) | PredCombCase::Same(item, _)) = self;
+		*item
+	}
+	fn id(&self) -> Self::Id {
+		let (PredCombCase::Diff(_, id) | PredCombCase::Same(_, id)) = self;
+		*id
+	}
+}
+
+impl<C: PredCombinatorCase, const N: usize> PredCombinatorCase for [C; N] {
+	type Item = [C::Item; N];
+	type Id = [C::Id; N];
+	fn is_diff(&self) -> bool {
+		self.iter().any(C::is_diff)
+	}
+	fn item_ref(&self) -> <Self::Item as PredItem>::Ref {
+		self.map(|x| x.item_ref())
+	}
+	fn id(&self) -> Self::Id {
+		self.map(|x| x.id())
+	}
+}
+
+impl<A, B> PredCombinatorCase for (A, B)
+where
+	A: PredCombinatorCase,
+	B: PredCombinatorCase,
+{
+	type Item = (A::Item, B::Item);
+	type Id = (A::Id, B::Id);
+	fn is_diff(&self) -> bool {
+		self.0.is_diff() || self.1.is_diff()
+	}
+	fn item_ref(&self) -> <Self::Item as PredItem>::Ref {
+		(self.0.item_ref(), self.1.item_ref())
+	}
+	fn id(&self) -> Self::Id {
+		(self.0.id(), self.1.id())
+	}
+}
+
+/// An item & ID pair of a `PredParam`, with their updated state.
+pub enum PredCombCase<P: PredItem, I: PredId> {
+	Diff(P::Ref, I),
+	Same(P::Ref, I),
+}
+
+impl<P: PredItem, I: PredId> Copy for PredCombCase<P, I> {}
+
+impl<P: PredItem, I: PredId> Clone for PredCombCase<P, I> {
+	fn clone(&self) -> Self {
+		*self
+	}
+}
+
 /// Combinator for `PredParam` tuple implementation.
 pub struct PredPairComb<A, B, K = CombNone> {
 	a_comb: A,
@@ -780,6 +623,55 @@ where
 				(min, max)
 			},
 		}
+	}
+}
+
+/// ...
+pub struct PredPairCombSplit<A, B, K> {
+	a_iter: A,
+	b_comb: B,
+	kind: PhantomData<K>,
+}
+
+impl<A, B, K> PredPairCombSplit<A, B, K>
+where
+	K: CombKind,
+{
+	pub fn new<C>(comb: PredPairComb<C, B, K>) -> Self
+	where
+		C: PredComb,
+		C::IntoKind<K::Pal>: IntoIterator<IntoIter=A>,
+	{
+		Self {
+			a_iter: comb.a_comb.into_kind().into_iter(),
+			b_comb: comb.b_comb,
+			kind: PhantomData,
+		}
+	}
+}
+
+impl<A, B, K> Iterator for PredPairCombSplit<A, B, K>
+where
+	K: CombKind,
+	A: Iterator,
+	A::Item: PredCombinatorCase,
+	B: PredComb,
+{
+	type Item = (A::Item, PredSubComb<B, K>);
+	fn next(&mut self) -> Option<Self::Item> {
+		if let Some(case) = self.a_iter.next() {
+			let sub_comb = if case.is_diff() {
+				PredSubComb::Diff(self.b_comb.clone().into_kind())
+			} else {
+				PredSubComb::Same(self.b_comb.clone().into_kind())
+			};
+			Some((case, sub_comb))
+		} else {
+			None
+		}
+	}
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		self.a_iter.size_hint()
 	}
 }
 
@@ -1072,6 +964,83 @@ where
 	}
 }
 
+/// ...
+pub struct PredArrayCombSplit<C, const N: usize, K>
+where
+	C: PredComb,
+{
+	inner: PredArrayComb<C, N, K>,
+}
+
+impl<C, const N: usize, K> PredArrayCombSplit<C, N, K>
+where
+	C: PredComb,
+{
+	pub fn new<const M: usize>(comb: PredArrayComb<C, M, K>) -> Self {
+		Self {
+			inner: PredArrayComb {
+				comb: comb.comb,
+				slice: comb.slice,
+				index: comb.index,
+				min_diff_index: comb.min_diff_index,
+				min_same_index: comb.min_same_index,
+				max_diff_index: comb.max_diff_index,
+				max_same_index: comb.max_same_index,
+				kind: PhantomData,
+			}
+		}
+	}
+}
+
+impl<C, const N: usize, K> Iterator for PredArrayCombSplit<C, N, K>
+where
+	K: CombKind,
+	C: PredComb,
+	C::Id: Ord,
+{
+	type Item = (C::Case, PredSubComb<PredArrayComb<C, N>, K>);
+	fn next(&mut self) -> Option<Self::Item> {
+		if let Some(mut max_index) = self.inner.slice.len().checked_sub(N) {
+			max_index = max_index.min(match (K::HAS_DIFF, K::HAS_SAME) {
+				(true, true) => self.inner.slice.len(),
+				(false, false) => 0,
+				(true, false) => self.inner.max_diff_index,
+				(false, true) => self.inner.max_same_index,
+			});
+			if self.inner.index >= max_index {
+				return None
+			}
+		} else {
+			return None
+		};
+		if let Some((case, _)) = self.inner.slice.get(self.inner.index) {
+			self.inner.index += 1;
+			let sub_comb = if case.is_diff() {
+				PredSubComb::Diff(self.inner.clone().into_kind())
+			} else {
+				PredSubComb::Same(self.inner.clone().into_kind())
+			};
+			Some((*case, sub_comb))
+		} else {
+			None
+		}
+	}
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		if let Some(mut max_index) = self.inner.slice.len().checked_sub(N) {
+			max_index = max_index.min(match (K::HAS_DIFF, K::HAS_SAME) {
+				(true, true) => self.inner.slice.len(),
+				(false, false) => 0,
+				(true, false) => self.inner.max_diff_index,
+				(false, true) => self.inner.max_same_index,
+			});
+			let num = max_index - self.inner.index;
+			(num, Some(num))
+		} else {
+			(0, Some(0))
+		}
+	}
+}
+
 /// Produces all case combinations in need of a new prediction, alongside a
 /// [`PredStateCase`] for scheduling.
 pub struct PredCombinator<'p, P: PredParam, M, K: CombKind> {
@@ -1135,4 +1104,35 @@ where
 			(0, Some(0))
 		}
 	}
+}
+
+impl<'p, P, M, K> Iterator for PredCombinatorSplit<'p, P, M, K>
+where
+	P: PredParam,
+	M: PredId,
+	K: CombKind,
+{
+	type Item = (
+		&'p mut PredStateCase<P::Id, M>,
+		<PredParamItem<'p, P> as PredItem>::Ref
+	);
+	fn next(&mut self) -> Option<Self::Item> {
+		match self {
+			Self::Diff(iter) => iter.next(),
+			Self::Same(iter) => iter.next(),
+		}
+	}
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		match self {
+			Self::Diff(iter) => iter.size_hint(),
+			Self::Same(iter) => iter.size_hint(),
+		}
+	}
+}
+
+
+/// Iterator of [`PredSubStateSplit`].
+pub enum PredCombinatorSplit<'p, P: PredParam, M: PredId, K: CombKind> {
+	Diff(PredCombinator<'p, P, M, K::Pal>),
+	Same(PredCombinator<'p, P, M, <<K::Inv as CombKind>::Pal as CombKind>::Inv>),
 }
