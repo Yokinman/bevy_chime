@@ -4,11 +4,13 @@
 // };
 
 mod comb;
+mod pred;
 mod node;
 
 use comb::*;
+use pred::*;
 
-pub use comb::{PredState, PredQuery};
+pub use pred::{PredState, PredQuery};
 
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, btree_map, BTreeMap, HashMap};
