@@ -40,7 +40,7 @@ pub trait PredParamVec: PredParam {
 	)>;
 	
 	fn split<K: CombKind>(
-		comb: <Self::Comb<'_> as PredComb>::IntoKind<K>
+		comb: <Self::Comb<'_> as PredCombinator>::IntoKind<K>
 	) -> Self::Split<'_, K>;
 	
 	fn join_id(
@@ -54,13 +54,13 @@ impl<A: PredParam, B: PredParam> PredParamVec for (A, B) {
 	type Tail = B;
 	
 	type Split<'p, K: CombKind> = PredPairCombSplit<
-		<<A::Comb<'p> as PredComb>::IntoKind<K::Pal> as IntoIterator>::IntoIter,
+		<<A::Comb<'p> as PredCombinator>::IntoKind<K::Pal> as IntoIterator>::IntoIter,
 		B::Comb<'p>,
 		K,
 	>;
 	
 	fn split<K: CombKind>(
-		comb: <Self::Comb<'_> as PredComb>::IntoKind<K>
+		comb: <Self::Comb<'_> as PredCombinator>::IntoKind<K>
 	) -> Self::Split<'_, K> {
 		PredPairCombSplit::new(comb)
 	}
@@ -86,7 +86,7 @@ macro_rules! impl_pred_param_vec_for_array {
 				= PredArrayCombSplit<P::Comb<'p>, { $size - 1 }, K>;
 			
 			fn split<K: CombKind>(
-				comb: <Self::Comb<'_> as PredComb>::IntoKind<K>
+				comb: <Self::Comb<'_> as PredCombinator>::IntoKind<K>
 			) -> Self::Split<'_, K> {
 				PredArrayCombSplit::new(comb)
 			}
@@ -172,11 +172,11 @@ where
 	K: CombKind,
 {
 	type Item = <Self::IntoIter as Iterator>::Item;
-	type IntoIter = PredCombinatorSplit<'p, P, M, K>;
+	type IntoIter = PredCombSplit<'p, P, M, K>;
 	fn into_iter(self) -> Self::IntoIter {
 		match self {
-			Self::Diff(state) => PredCombinatorSplit::Diff(state.into_iter()),
-			Self::Same(state) => PredCombinatorSplit::Same(state.into_iter()),
+			Self::Diff(state) => PredCombSplit::Diff(state.into_iter()),
+			Self::Same(state) => PredCombSplit::Same(state.into_iter()),
 		}
 	}
 }
@@ -184,7 +184,7 @@ where
 /// Shortcut for accessing `PredParam::Comb::Case::Item`.
 pub type PredParamItem<'w, P> = <<<P
 	as PredParam>::Comb<'w>
-	as PredComb>::Case
+	as PredCombinator>::Case
 	as PredCombinatorCase>::Item;
 
 /// A set of [`PredItem`] values used to predict & schedule events.
@@ -196,7 +196,7 @@ pub trait PredParam {
 	type Id: PredId;
 	
 	/// Creates combinator iterators over [`Self::Param`]'s items.
-	type Comb<'w>: PredComb<Id=Self::Id>;
+	type Comb<'w>: PredCombinator<Id=Self::Id>;
 	
 	/// Produces [`Self::Comb`].
 	fn comb<'w>(param: &'w SystemParamItem<Self::Param>) -> Self::Comb<'w>;
@@ -332,7 +332,7 @@ where
 	P: PredParam,
 	K: CombKind,
 {
-	pub(crate) comb: <P::Comb<'p> as PredComb>::IntoKind<K>,
+	pub(crate) comb: <P::Comb<'p> as PredCombinator>::IntoKind<K>,
 	pub(crate) misc_state: Box<[M]>,
 	pub(crate) node: &'p mut PredNode<'s, P, M>,
 }
@@ -345,8 +345,8 @@ where
 	K: CombKind,
 {
 	fn new(
-		comb: <P::Comb<'p> as PredComb>::IntoKind<K>,
-		misc_state: Box<[M]>, 
+		comb: <P::Comb<'p> as PredCombinator>::IntoKind<K>,
+		misc_state: Box<[M]>,
 		node: &'p mut PredNode<'s, P, M>,
 	) -> Self {
 		Self {
@@ -398,9 +398,9 @@ where
 	K: CombKind,
 {
 	type Item = <Self::IntoIter as IntoIterator>::Item;
-	type IntoIter = PredCombinator<'p, P, M, K>;
+	type IntoIter = PredComb<'p, P, M, K>;
 	fn into_iter(self) -> Self::IntoIter {
-		PredCombinator::new(self)
+		PredComb::new(self)
 	}
 }
 
@@ -421,8 +421,8 @@ where
 	M: PredId,
 {
 	pub(crate) fn new(
-		comb: <P::Comb<'p> as PredComb>::IntoKind<CombUpdated>,
-		misc_state: Box<[M]>, 
+		comb: <P::Comb<'p> as PredCombinator>::IntoKind<CombUpdated>,
+		misc_state: Box<[M]>,
 		node: &'p mut PredNode<'s, P, M>,
 	) -> Self {
 		Self {
@@ -1016,7 +1016,7 @@ mod testing {
 			<<<<<[Query<'w, 's, &'a Test>; R]
 				as PredParamVec>::Tail
 				as PredParam>::Comb<'b>
-				as PredComb>::Case
+				as PredCombinator>::Case
 				as PredCombinatorCase>::Item
 				as PredItem>::Ref:
 					IntoIterator,
@@ -1024,7 +1024,7 @@ mod testing {
 			<<<<<<[Query<'w, 's, &'a Test>; R]
 				as PredParamVec>::Tail
 				as PredParam>::Comb<'b>
-				as PredComb>::Case
+				as PredCombinator>::Case
 				as PredCombinatorCase>::Item
 				as PredItem>::Ref
 				as IntoIterator>::Item:
