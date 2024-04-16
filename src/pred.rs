@@ -1869,6 +1869,197 @@ mod testing {
 	#[derive(Component, Copy, Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
 	struct Test(usize);
 	
+	#[derive(Component, Copy, Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
+	struct TestB(usize);
+	
+	fn test_pair<const A: usize, const B: usize>(
+		update_list: &[usize],
+		b_update_list: &[usize],
+	)
+	where
+		for<'w, 's, 'a, 'w1, 's1, 'a1, 'b>
+			(Query<'w, 's, &'a Test>, Query<'w1, 's1, &'a1 TestB>):
+				PredParamVec<
+					Head = Query<'w, 's, &'a Test>,
+					Tail = Query<'w1, 's1, &'a1 TestB>,
+					Comb<'b> = PredPairComb<QueryComb<'b, Test, ()>, QueryComb<'b, TestB, ()>>
+				>,
+	{
+		use crate::*;
+		
+		let mut app = App::new();
+		app.insert_resource::<Time>(Time::default());
+		app.add_plugins(ChimePlugin);
+		
+		for i in 0..A {
+			app.world.spawn(Test(i));
+		}
+		for i in 0..B {
+			app.world.spawn(TestB(i));
+		}
+		
+		 // Setup [`PredPairComb`] Testing:
+		let update_vec = update_list.to_vec();
+		let b_update_vec = b_update_list.to_vec();
+		app.add_chime_events((move |
+			state: PredState<(Query<&Test>, Query<&TestB>)>,
+			a_query: Query<&Test>,
+			b_query: Query<&TestB>,
+			mut index: system::Local<usize>,
+		| {
+			let mut iter = state.into_iter();
+			match *index {
+				0 => { // Full
+					if A > 1 && B > 1 {
+						// !!! This shouldn't really be +1, but it's an issue
+						// with how `PredCombinator` adds 1 to the upper bound
+						// of `PredPairCombIter` which remains semi-constant:
+						assert_eq!(iter.size_hint(), (B, Some(A*B + 1)));
+					}
+					let mut n = 0;
+					for a in &a_query {
+						for b in &b_query {
+							// This assumes `iter` and `QueryIter` will always
+							// produce the same order.
+							if let Some((_, next)) = iter.next() {
+								assert_eq!(next, (a, b));
+							} else {
+								panic!();
+							}
+							n += 1;
+						}
+					}
+					assert_eq!(n, A*B);
+				},
+				1 => { // Empty
+					assert_eq!(iter.size_hint(), (0, Some(0)));
+					let next = iter.next();
+					if next.is_some() {
+						println!("> {:?}", next.as_ref().unwrap().1);
+					}
+					assert!(next.is_none());
+				},
+				2 => { // Misc
+					let count = A*b_update_vec.len()
+						+ B*update_vec.len()
+						- update_vec.len()*b_update_vec.len();
+					if A > 1 && B > 1 {
+						assert_eq!(iter.size_hint(), (B, Some(A*B + 1)));
+					}
+					let mut n = 0;
+					for (_, (a, b)) in iter {
+						assert!(update_vec.contains(&a.0)
+							|| b_update_vec.contains(&b.0));
+						n += 1;
+					}
+					assert_eq!(n, count);
+				},
+				_ => unimplemented!(),
+			}
+			*index += 1;
+		}).into_events().on_begin(|| {}));
+		
+		 // Setup [`PredSubState::iter_step`] Testing:
+		let update_vec = update_list.to_vec();
+		let b_update_vec = b_update_list.to_vec();
+		app.add_chime_events((move |
+			state: PredState<(Query<&Test>, Query<&TestB>)>,
+			a_query: Query<Ref<Test>>,
+			b_query: Query<Ref<TestB>>,
+			mut index: system::Local<usize>,
+		| {
+			let mut iter = state.iter_step();
+			match *index {
+				0 => { // Full
+					// !!! This should be `(0, Some(A))`, and PredPairCombSplit
+					// shouldn't return A-values that have an empty B iterator.
+					assert_eq!(iter.size_hint(), (A, Some(A)));
+					let mut n = 0;
+					for a in &a_query {
+						if let Some((state, x)) = iter.next() {
+							let mut iter = state.into_iter();
+							assert_eq!(iter.size_hint(), (B, Some(B)));
+							assert_eq!(*x, *a);
+							for b in &b_query {
+								// This assumes `iter` and `QueryIter` always
+								// produce the same order.
+								if let Some((_, y)) = iter.next() {
+									assert_eq!(*y, *b);
+								} else {
+									panic!();
+								}
+								n += 1;
+							}
+						} else {
+							panic!();
+						}
+					}
+					assert_eq!(n, A*B);
+				},
+				1 => { // Empty
+					assert_eq!(iter.size_hint(), (A, Some(A)));
+					for (state, _) in iter {
+						let mut iter = state.into_iter();
+						let next = iter.next();
+						if next.is_some() {
+							println!("> {:?}", next.as_ref().unwrap().1);
+						}
+						assert!(next.is_none());
+					}
+				},
+				2 => { // Misc
+					let count = A*b_update_vec.len()
+						+ B*update_vec.len()
+						- update_vec.len()*b_update_vec.len();
+					assert_eq!(iter.size_hint(), (A, Some(A)));
+					let mut n = 0;
+					for ((state, a), a_ref) in iter.zip(&a_query) {
+						// This assumes `iter` and `QueryIter` always produce
+						// the same order.
+						assert_eq!(*a, *a_ref);
+						let iter = state.into_iter();
+						if DetectChanges::is_changed(&a_ref) {
+							assert!(update_vec.contains(&a.0));
+							assert_eq!(iter.size_hint(), (B, Some(B)));
+							for ((_, b), b_ref) in iter.zip(&b_query) {
+								assert_eq!(*b, *b_ref);
+								n += 1;
+							}
+						} else {
+							assert!(!update_vec.contains(&a.0));
+							for (_, b) in iter {
+								assert!(b_update_vec.contains(&b.0));
+								n += 1;
+							}
+						}
+					}
+					assert_eq!(n, count);
+				},
+				_ => unimplemented!(),
+			}
+			*index += 1;
+		}).into_events().on_begin(|| {}));
+		
+		 // Run Tests:
+		app.world.run_schedule(ChimeSchedule);
+		app.world.run_schedule(ChimeSchedule);
+		for mut test in app.world.query::<&mut Test>()
+			.iter_mut(&mut app.world)
+		{
+			if update_list.contains(&test.0) {
+				test.0 = std::hint::black_box(test.0);
+			}
+		}
+		for mut test in app.world.query::<&mut TestB>()
+			.iter_mut(&mut app.world)
+		{
+			if b_update_list.contains(&test.0) {
+				test.0 = std::hint::black_box(test.0);
+			}
+		}
+		app.world.run_schedule(ChimeSchedule);
+	}
+	
 	fn test_array<const N: usize, const R: usize>(update_list: &[usize])
 	where
 		for<'w, 's, 'a, 'b> [Query<'w, 's, &'a Test>; R]:
@@ -2053,5 +2244,20 @@ mod testing {
 		test_array::<0, 2>(&[]);
 		// test_array::<10, 0>(&[]);
 		// test_array::<0, 0>(&[]);
+	}
+	
+	#[test]
+	fn pair_comb() {
+		 // Normal Cases:
+		test_pair::<40, 100>(&[0, 1, 5, 20], &[5, 51, 52, 53, 55, 99]);
+		test_pair::<100, 40>(&[5, 51, 52, 53, 55, 99], &[0, 1, 5, 20]);
+		
+		 // Weird Cases:
+		test_pair::<0, 100>(&[], &[50]);
+		test_pair::<1, 100>(&[], &[]);
+		test_pair::<100, 0>(&[], &[]);
+		test_pair::<100, 1>(&[], &[0]);
+		test_pair::<1, 1>(&[], &[]);
+		test_pair::<0, 0>(&[], &[]);
 	}
 }
