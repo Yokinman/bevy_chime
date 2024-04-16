@@ -111,7 +111,7 @@ impl<A: PredParam, B: PredParam> PredParamVec for (A, B) {
 	type Tail = B;
 	
 	type Split<'p, K: CombKind> = PredPairCombSplit<
-		<<A::Comb<'p> as PredComb>::IntoKind<K> as IntoIterator>::IntoIter,
+		<<A::Comb<'p> as PredComb>::IntoKind<K::Pal> as IntoIterator>::IntoIter,
 		B::Comb<'p>,
 		K,
 	>;
