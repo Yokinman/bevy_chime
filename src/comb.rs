@@ -45,21 +45,21 @@ impl CombKind for CombAll {
 }
 
 /// Combinations where either item updated.
-pub struct CombUpdated;
+pub struct CombDiff;
 
-impl CombKind for CombUpdated {
+impl CombKind for CombDiff {
 	type Pal = CombAll;
-	type Inv = CombStatic;
+	type Inv = CombSame;
 	const HAS_DIFF: bool = true;
 	const HAS_SAME: bool = false;
 }
 
 /// Combinations where neither item updated.
-pub struct CombStatic;
+pub struct CombSame;
 
-impl CombKind for CombStatic {
-	type Pal = CombStatic;
-	type Inv = CombUpdated;
+impl CombKind for CombSame {
+	type Pal = CombSame;
+	type Inv = CombDiff;
 	const HAS_DIFF: bool = false;
 	const HAS_SAME: bool = true;
 }

@@ -411,7 +411,7 @@ where
 	P: PredParam,
 	M: PredId,
 {
-	inner: PredSubState<'p, 's, P, M, CombUpdated>,
+	inner: PredSubState<'p, 's, P, M, CombDiff>,
 }
 
 impl<'p, 's, P, M> PredState<'p, 's, P, M>
@@ -421,7 +421,7 @@ where
 	M: PredId,
 {
 	pub(crate) fn new(
-		comb: <P::Comb<'p> as PredCombinator>::IntoKind<CombUpdated>,
+		comb: <P::Comb<'p> as PredCombinator>::IntoKind<CombDiff>,
 		misc_state: Box<[M]>,
 		node: &'p mut PredNode<'s, P, M>,
 	) -> Self {
@@ -437,7 +437,7 @@ where
 	P: PredParamVec,
 	M: PredId,
 {
-	pub fn iter_step(self) -> PredSubStateSplitIter<'p, 's, P, M, CombUpdated> {
+	pub fn iter_step(self) -> PredSubStateSplitIter<'p, 's, P, M, CombDiff> {
 		self.inner.iter_step()
 	}
 }
@@ -449,7 +449,7 @@ where
 	M: PredId,
 {
 	type Item = <Self::IntoIter as Iterator>::Item;
-	type IntoIter = <PredSubState<'p, 's, P, M, CombUpdated> as IntoIterator>::IntoIter;
+	type IntoIter = <PredSubState<'p, 's, P, M, CombDiff> as IntoIterator>::IntoIter;
 	fn into_iter(self) -> Self::IntoIter {
 		self.inner.into_iter()
 	}
@@ -461,7 +461,7 @@ where
 	P: PredParam,
 	M: PredId,
 {
-	type Target = PredSubState<'p, 's, P, M, CombUpdated>;
+	type Target = PredSubState<'p, 's, P, M, CombDiff>;
 	fn deref(&self) -> &Self::Target {
 		&self.inner
 	}
