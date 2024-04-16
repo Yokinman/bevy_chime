@@ -962,56 +962,37 @@ impl<'s, P: PredParam + 's, M: PredId> PredNode<'s, P, M> {
 
 impl<'s, P: PredParam, M: PredId> IntoIterator for PredNode<'s, P, M> {
 	type Item = PredStateCase<P::Id, M>;
-	type IntoIter = PredNodeIter<P, M>;
+	type IntoIter = PredNodeIter<'s, P, M>;
 	fn into_iter(self) -> Self::IntoIter {
 		match self {
 			Self::Blank => PredNodeIter::Blank,
 			Self::Data(node) => PredNodeIter::Data(node.into_iter()),
-			Self::Branches(mut branches) => {
-				let mut branch_iter = branches.into_branch_iter();
-				if let Some(branch) = branch_iter.next() {
-					PredNodeIter::Branches { branch_iter, branch }
-				} else {
-					PredNodeIter::Blank
-				}
-			},
+			Self::Branches(mut branches) => PredNodeIter::Branches(branches.into_branch_iter()),
 		}
 	}
 }
 
 /// Iterator of [`PredNode`]'s items.
-pub enum PredNodeIter<P: PredParam, M> {
+pub enum PredNodeIter<'s, P: PredParam, M> {
 	Blank,
 	Data(NodeIter<PredStateCase<P::Id, M>>),
-	Branches {
-		branch_iter: std::vec::IntoIter<std::vec::IntoIter<PredStateCase<P::Id, M>>>,
-		branch: std::vec::IntoIter<PredStateCase<P::Id, M>>,
-	}
+	Branches(Box<dyn PredNodeBranchesIterator<'s, P, M> + 's>),
 }
 
-impl<P: PredParam, M: PredId> Iterator for PredNodeIter<P, M> {
+impl<P: PredParam, M: PredId> Iterator for PredNodeIter<'_, P, M> {
 	type Item = PredStateCase<P::Id, M>;
 	fn next(&mut self) -> Option<Self::Item> {
 		match self {
 			Self::Blank => None,
 			Self::Data(iter) => iter.next(),
-			Self::Branches { branch_iter, branch } => {
-				if let Some(case) = branch.next() {
-					Some(case)
-				} else if let Some(next_branch) = branch_iter.next() {
-					*branch = next_branch;
-					self.next()
-				} else {
-					None
-				}
-			},
+			Self::Branches(iter) => iter.next(),
 		}
 	}
 	fn size_hint(&self) -> (usize, Option<usize>) {
 		match self {
 			Self::Blank => (0, Some(0)),
 			Self::Data(iter) => iter.size_hint(),
-			Self::Branches { branch, .. } => (branch.size_hint().0, None),
+			Self::Branches(iter) => iter.size_hint(),
 		}
 	}
 }
@@ -1024,13 +1005,17 @@ type PredNodeBranch<'s, P, M> = (
 
 /// Used to define a trait object for dynamic branching in [`PredNode`], as not
 /// all [`PredParam`] types implement [`PredParamVec`].
+/// 
+/// ??? To avoid dynamic dispatch: could move all `PredParamVec` items into
+/// `PredParam` and implement empty defaults for scalar types. However, this
+/// would only support a subset of arrays instead of all sizes, which feels
+/// like an unnecessary constraint. Specialization would probably help here.
 pub trait PredNodeBranches<'s, P: PredParam, M: PredId> {
 	fn as_writer<'n>(&'n mut self) -> NodeWriter<'n, PredNodeBranch<'s, P, M>>
 	where
 		P: PredParamVec;
 	
-	fn into_branch_iter(&mut self)
-		-> std::vec::IntoIter<std::vec::IntoIter<PredStateCase<P::Id, M>>>;
+	fn into_branch_iter(&mut self) -> Box<dyn PredNodeBranchesIterator<'s, P, M> + 's>;
 }
 
 impl<'s, P, M> PredNodeBranches<'s, P, M> for Node<PredNodeBranch<'s, P, M>>
@@ -1045,25 +1030,59 @@ where
 		NodeWriter::new(self)
 	}
 	
-	fn into_branch_iter(&mut self)
-		-> std::vec::IntoIter<std::vec::IntoIter<PredStateCase<P::Id, M>>>
-	{
-		let node = std::mem::take(self);
-		node.into_iter()
-			.map(|(id, node)| {
-				node.into_iter()
-					.map(move |case| PredStateCase {
-						id: P::join_id(id, case.id),
-						misc: case.misc,
-						times: case.times,
-					})
-					.collect::<Vec<_>>()
-					.into_iter()
-			})
-			.collect::<Vec<_>>()
-			.into_iter()
+	fn into_branch_iter(&mut self) -> Box<dyn PredNodeBranchesIterator<'s, P, M> + 's> {
+		Box::new(PredNodeBranchesIter {
+			node_iter: std::mem::take(self).into_iter(),
+			branch_id: None,
+			branch_iter: PredNodeIter::Blank,
+		})
 	}
 }
+
+/// Specific type of [`PredNodeBranchesIterator`] trait objects.
+pub struct PredNodeBranchesIter<'s, P: PredParamVec, M> {
+	node_iter: NodeIter<PredNodeBranch<'s, P, M>>,
+	branch_id: Option<<P::Head as PredParam>::Id>,
+	branch_iter: PredNodeIter<'s, P::Tail, M>,
+}
+
+impl<'s, P, M> Iterator for PredNodeBranchesIter<'s, P, M>
+where
+	P: PredParamVec,
+	M: PredId,
+{
+	type Item = PredStateCase<P::Id, M>;
+	fn next(&mut self) -> Option<Self::Item> {
+		if let Some(case) = self.branch_iter.next() {
+			Some(PredStateCase {
+				id: P::join_id(self.branch_id.unwrap(), case.id),
+				misc: case.misc,
+				times: case.times,
+			})
+		} else if let Some((id, node)) = self.node_iter.next() {
+			self.branch_id = Some(id);
+			self.branch_iter = node.into_iter();
+			self.next()
+		} else {
+			None
+		}
+	}
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		(self.branch_iter.size_hint().0, None)
+	}
+}
+
+/// Used to define a trait object for dynamic branching in [`PredNodeIter`], as
+/// not all [`PredParam`] types implement [`PredParamVec`].
+pub trait PredNodeBranchesIterator<'s, P: PredParam, M>:
+	Iterator<Item = PredStateCase<P::Id, M>>
+{}
+
+impl<'s, P, M> PredNodeBranchesIterator<'s, P, M> for PredNodeBranchesIter<'s, P, M>
+where
+	P: PredParamVec,
+	M: PredId,
+{}
 
 /// Types that can be used to query for a specific entity.
 pub trait PredQueryData {
