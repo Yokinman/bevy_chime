@@ -3,12 +3,12 @@
 // 	DefaultPlugins
 // };
 
-mod pred;
+mod comb;
 mod node;
 
-use pred::*;
+use comb::*;
 
-pub use pred::{PredState, PredQuery};
+pub use comb::{PredState, PredQuery};
 
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, btree_map, BTreeMap, HashMap};
