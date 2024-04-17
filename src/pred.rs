@@ -1,5 +1,4 @@
 use std::hash::Hash;
-use std::ops::{Deref, DerefMut};
 use std::time::Duration;
 use bevy_ecs::change_detection::{DetectChanges, Ref, Res};
 use bevy_ecs::component::{Component, Tick};
@@ -452,29 +451,6 @@ where
 	type IntoIter = <PredSubState<'p, 's, P, M, CombAnyTrue> as IntoIterator>::IntoIter;
 	fn into_iter(self) -> Self::IntoIter {
 		self.inner.into_iter()
-	}
-}
-
-impl<'p, 's, P, M> Deref for PredState<'p, 's, P, M>
-where
-	's: 'p,
-	P: PredParam,
-	M: PredId,
-{
-	type Target = PredSubState<'p, 's, P, M, CombAnyTrue>;
-	fn deref(&self) -> &Self::Target {
-		&self.inner
-	}
-}
-
-impl<'p, 's, P, M> DerefMut for PredState<'p, 's, P, M>
-where
-	's: 'p,
-	P: PredParam,
-	M: PredId,
-{
-	fn deref_mut(&mut self) -> &mut Self::Target {
-		&mut self.inner
 	}
 }
 
@@ -1028,7 +1004,7 @@ mod testing {
 				as PredCombinatorCase>::Item
 				as PredItem>::Ref
 				as IntoIterator>::Item:
-					Deref<Target = Test>,
+					std::ops::Deref<Target = Test>,
 	{
 		use crate::*;
 		
