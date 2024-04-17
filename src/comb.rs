@@ -1155,7 +1155,7 @@ where
 	}
 }
 
-impl<'p, P, M, K> Iterator for PredCombSplit<'p, P, M, K>
+impl<'p, P, M, K> Iterator for PredCombWithIdSplit<'p, P, M, K>
 where
 	P: PredParam,
 	M: PredId,
@@ -1181,7 +1181,7 @@ where
 }
 
 /// Iterator of [`PredSubStateWithIdSplit`].
-pub enum PredCombSplit<'p, P: PredParam, M: PredId, K: CombKind> {
+pub enum PredCombWithIdSplit<'p, P: PredParam, M: PredId, K: CombKind> {
 	Diff(PredCombWithId<'p, P, M, K::Pal>),
 	Same(PredCombWithId<'p, P, M, <<K::Inv as CombKind>::Pal as CombKind>::Inv>),
 }

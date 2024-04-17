@@ -170,11 +170,11 @@ where
 	K: CombKind,
 {
 	type Item = <Self::IntoIter as Iterator>::Item;
-	type IntoIter = PredCombSplit<'p, P, M, K>;
+	type IntoIter = PredCombWithIdSplit<'p, P, M, K>;
 	fn into_iter(self) -> Self::IntoIter {
 		match self {
-			Self::Diff(state) => PredCombSplit::Diff(state.into_iter()),
-			Self::Same(state) => PredCombSplit::Same(state.into_iter()),
+			Self::Diff(state) => PredCombWithIdSplit::Diff(state.into_iter()),
+			Self::Same(state) => PredCombWithIdSplit::Same(state.into_iter()),
 		}
 	}
 }
