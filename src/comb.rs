@@ -182,7 +182,7 @@ where
 	}
 }
 
-/// ...
+/// Combinator for each [`PredParamVec::Split`] case.
 pub enum PredSubComb<C: PredCombinator, K: CombKind> {
 	Diff(C::IntoKind<K::Pal>),
 	Same(C::IntoKind<<<K::Inv as CombKind>::Pal as CombKind>::Inv>),
@@ -637,7 +637,7 @@ where
 	}
 }
 
-/// ...
+/// [`PredParamVec::Split`] type of 2-tuples.
 pub struct PredPairCombSplit<A, B, K> {
 	a_iter: A,
 	b_comb: B,
@@ -975,7 +975,7 @@ where
 	}
 }
 
-/// ...
+/// [`PredParamVec::Split`] type of arrays.
 pub struct PredArrayCombSplit<C, const N: usize, K>
 where
 	C: PredCombinator,
