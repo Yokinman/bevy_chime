@@ -361,8 +361,8 @@ where
 		TimeRanges<I>: Iterator<Item = (Duration, Duration)> + Clone + Send + Sync + 'static
 	{
 		let mut iter = self.into_iter();
-		if let Some((first, _)) = iter.next() {
-			for (case, _) in iter {
+		if let Some((first, ..)) = iter.next() {
+			for (case, ..) in iter {
 				case.set(times.clone());
 			}
 			first.set(times);
@@ -438,9 +438,41 @@ where
 	P: PredParam,
 {
 	type Item = <Self::IntoIter as Iterator>::Item;
-	type IntoIter = <PredStateWithId<'p, 's, P, ()> as IntoIterator>::IntoIter;
+	type IntoIter = PredStateIter<'p, 's, P>;
 	fn into_iter(self) -> Self::IntoIter {
-		self.inner.into_iter()
+		PredStateIter {
+			inner: self.inner.into_iter(),
+		}
+	}
+}
+
+/// ...
+pub struct PredStateIter<'p, 's, P>
+where
+	's: 'p,
+	P: PredParam,
+{
+	inner: <PredStateWithId<'p, 's, P, ()> as IntoIterator>::IntoIter,
+}
+
+impl<'p, 's, P> Iterator for PredStateIter<'p, 's, P>
+where
+	's: 'p,
+	P: PredParam,
+{
+	type Item = (
+		&'p mut PredStateCase<P::Id, ()>,
+		<PredParamItem<'p, P> as PredItem>::Ref,
+	);
+	fn next(&mut self) -> Option<Self::Item> {
+		if let Some((case, item_ref, ())) = self.inner.next() {
+			Some((case, item_ref))
+		} else {
+			None
+		}
+	}
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		self.inner.size_hint()
 	}
 }
 

@@ -1085,7 +1085,8 @@ where
 {
 	type Item = (
 		&'p mut PredStateCase<P::Id, M>,
-		<PredParamItem<'p, P> as PredItem>::Ref
+		<PredParamItem<'p, P> as PredItem>::Ref,
+		M,
 	);
 	fn next(&mut self) -> Option<Self::Item> {
 		while let Some(case) = self.curr {
@@ -1094,7 +1095,8 @@ where
 				let (item, id) = case.into_parts();
 				return Some((
 					self.node.write(PredStateCase::new(id, *misc)),
-					item
+					item,
+					*misc,
 				))
 			}
 			self.curr = self.iter.next();
@@ -1125,7 +1127,8 @@ where
 {
 	type Item = (
 		&'p mut PredStateCase<P::Id, M>,
-		<PredParamItem<'p, P> as PredItem>::Ref
+		<PredParamItem<'p, P> as PredItem>::Ref,
+		M,
 	);
 	fn next(&mut self) -> Option<Self::Item> {
 		match self {
