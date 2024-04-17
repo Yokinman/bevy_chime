@@ -153,29 +153,6 @@ where
 	}
 }
 
-/// ...
-pub struct PredSubStateSplit<'p, 's, P, K>
-where
-	's: 'p,
-	P: PredParam,
-	K: CombKind,
-{
-	inner: PredSubStateWithIdSplit<'p, 's, P, (), K>,
-}
-
-impl<'p, 's, P, K> IntoIterator for PredSubStateSplit<'p, 's, P, K>
-where
-	's: 'p,
-	P: PredParam,
-	K: CombKind,
-{
-	type Item = <Self::IntoIter as Iterator>::Item;
-	type IntoIter = PredCombSplit<'p, P, K>;
-	fn into_iter(self) -> Self::IntoIter {
-		PredCombSplit::new(self.inner.into_iter())
-	}
-}
-
 /// Nested state of each [`PredSubState::outer_iter`].
 pub enum PredSubStateWithIdSplit<'p, 's, P, M, K>
 where
