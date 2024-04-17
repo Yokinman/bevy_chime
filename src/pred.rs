@@ -115,7 +115,6 @@ pub struct PredSubStateSplitIter<'p, 's, P, M, K>
 where
 	's: 'p,
 	P: PredParamVec,
-	M: PredId,
 	K: CombKind,
 {
 	iter: <P as PredParamVec>::Split<'p, K>,
@@ -649,7 +648,7 @@ type PredNodeBranch<'s, P, M> = (
 /// `PredParam` and implement empty defaults for scalar types. However, this
 /// would only support a subset of arrays instead of all sizes, which feels
 /// like an unnecessary constraint. Specialization would probably help here.
-pub trait PredNodeBranches<'s, P: PredParam, M: PredId> {
+pub trait PredNodeBranches<'s, P: PredParam, M> {
 	fn as_writer<'n>(&'n mut self) -> NodeWriter<'n, PredNodeBranch<'s, P, M>>
 	where
 		P: PredParamVec;
