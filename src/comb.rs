@@ -22,14 +22,14 @@ use crate::pred::*;
 ///  AnyDiff  | AllSame  | AllSame  | AnyDiff
 /// ```
 /// 
-/// - None: No combinations.
-/// - All: All possible combinations.
-/// - AllTrue: Combinations where all are true.
-/// - AllFalse: Combinations where all are false.
-/// - AllSame: Combinations where all are the same as each other.
-/// - AnyTrue: Combinations where at least one is true.
-/// - AnyFalse: Combinations where at least one is false.
-/// - AnyDiff: Combinations where at least one is different from the rest.
+/// - `None`: No combinations.
+/// - `All`: All possible combinations.
+/// - `AllTrue`: Combinations where all are true.
+/// - `AllFalse`: Combinations where all are false.
+/// - `AllSame`: Combinations where all are the same as each other.
+/// - `AnyTrue`: Combinations where at least one is true.
+/// - `AnyFalse`: Combinations where at least one is false.
+/// - `AnyDiff`: Combinations where at least one is different from the rest.
 pub trait CombKind {
 	type Pal: CombKind;
 	type Inv: CombKind;
