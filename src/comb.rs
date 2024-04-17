@@ -1052,38 +1052,6 @@ where
 	}
 }
 
-/// ...
-pub struct PredComb<'p, P: PredParam, K: CombKind> {
-	inner: PredCombWithId<'p, P, (), K>,
-}
-
-impl<'p, P, K> PredComb<'p, P, K>
-where
-	P: PredParam,
-	K: CombKind,
-{
-	pub fn new(inner: PredCombWithId<'p, P, (), K>) -> Self {
-		Self { inner }
-	}
-}
-
-impl<'p, P, K> Iterator for PredComb<'p, P, K>
-where
-	P: PredParam,
-	K: CombKind,
-{
-	type Item = (
-		&'p mut PredStateCase<P::Id, ()>,
-		<PredParamItem<'p, P> as PredItem>::Ref,
-	);
-	fn next(&mut self) -> Option<Self::Item> {
-		self.inner.next()
-	}
-	fn size_hint(&self) -> (usize, Option<usize>) {
-		self.inner.size_hint()
-	}
-}
-
 /// Produces all case combinations in need of a new prediction, alongside a
 /// [`PredStateCase`] for scheduling.
 pub struct PredCombWithId<'p, P, M, K>

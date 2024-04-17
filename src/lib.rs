@@ -10,7 +10,7 @@ mod node;
 use comb::*;
 use pred::*;
 
-pub use pred::{PredState, PredStateWithId, PredQuery, WithId};
+pub use pred::{PredStateWithId, PredQuery, WithId};
 
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, btree_map, BTreeMap, HashMap};
@@ -120,7 +120,7 @@ where
 {}
 
 /// Types that can be converted into a [`PredFn`].
-pub trait IntoPredFn<P, M, A, Marker>: Sized
+pub trait IntoPredFn<P, M, A>: Sized
 where
 	P: PredParam,
 	M: PredStateMisc,
@@ -155,7 +155,7 @@ macro_rules! impl_into_pred_fn {
 		$(impl_into_pred_fn!(@all $($rest),*);)?
 	};
 	($($param:ident),*) => {
-		impl<F, P, M, $($param: ReadOnlySystemParam),*> IntoPredFn<P, M, ($($param,)*), [(); 1]> for F
+		impl<F, P, M, $($param: ReadOnlySystemParam),*> IntoPredFn<P, M, ($($param,)*)> for F
 		where
 			F: Fn(PredStateWithId<P, M>, $($param),*)
 				+ Fn(PredStateWithId<P, M>, $(SystemParamItem<$param>),*),
@@ -166,20 +166,6 @@ macro_rules! impl_into_pred_fn {
 				move |state, misc| {
 					let ($($param,)*) = misc;
 					self(state, $($param),*);
-				}
-			}
-		}
-		
-		impl<F, P, $($param: ReadOnlySystemParam),*> IntoPredFn<P, (), ($($param,)*), [(); 0]> for F
-		where
-			F: Fn(PredState<P>, $($param),*)
-				+ Fn(PredState<P>, $(SystemParamItem<$param>),*),
-			P: PredParam,
-		{
-			fn into_pred_fn(self) -> impl PredFn<P, (), ($($param,)*)> {
-				move |state, misc| {
-					let ($($param,)*) = misc;
-					self(PredState::new(state), $($param),*);
 				}
 			}
 		}
