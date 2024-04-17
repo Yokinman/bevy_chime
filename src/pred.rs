@@ -529,7 +529,7 @@ where
 }
 
 /// Collects predictions from "when" systems for later compilation.
-pub struct PredStateWithId<'p, 's, P, M>
+pub struct PredState<'p, 's, P, M>
 where
 	's: 'p,
 	P: PredParam,
@@ -538,7 +538,7 @@ where
 	inner: PredSubState<'p, 's, P, M, CombAnyTrue>,
 }
 
-impl<'p, 's, P, M> PredStateWithId<'p, 's, P, M>
+impl<'p, 's, P, M> PredState<'p, 's, P, M>
 where
 	's: 'p,
 	P: PredParam,
@@ -555,7 +555,7 @@ where
 	}
 }
 
-impl<'p, 's, P, M> PredStateWithId<'p, 's, P, M>
+impl<'p, 's, P, M> PredState<'p, 's, P, M>
 where
 	's: 'p,
 	P: PredParamVec,
@@ -566,7 +566,7 @@ where
 	}
 }
 
-impl<'p, 's, P, M> IntoIterator for PredStateWithId<'p, 's, P, M>
+impl<'p, 's, P, M> IntoIterator for PredState<'p, 's, P, M>
 where
 	's: 'p,
 	P: PredParam,
