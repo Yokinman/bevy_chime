@@ -402,18 +402,18 @@ where
 	}
 }
 
-// impl<'p, 's, P, K> PredSubState<'p, 's, P, K>
-// where
-// 	's: 'p,
-// 	P: PredParamVec,
-// 	K: CombKind,
-// {
-// 	pub fn outer_iter(self) -> PredSubStateSplitIter<'p, 's, P, K> {
-// 		PredSubStateSplitIter {
-// 			inner: self.inner.outer_iter(),
-// 		}
-// 	}
-// }
+impl<'p, 's, P, K> PredSubState<'p, 's, P, K>
+where
+	's: 'p,
+	P: PredParamVec,
+	K: CombKind,
+{
+	pub fn outer_iter(self) -> PredSubStateSplitIter<'p, 's, P, K> {
+		PredSubStateSplitIter {
+			inner: self.inner.outer_iter(),
+		}
+	}
+}
 
 impl<'p, 's, P, K> IntoIterator for PredSubState<'p, 's, P, K>
 where
@@ -532,8 +532,10 @@ where
 	's: 'p,
 	P: PredParamVec,
 {
-	pub fn outer_iter(self) -> PredSubStateWithIdSplitIter<'p, 's, P, (), CombAnyTrue> {
-		self.inner.outer_iter()
+	pub fn outer_iter(self) -> PredSubStateSplitIter<'p, 's, P, CombAnyTrue> {
+		PredSubStateSplitIter {
+			inner: self.inner.outer_iter()
+		}
 	}
 }
 
