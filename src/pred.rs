@@ -408,9 +408,8 @@ pub struct PredState<'p, 's, P = (), M = ()>
 where
 	's: 'p,
 	P: PredParam,
-	M: PredId,
 {
-	inner: PredSubState<'p, 's, P, M, CombAnyTrue>,
+	inner: PredStateWithId<'p, 's, P, M>,
 }
 
 impl<'p, 's, P, M> PredState<'p, 's, P, M>
@@ -425,7 +424,7 @@ where
 		node: &'p mut PredNode<'s, P, M>,
 	) -> Self {
 		Self {
-			inner: PredSubState::new(comb, misc_state, node),
+			inner: PredStateWithId::new(comb, misc_state, node),
 		}
 	}
 }
@@ -442,6 +441,56 @@ where
 }
 
 impl<'p, 's, P, M> IntoIterator for PredState<'p, 's, P, M>
+where
+	's: 'p,
+	P: PredParam,
+	M: PredId,
+{
+	type Item = <Self::IntoIter as Iterator>::Item;
+	type IntoIter = <PredStateWithId<'p, 's, P, M> as IntoIterator>::IntoIter;
+	fn into_iter(self) -> Self::IntoIter {
+		self.inner.into_iter()
+	}
+}
+
+/// ...
+pub struct PredStateWithId<'p, 's, P, M>
+where
+	's: 'p,
+	P: PredParam,
+{
+	inner: PredSubState<'p, 's, P, M, CombAnyTrue>,
+}
+
+impl<'p, 's, P, M> PredStateWithId<'p, 's, P, M>
+where
+	's: 'p,
+	P: PredParam,
+	M: PredId,
+{
+	pub(crate) fn new(
+		comb: <P::Comb<'p> as PredCombinator>::IntoKind<CombAnyTrue>,
+		misc_state: Box<[M]>,
+		node: &'p mut PredNode<'s, P, M>,
+	) -> Self {
+		Self {
+			inner: PredSubState::new(comb, misc_state, node),
+		}
+	}
+}
+
+impl<'p, 's, P, M> PredStateWithId<'p, 's, P, M>
+where
+	's: 'p,
+	P: PredParamVec,
+	M: PredId,
+{
+	pub fn outer_iter(self) -> PredSubStateSplitIter<'p, 's, P, M, CombAnyTrue> {
+		self.inner.outer_iter()
+	}
+}
+
+impl<'p, 's, P, M> IntoIterator for PredStateWithId<'p, 's, P, M>
 where
 	's: 'p,
 	P: PredParam,
