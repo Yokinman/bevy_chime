@@ -1054,7 +1054,7 @@ where
 
 /// Produces all case combinations in need of a new prediction, alongside a
 /// [`PredStateCase`] for scheduling.
-pub struct PredComb<'p, P: PredParam, M, K: CombKind> {
+pub struct PredCombWithId<'p, P: PredParam, M, K: CombKind> {
 	iter: <<P::Comb<'p> as PredCombinator>::IntoKind<K> as IntoIterator>::IntoIter,
 	curr: Option<<<P::Comb<'p> as PredCombinator>::IntoKind<K> as IntoIterator>::Item>,
 	misc_state: Box<[M]>,
@@ -1062,7 +1062,7 @@ pub struct PredComb<'p, P: PredParam, M, K: CombKind> {
 	node: NodeWriter<'p, PredStateCase<P::Id, M>>,
 }
 
-impl<'p, P: PredParam, M: PredId, K: CombKind> PredComb<'p, P, M, K> {
+impl<'p, P: PredParam, M: PredId, K: CombKind> PredCombWithId<'p, P, M, K> {
 	pub fn new<'s: 'p>(state: PredSubStateWithId<'p, 's, P, M, K>) -> Self {
 		let mut iter = state.comb.into_iter();
 		let node = state.node.init_data(4 * iter.size_hint().0.max(1));
@@ -1077,7 +1077,7 @@ impl<'p, P: PredParam, M: PredId, K: CombKind> PredComb<'p, P, M, K> {
 	}
 }
 
-impl<'p, P, M, K> Iterator for PredComb<'p, P, M, K>
+impl<'p, P, M, K> Iterator for PredCombWithId<'p, P, M, K>
 where
 	P: PredParam,
 	M: PredId,
@@ -1146,6 +1146,6 @@ where
 
 /// Iterator of [`PredSubStateWithIdSplit`].
 pub enum PredCombSplit<'p, P: PredParam, M: PredId, K: CombKind> {
-	Diff(PredComb<'p, P, M, K::Pal>),
-	Same(PredComb<'p, P, M, <<K::Inv as CombKind>::Pal as CombKind>::Inv>),
+	Diff(PredCombWithId<'p, P, M, K::Pal>),
+	Same(PredCombWithId<'p, P, M, <<K::Inv as CombKind>::Pal as CombKind>::Inv>),
 }

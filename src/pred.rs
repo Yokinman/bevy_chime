@@ -396,9 +396,9 @@ where
 	K: CombKind,
 {
 	type Item = <Self::IntoIter as IntoIterator>::Item;
-	type IntoIter = PredComb<'p, P, M, K>;
+	type IntoIter = PredCombWithId<'p, P, M, K>;
 	fn into_iter(self) -> Self::IntoIter {
-		PredComb::new(self)
+		PredCombWithId::new(self)
 	}
 }
 
