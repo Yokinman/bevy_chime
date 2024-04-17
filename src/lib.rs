@@ -117,6 +117,9 @@ where
 
 /// Types that can be converted into a [`PredFn`].
 pub trait IntoPredFn<P: PredParam, M: PredId, A: ReadOnlySystemParam, Marker>: Sized {
+	// !!! This should probably be split into two functions, with the two
+	// separate methods (`into_events` and `into_events_with_id`).
+	
 	fn into_pred_fn(self) -> impl PredFn<P, M, A>;
 	
 	fn into_events(self) -> ChimeEventBuilder<P, M, A, impl PredFn<P, M, A>>
@@ -142,7 +145,7 @@ macro_rules! impl_into_pred_fn {
 		$(impl_into_pred_fn!(@all $($rest),*);)?
 	};
 	($($param:ident),*) => {
-		impl<F, P, M, $($param: ReadOnlySystemParam),*> IntoPredFn<P, M, ($($param,)*), u8> for F
+		impl<F, P, M, $($param: ReadOnlySystemParam),*> IntoPredFn<P, M, ($($param,)*), [(); 1]> for F
 		where
 			F: Fn(PredStateWithId<P, M>, $($param),*)
 				+ Fn(PredStateWithId<P, M>, $(SystemParamItem<$param>),*),
@@ -157,7 +160,7 @@ macro_rules! impl_into_pred_fn {
 			}
 		}
 		
-		impl<F, P, $($param: ReadOnlySystemParam),*> IntoPredFn<P, (), ($($param,)*), u16> for F
+		impl<F, P, $($param: ReadOnlySystemParam),*> IntoPredFn<P, (), ($($param,)*), [(); 0]> for F
 		where
 			F: Fn(PredState<P>, $($param),*)
 				+ Fn(PredState<P>, $(SystemParamItem<$param>),*),
