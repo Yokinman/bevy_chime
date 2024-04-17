@@ -1063,7 +1063,7 @@ pub struct PredComb<'p, P: PredParam, M, K: CombKind> {
 }
 
 impl<'p, P: PredParam, M: PredId, K: CombKind> PredComb<'p, P, M, K> {
-	pub fn new<'s: 'p>(state: PredSubState<'p, 's, P, M, K>) -> Self {
+	pub fn new<'s: 'p>(state: PredSubStateWithId<'p, 's, P, M, K>) -> Self {
 		let mut iter = state.comb.into_iter();
 		let node = state.node.init_data(4 * iter.size_hint().0.max(1));
 		let curr = iter.next();

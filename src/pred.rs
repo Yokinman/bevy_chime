@@ -110,8 +110,8 @@ macro_rules! impl_pred_param_vec_for_array {
 // method to [`PredSubState::outer_iter`] might be worthwhile for convenience.
 impl_pred_param_vec_for_array!(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12);
 
-/// Iterator of [`PredSubState::outer_iter`].
-pub struct PredSubStateSplitIter<'p, 's, P, M, K>
+/// Iterator of [`PredSubStateWithId::outer_iter`].
+pub struct PredSubStateWithIdSplitIter<'p, 's, P, M, K>
 where
 	's: 'p,
 	P: PredParamVec,
@@ -122,7 +122,7 @@ where
 	branches: NodeWriter<'p, PredNodeBranch<'s, P, M>>,
 }
 
-impl<'p, 's, P, M, K> Iterator for PredSubStateSplitIter<'p, 's, P, M, K>
+impl<'p, 's, P, M, K> Iterator for PredSubStateWithIdSplitIter<'p, 's, P, M, K>
 where
 	's: 'p,
 	P: PredParamVec,
@@ -138,8 +138,8 @@ where
 			let node = &mut self.branches.write((head.id(), PredNode::Blank)).1;
 			let misc_state = self.misc_state.clone();
 			let sub_state = match tail {
-				PredSubComb::Diff(comb) => PredSubStateSplit::Diff(PredSubState::new(comb, misc_state, node)),
-				PredSubComb::Same(comb) => PredSubStateSplit::Same(PredSubState::new(comb, misc_state, node)),
+				PredSubComb::Diff(comb) => PredSubStateSplit::Diff(PredSubStateWithId::new(comb, misc_state, node)),
+				PredSubComb::Same(comb) => PredSubStateSplit::Same(PredSubStateWithId::new(comb, misc_state, node)),
 			};
 			Some((sub_state, head.item_ref()))
 		} else {
@@ -151,15 +151,15 @@ where
 	}
 }
 
-/// Nested state of each [`PredSubState::outer_iter`].
+/// Nested state of each [`PredSubStateWithId::outer_iter`].
 pub enum PredSubStateSplit<'p, 's, P, M, K>
 where
 	's: 'p,
 	P: PredParam,
 	K: CombKind,
 {
-	Diff(PredSubState<'p, 's, P, M, K::Pal>),
-	Same(PredSubState<'p, 's, P, M, <<K::Inv as CombKind>::Pal as CombKind>::Inv>),
+	Diff(PredSubStateWithId<'p, 's, P, M, K::Pal>),
+	Same(PredSubStateWithId<'p, 's, P, M, <<K::Inv as CombKind>::Pal as CombKind>::Inv>),
 }
 
 impl<'p, 's, P, M, K> IntoIterator for PredSubStateSplit<'p, 's, P, M, K>
@@ -324,7 +324,7 @@ where
 
 /// Collects predictions from "when" systems for later compilation. More general
 /// form of [`PredState`] for stepping through combinators layer-wise.
-pub struct PredSubState<'p, 's, P, M, K>
+pub struct PredSubStateWithId<'p, 's, P, M, K>
 where
 	's: 'p,
 	P: PredParam,
@@ -335,7 +335,7 @@ where
 	pub(crate) node: &'p mut PredNode<'s, P, M>,
 }
 
-impl<'p, 's, P, M, K> PredSubState<'p, 's, P, M, K>
+impl<'p, 's, P, M, K> PredSubStateWithId<'p, 's, P, M, K>
 where
 	's: 'p,
 	P: PredParam,
@@ -369,18 +369,18 @@ where
 	}
 }
 
-impl<'p, 's, P, M, K> PredSubState<'p, 's, P, M, K>
+impl<'p, 's, P, M, K> PredSubStateWithId<'p, 's, P, M, K>
 where
 	's: 'p,
 	P: PredParamVec,
 	M: PredId,
 	K: CombKind,
 {
-	pub fn outer_iter(self) -> PredSubStateSplitIter<'p, 's, P, M, K> {
-		let PredSubState { comb, misc_state, node } = self;
+	pub fn outer_iter(self) -> PredSubStateWithIdSplitIter<'p, 's, P, M, K> {
+		let PredSubStateWithId { comb, misc_state, node } = self;
 		let iter = P::split(comb);
 		let capacity = 4 * iter.size_hint().0.max(1);
-		PredSubStateSplitIter {
+		PredSubStateWithIdSplitIter {
 			iter,
 			misc_state,
 			branches: node.init_branches(capacity),
@@ -388,7 +388,7 @@ where
 	}
 }
 
-impl<'p, 's, P, M, K> IntoIterator for PredSubState<'p, 's, P, M, K>
+impl<'p, 's, P, M, K> IntoIterator for PredSubStateWithId<'p, 's, P, M, K>
 where
 	's: 'p,
 	P: PredParam,
@@ -426,7 +426,7 @@ where
 	's: 'p,
 	P: PredParamVec,
 {
-	pub fn outer_iter(self) -> PredSubStateSplitIter<'p, 's, P, (), CombAnyTrue> {
+	pub fn outer_iter(self) -> PredSubStateWithIdSplitIter<'p, 's, P, (), CombAnyTrue> {
 		self.inner.outer_iter()
 	}
 }
@@ -481,7 +481,7 @@ where
 	's: 'p,
 	P: PredParam,
 {
-	inner: PredSubState<'p, 's, P, M, CombAnyTrue>,
+	inner: PredSubStateWithId<'p, 's, P, M, CombAnyTrue>,
 }
 
 impl<'p, 's, P, M> PredStateWithId<'p, 's, P, M>
@@ -496,7 +496,7 @@ where
 		node: &'p mut PredNode<'s, P, M>,
 	) -> Self {
 		Self {
-			inner: PredSubState::new(comb, misc_state, node),
+			inner: PredSubStateWithId::new(comb, misc_state, node),
 		}
 	}
 }
@@ -507,7 +507,7 @@ where
 	P: PredParamVec,
 	M: PredId,
 {
-	pub fn outer_iter(self) -> PredSubStateSplitIter<'p, 's, P, M, CombAnyTrue> {
+	pub fn outer_iter(self) -> PredSubStateWithIdSplitIter<'p, 's, P, M, CombAnyTrue> {
 		self.inner.outer_iter()
 	}
 }
@@ -519,7 +519,7 @@ where
 	M: PredId,
 {
 	type Item = <Self::IntoIter as Iterator>::Item;
-	type IntoIter = <PredSubState<'p, 's, P, M, CombAnyTrue> as IntoIterator>::IntoIter;
+	type IntoIter = <PredSubStateWithId<'p, 's, P, M, CombAnyTrue> as IntoIterator>::IntoIter;
 	fn into_iter(self) -> Self::IntoIter {
 		self.inner.into_iter()
 	}
