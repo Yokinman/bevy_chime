@@ -33,7 +33,18 @@ use crate::pred::*;
 pub trait CombKind {
 	type Pal: CombKind;
 	type Inv: CombKind;
+	
 	fn has_state(state: bool) -> bool;
+	
+	#[inline]
+	fn has_all() -> bool {
+		Self::has_state(true) && Self::has_state(false)
+	}
+	
+	#[inline]
+	fn has_none() -> bool {
+		!(Self::has_state(true) || Self::has_state(false))
+	}
 }
 
 macro_rules! def_comb_kind {
@@ -329,7 +340,7 @@ where
 {
 	type Item = PredCombCase<P, I>;
 	fn next(&mut self) -> Option<Self::Item> {
-		if !K::has_state(true) && !K::has_state(false) {
+		if K::has_none() {
 			return None
 		}
 		for (item, id) in self.iter.by_ref() {
@@ -880,10 +891,10 @@ where
 				self.layer = 0;
 				
 				 // Jump to End:
-				if !K::has_state(true) || !K::has_state(false) {
-					if self.slice[self.index[i + 1]].1 >= self.slice.len() {
-						self.index[i + 1] = self.slice.len();
-					}
+				if !K::has_all()
+					&& self.slice[self.index[i + 1]].1 >= self.slice.len()
+				{
+					self.index[i + 1] = self.slice.len();
 				}
 			}
 			self.step(i + 1);
@@ -912,7 +923,7 @@ where
 		
 		if N == 0
 			|| self.index[N-1] >= self.slice.len()
-			|| (!K::has_state(true) && !K::has_state(false))
+			|| K::has_none()
 		{
 			return (0, Some(0))
 		}
@@ -933,7 +944,7 @@ where
 			}
 			let mut remaining = self.slice.len() - index;
 			let mut num = falling_factorial(remaining, i + 1);
-			if i >= self.layer && (!K::has_state(true) || !K::has_state(false)) {
+			if i >= self.layer && !K::has_all() {
 				let first_index = if K::has_state(true) {
 					self.min_diff_index
 				} else {
