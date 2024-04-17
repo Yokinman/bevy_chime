@@ -8,68 +8,55 @@ use bevy_ecs::system::{Query, Resource};
 use crate::node::NodeWriter;
 use crate::pred::*;
 
-/// Unit types that define what `PredParam::comb` iterates over.
+/// Unit types that filter what `PredParam::comb` iterates over.
 /// 
 /// ```text
-///         | ::Pal  | ::Inv   | ::Inv::Pal::Inv
-///    None | None   | All     | None
-///     All | All    | None    | All
-/// Updated | All    | Static  | Updated
-///  Static | Static | Updated | None
+///           | ::Pal    | ::Inv    | ::Inv::Pal::Inv
+///  None     | None     | All      | None
+///  All      | All      | None     | All
+///  AllTrue  | AllTrue  | AnyFalse | None
+///  AllFalse | AllFalse | AnyTrue  | None
+///  AllSame  | AllSame  | AnyDiff  | AnyDiff
+///  AnyTrue  | All      | AllFalse | AnyTrue
+///  AnyFalse | All      | AllTrue  | AnyFalse
+///  AnyDiff  | AllSame  | AllSame  | AnyDiff
 /// ```
+/// 
+/// - None: No combinations.
+/// - All: All possible combinations.
+/// - AllTrue: Combinations where all are true.
+/// - AllFalse: Combinations where all are false.
+/// - AllSame: Combinations where all are the same as each other.
+/// - AnyTrue: Combinations where at least one is true.
+/// - AnyFalse: Combinations where at least one is false.
+/// - AnyDiff: Combinations where at least one is different from the rest.
 pub trait CombKind {
 	type Pal: CombKind;
 	type Inv: CombKind;
 	fn has_state(state: bool) -> bool;
 }
 
-/// No combinations.
-pub struct CombNone;
-
-impl CombKind for CombNone {
-	type Pal = CombNone;
-	type Inv = CombAll;
-	#[inline]
-	fn has_state(_: bool) -> bool {
-		false
-	}
+macro_rules! def_comb_kind {
+	($name:ident, $pal:ty, $inv:ty, $state:pat => $has_state:expr) => {
+		/// See [`CombKind`].
+		pub struct $name;
+		
+		impl CombKind for $name {
+			type Pal = $pal;
+			type Inv = $inv;
+			#[inline]
+			fn has_state($state: bool) -> bool {
+				$has_state
+			}
+		}
+	};
 }
 
-/// All combinations.
-pub struct CombAll;
-
-impl CombKind for CombAll {
-	type Pal = CombAll;
-	type Inv = CombNone;
-	#[inline]
-	fn has_state(_: bool) -> bool {
-		true
-	}
-}
-
-/// Combinations where either item updated.
-pub struct CombDiff;
-
-impl CombKind for CombDiff {
-	type Pal = CombAll;
-	type Inv = CombSame;
-	#[inline]
-	fn has_state(state: bool) -> bool {
-		state
-	}
-}
-
-/// Combinations where neither item updated.
-pub struct CombSame;
-
-impl CombKind for CombSame {
-	type Pal = CombSame;
-	type Inv = CombDiff;
-	#[inline]
-	fn has_state(state: bool) -> bool {
-		!state
-	}
-}
+            // Name,         Pal,          Inv,          Filter
+def_comb_kind!(CombNone,     CombNone,     CombAll,      _ => false);
+def_comb_kind!(CombAll,      CombAll,      CombNone,     _ => true);
+def_comb_kind!(CombAllFalse, CombAllFalse, CombAnyTrue,  x => !x);
+def_comb_kind!(CombAnyTrue,  CombAll,      CombAllFalse, x => x);
 
 /// Combinator type produced by `PredParam::comb`.
 pub trait PredCombinator<K: CombKind = CombNone>:
@@ -617,7 +604,7 @@ where
 					let b_inv_max = b_inv_comb.clone().into_iter().size_hint().1?;
 					std::cmp::max(
 						// This may be inaccurate if a new `CombKind` is added.
-						// It should work for `K = CombAll|None|Updated|Static`.
+						// It should work for `K=CombNone|All|AnyTrue|AllFalse`.
 						min.checked_add(a_max.checked_mul(b_max)?),
 						a_inv_max.checked_mul(b_inv_max)
 					)
