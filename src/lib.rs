@@ -159,14 +159,14 @@ macro_rules! impl_into_pred_fn {
 		
 		impl<F, P, $($param: ReadOnlySystemParam),*> IntoPredFn<P, (), ($($param,)*), u16> for F
 		where
-			F: Fn(PredState<P, ()>, $($param),*)
-				+ Fn(PredState<P, ()>, $(SystemParamItem<$param>),*),
+			F: Fn(PredState<P>, $($param),*)
+				+ Fn(PredState<P>, $(SystemParamItem<$param>),*),
 			P: PredParam,
 		{
 			fn into_pred_fn(self) -> impl PredFn<P, (), ($($param,)*)> {
 				move |state, misc| {
 					let ($($param,)*) = misc;
-					self(PredState { inner: state }, $($param),*);
+					self(PredState::new(state), $($param),*);
 				}
 			}
 		}

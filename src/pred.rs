@@ -404,50 +404,41 @@ where
 }
 
 /// Collects predictions from "when" systems for later compilation.
-pub struct PredState<'p, 's, P = (), M = ()>
+pub struct PredState<'p, 's, P = ()>
 where
 	's: 'p,
 	P: PredParam,
 {
-	pub(crate) inner: PredStateWithId<'p, 's, P, M>,
+	inner: PredStateWithId<'p, 's, P, ()>,
 }
 
-impl<'p, 's, P, M> PredState<'p, 's, P, M>
+impl<'p, 's, P> PredState<'p, 's, P>
 where
 	's: 'p,
 	P: PredParam,
-	M: PredId,
 {
-	pub(crate) fn new(
-		comb: <P::Comb<'p> as PredCombinator>::IntoKind<CombAnyTrue>,
-		misc_state: Box<[M]>,
-		node: &'p mut PredNode<'s, P, M>,
-	) -> Self {
-		Self {
-			inner: PredStateWithId::new(comb, misc_state, node),
-		}
+	pub(crate) fn new(inner: PredStateWithId<'p, 's, P, ()>) -> Self {
+		Self { inner }
 	}
 }
 
-impl<'p, 's, P, M> PredState<'p, 's, P, M>
+impl<'p, 's, P> PredState<'p, 's, P>
 where
 	's: 'p,
 	P: PredParamVec,
-	M: PredId,
 {
-	pub fn outer_iter(self) -> PredSubStateSplitIter<'p, 's, P, M, CombAnyTrue> {
+	pub fn outer_iter(self) -> PredSubStateSplitIter<'p, 's, P, (), CombAnyTrue> {
 		self.inner.outer_iter()
 	}
 }
 
-impl<'p, 's, P, M> IntoIterator for PredState<'p, 's, P, M>
+impl<'p, 's, P> IntoIterator for PredState<'p, 's, P>
 where
 	's: 'p,
 	P: PredParam,
-	M: PredId,
 {
 	type Item = <Self::IntoIter as Iterator>::Item;
-	type IntoIter = <PredStateWithId<'p, 's, P, M> as IntoIterator>::IntoIter;
+	type IntoIter = <PredStateWithId<'p, 's, P, ()> as IntoIterator>::IntoIter;
 	fn into_iter(self) -> Self::IntoIter {
 		self.inner.into_iter()
 	}
