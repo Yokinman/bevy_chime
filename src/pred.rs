@@ -112,7 +112,7 @@ macro_rules! impl_pred_param_vec_for_array {
 impl_pred_param_vec_for_array!(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12);
 
 /// Iterator of [`PredSubState::outer_iter`].
-pub struct PredSubStateWithIdSplitIter<'p, 's, P, M, K>
+pub struct PredSubStateSplitIter<'p, 's, P, M, K>
 where
 	's: 'p,
 	P: PredParamVec,
@@ -124,7 +124,7 @@ where
 	branches: NodeWriter<'p, PredNodeBranch<'s, P, M::Item>>,
 }
 
-impl<'p, 's, P, M, K> Iterator for PredSubStateWithIdSplitIter<'p, 's, P, M, K>
+impl<'p, 's, P, M, K> Iterator for PredSubStateSplitIter<'p, 's, P, M, K>
 where
 	's: 'p,
 	P: PredParamVec,
@@ -469,11 +469,11 @@ where
 	M: PredStateMisc,
 	K: CombKind,
 {
-	pub fn outer_iter(self) -> PredSubStateWithIdSplitIter<'p, 's, P, M, K> {
+	pub fn outer_iter(self) -> PredSubStateSplitIter<'p, 's, P, M, K> {
 		let PredSubState { comb, misc_state, node } = self;
 		let iter = P::split(comb);
 		let capacity = 4 * iter.size_hint().0.max(1);
-		PredSubStateWithIdSplitIter {
+		PredSubStateSplitIter {
 			iter,
 			misc_state,
 			branches: node.init_branches(capacity),
@@ -529,7 +529,7 @@ where
 	P: PredParamVec,
 	M: PredStateMisc,
 {
-	pub fn outer_iter(self) -> PredSubStateWithIdSplitIter<'p, 's, P, M, CombAnyTrue> {
+	pub fn outer_iter(self) -> PredSubStateSplitIter<'p, 's, P, M, CombAnyTrue> {
 		self.inner.outer_iter()
 	}
 }
