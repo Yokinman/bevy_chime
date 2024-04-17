@@ -20,8 +20,7 @@ use crate::pred::*;
 pub trait CombKind {
 	type Pal: CombKind;
 	type Inv: CombKind;
-	const HAS_DIFF: bool;
-	const HAS_SAME: bool;
+	fn has_state(state: bool) -> bool;
 }
 
 /// No combinations.
@@ -30,8 +29,10 @@ pub struct CombNone;
 impl CombKind for CombNone {
 	type Pal = CombNone;
 	type Inv = CombAll;
-	const HAS_DIFF: bool = false;
-	const HAS_SAME: bool = false;
+	#[inline]
+	fn has_state(_: bool) -> bool {
+		false
+	}
 }
 
 /// All combinations.
@@ -40,8 +41,10 @@ pub struct CombAll;
 impl CombKind for CombAll {
 	type Pal = CombAll;
 	type Inv = CombNone;
-	const HAS_DIFF: bool = true;
-	const HAS_SAME: bool = true;
+	#[inline]
+	fn has_state(_: bool) -> bool {
+		true
+	}
 }
 
 /// Combinations where either item updated.
@@ -50,8 +53,10 @@ pub struct CombDiff;
 impl CombKind for CombDiff {
 	type Pal = CombAll;
 	type Inv = CombSame;
-	const HAS_DIFF: bool = true;
-	const HAS_SAME: bool = false;
+	#[inline]
+	fn has_state(state: bool) -> bool {
+		state
+	}
 }
 
 /// Combinations where neither item updated.
@@ -60,8 +65,10 @@ pub struct CombSame;
 impl CombKind for CombSame {
 	type Pal = CombSame;
 	type Inv = CombDiff;
-	const HAS_DIFF: bool = false;
-	const HAS_SAME: bool = true;
+	#[inline]
+	fn has_state(state: bool) -> bool {
+		!state
+	}
 }
 
 /// Combinator type produced by `PredParam::comb`.
@@ -155,8 +162,8 @@ where
 	type IntoKind<Kind: CombKind> = PredArrayComb<C, N, Kind>;
 	
 	fn into_kind<Kind: CombKind>(self) -> Self::IntoKind<Kind> {
-		if K::Pal::HAS_DIFF == Kind::Pal::HAS_DIFF
-			&& K::Pal::HAS_SAME == Kind::Pal::HAS_SAME
+		if K::Pal::has_state(true) == Kind::Pal::has_state(true)
+			&& K::Pal::has_state(false) == Kind::Pal::has_state(false)
 		{
 			PredArrayComb {
 				comb: self.comb,
@@ -335,22 +342,23 @@ where
 {
 	type Item = PredCombCase<P, I>;
 	fn next(&mut self) -> Option<Self::Item> {
-		if !K::HAS_DIFF && !K::HAS_SAME {
+		if !K::has_state(true) && !K::has_state(false) {
 			return None
 		}
 		for (item, id) in self.iter.by_ref() {
-			if P::is_updated(&item) {
-				if K::HAS_DIFF {
-					return Some(PredCombCase::Diff(P::into_ref(item), id))
-				}
-			} else if K::HAS_SAME {
-				return Some(PredCombCase::Same(P::into_ref(item), id))
+			let is_updated = P::is_updated(&item);
+			if K::has_state(is_updated) {
+				return Some(if is_updated {
+					PredCombCase::Diff(P::into_ref(item), id)
+				} else {
+					PredCombCase::Same(P::into_ref(item), id)
+				})
 			}
 		}
 		None
 	}
 	fn size_hint(&self) -> (usize, Option<usize>) {
-		match (K::HAS_DIFF, K::HAS_SAME) {
+		match (K::has_state(true), K::has_state(false)) {
 			(false, false) => (0, Some(0)),
 			(true, true) => self.iter.size_hint(),
 			_ => (0, self.iter.size_hint().1)
@@ -782,7 +790,7 @@ where
 		}
 		
 		 // Initialize Main Index:
-		if match (K::HAS_DIFF, K::HAS_SAME) {
+		if match (K::has_state(true), K::has_state(false)) {
 			(true, true) => false,
 			(false, false) => true,
 			(true, false) => iter.min_diff_index >= iter.slice.len(),
@@ -791,7 +799,7 @@ where
 			iter.index[N-1] = iter.slice.len();
 		} else if iter.index[N-1] < iter.slice.len() {
 			let (case, _) = iter.slice[iter.index[N-1]];
-			if if case.is_diff() { K::HAS_DIFF } else { K::HAS_SAME } {
+			if K::has_state(case.is_diff()) {
 				iter.layer = N-1;
 			} else if N == 1 {
 				iter.step_index(N-1);
@@ -833,20 +841,20 @@ where
 			return true
 		}
 		self.index[i] = match self.layer.cmp(&i) {
-			std::cmp::Ordering::Equal => match (K::HAS_DIFF, K::HAS_SAME){
+			std::cmp::Ordering::Equal => match (K::has_state(true), K::has_state(false)) {
 				(true, true) => index + 1,
 				(false, false) => self.slice.len(),
 				_ => {
 					let (case, next_index) = self.slice[index];
 					
 					 // Jump to Next Matching Case:
-					if if case.is_diff() { K::HAS_DIFF } else { K::HAS_SAME } {
+					if K::has_state(case.is_diff()) {
 						next_index
 					}
 					
 					 // Find Next Matching Case:
 					else {
-						let first_index = if K::HAS_DIFF {
+						let first_index = if K::has_state(true) {
 							self.min_diff_index
 						} else {
 							self.min_same_index
@@ -856,7 +864,7 @@ where
 						} else {
 							let mut index = index + 1;
 							while let Some((case, _)) = self.slice.get(index) {
-								if if case.is_diff() { K::HAS_DIFF } else { K::HAS_SAME } {
+								if K::has_state(case.is_diff()) {
 									break
 								}
 								index += 1;
@@ -868,7 +876,7 @@ where
 			},
 			std::cmp::Ordering::Less => {
 				if let Some((case, _)) = self.slice.get(index + 1) {
-					if if case.is_diff() { K::HAS_DIFF } else { K::HAS_SAME } {
+					if K::has_state(case.is_diff()) {
 						self.layer = i;
 					}
 				}
@@ -885,7 +893,7 @@ where
 				self.layer = 0;
 				
 				 // Jump to End:
-				if !K::HAS_DIFF || !K::HAS_SAME {
+				if !K::has_state(true) || !K::has_state(false) {
 					if self.slice[self.index[i + 1]].1 >= self.slice.len() {
 						self.index[i + 1] = self.slice.len();
 					}
@@ -917,7 +925,7 @@ where
 		
 		if N == 0
 			|| self.index[N-1] >= self.slice.len()
-			|| (!K::HAS_DIFF && !K::HAS_SAME)
+			|| (!K::has_state(true) && !K::has_state(false))
 		{
 			return (0, Some(0))
 		}
@@ -938,15 +946,15 @@ where
 			}
 			let mut remaining = self.slice.len() - index;
 			let mut num = falling_factorial(remaining, i + 1);
-			if i >= self.layer && (!K::HAS_DIFF || !K::HAS_SAME) {
-				let first_index = if K::HAS_DIFF {
+			if i >= self.layer && (!K::has_state(true) || !K::has_state(false)) {
+				let first_index = if K::has_state(true) {
 					self.min_diff_index
 				} else {
 					self.min_same_index
 				};
 				while index < self.slice.len() {
 					let (case, next_index) = self.slice[index];
-					index = if if case.is_diff() { K::HAS_DIFF } else { K::HAS_SAME } {
+					index = if K::has_state(case.is_diff()) {
 						remaining -= 1;
 						next_index
 					} else if index < first_index {
@@ -1003,7 +1011,7 @@ where
 	type Item = (C::Case, PredSubComb<PredArrayComb<C, N>, K>);
 	fn next(&mut self) -> Option<Self::Item> {
 		if let Some(mut max_index) = self.inner.slice.len().checked_sub(N) {
-			max_index = max_index.min(match (K::HAS_DIFF, K::HAS_SAME) {
+			max_index = max_index.min(match (K::has_state(true), K::has_state(false)) {
 				(true, true) => self.inner.slice.len(),
 				(false, false) => 0,
 				(true, false) => self.inner.max_diff_index,
@@ -1029,7 +1037,7 @@ where
 	}
 	fn size_hint(&self) -> (usize, Option<usize>) {
 		if let Some(mut max_index) = self.inner.slice.len().checked_sub(N) {
-			max_index = max_index.min(match (K::HAS_DIFF, K::HAS_SAME) {
+			max_index = max_index.min(match (K::has_state(true), K::has_state(false)) {
 				(true, true) => self.inner.slice.len(),
 				(false, false) => 0,
 				(true, false) => self.inner.max_diff_index,
