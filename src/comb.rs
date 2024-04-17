@@ -1163,7 +1163,7 @@ where
 }
 
 /// Iterator of [`PredSubStateSplit`].
-pub enum PredCombWithIdSplit<'p, P, M, K>
+pub enum PredCombSplit<'p, P, M, K>
 where
 	P: PredParam,
 	M: PredStateMisc,
@@ -1173,7 +1173,7 @@ where
 	Same(PredComb<'p, P, M, <<K::Inv as CombKind>::Pal as CombKind>::Inv>),
 }
 
-impl<'p, P, M, K> Iterator for PredCombWithIdSplit<'p, P, M, K>
+impl<'p, P, M, K> Iterator for PredCombSplit<'p, P, M, K>
 where
 	P: PredParam,
 	M: PredStateMisc,
