@@ -1194,7 +1194,7 @@ where
 	}
 }
 
-/// Iterator of [`PredSubStateWithIdSplit`].
+/// Iterator of [`PredSubStateSplit`].
 pub enum PredCombWithIdSplit<'p, P, M, K>
 where
 	P: PredParam,
