@@ -1057,6 +1057,16 @@ pub struct PredComb<'p, P: PredParam, K: CombKind> {
 	inner: PredCombWithId<'p, P, (), K>,
 }
 
+impl<'p, P, K> PredComb<'p, P, K>
+where
+	P: PredParam,
+	K: CombKind,
+{
+	pub fn new(inner: PredCombWithId<'p, P, (), K>) -> Self {
+		Self { inner }
+	}
+}
+
 impl<'p, P, K> Iterator for PredComb<'p, P, K>
 where
 	P: PredParam,
