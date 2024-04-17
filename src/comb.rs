@@ -1160,6 +1160,16 @@ pub struct PredCombSplit<'p, P: PredParam, K: CombKind> {
 	inner: PredCombWithIdSplit<'p, P, (), K>,
 }
 
+impl<'p, P, K> PredCombSplit<'p, P, K>
+where
+	P: PredParam,
+	K: CombKind,
+{
+	pub fn new(inner: PredCombWithIdSplit<'p, P, (), K>) -> Self {
+		Self { inner }
+	}
+}
+
 impl<'p, P, K> Iterator for PredCombSplit<'p, P, K>
 where
 	P: PredParam,
