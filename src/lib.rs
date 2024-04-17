@@ -126,8 +126,8 @@ where
 	M: PredStateMisc,
 	A: ReadOnlySystemParam,
 {
-	// !!! This should probably be split into two functions, with the two
-	// separate methods (`into_events` and `into_events_with_id`).
+	// !!! This should probably be split into two traits, with the two separate
+	// methods (`into_events` and `into_events_with_id`).
 	
 	fn into_pred_fn(self) -> impl PredFn<P, M, A>;
 	
