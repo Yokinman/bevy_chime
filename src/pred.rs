@@ -379,6 +379,33 @@ where
 }
 
 /// ...
+#[derive(Clone)]
+pub struct WithId<I>(Rc<[I]>);
+
+impl<I: PredId> PredStateMisc for WithId<I> {
+	type Item = I;
+	type MiscIter = std::vec::IntoIter<I>;
+	fn into_misc_iter(self) -> Self::MiscIter {
+		self.0.iter().copied().collect::<Vec<_>>().into_iter()
+	}
+}
+
+/// ...
+pub trait PredStateMisc: Clone {
+	type Item;
+	type MiscIter: Iterator<Item = Self::Item>;
+	fn into_misc_iter(self) -> Self::MiscIter;
+}
+
+impl PredStateMisc for () {
+	type Item = ();
+	type MiscIter = std::iter::Empty<()>;
+	fn into_misc_iter(self) -> Self::MiscIter {
+		std::iter::empty()
+	}
+}
+
+/// ...
 pub struct PredSubState<'p, 's, P, K>
 where
 	's: 'p,
