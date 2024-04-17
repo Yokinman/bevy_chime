@@ -10,7 +10,7 @@ mod node;
 use comb::*;
 use pred::*;
 
-pub use pred::{PredState, PredQuery};
+pub use pred::{PredState, PredStateWithId, PredQuery};
 
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, btree_map, BTreeMap, HashMap};
@@ -71,7 +71,11 @@ impl AddChimeEvent for App {
 			{
 				let (state, misc) = state.get(world);
 				pred_sys(
-					PredState::new(P::comb(&state).into_kind(), misc_state.clone(), &mut node),
+					PredStateWithId::new(
+						P::comb(&state).into_kind(),
+						misc_state.clone(),
+						&mut node,
+					),
 					misc
 				);
 			}
@@ -100,7 +104,7 @@ impl AddChimeEvent for App {
 /// Specialized function used for predicting and scheduling events, functionally
 /// similar to a read-only [`bevy_ecs::system::SystemParamFunction`].
 pub trait PredFn<P: PredParam, M: PredId, A: ReadOnlySystemParam>:
-	/*Fn(PredState<P>, A) + */ Fn(PredState<P, M>, SystemParamItem<A>)
+	/*Fn(PredStateWithId<P>, A) + */ Fn(PredStateWithId<P, M>, SystemParamItem<A>)
 {}
 
 impl<P, M, A, F> PredFn<P, M, A> for F
@@ -108,11 +112,11 @@ where
 	P: PredParam,
 	M: PredId,
 	A: ReadOnlySystemParam,
-	F: /*Fn(PredState<P>, A) + */ Fn(PredState<P, M>, SystemParamItem<A>),
+	F: /*Fn(PredStateWithId<P>, A) + */ Fn(PredStateWithId<P, M>, SystemParamItem<A>),
 {}
 
 /// Types that can be converted into a [`PredFn`].
-pub trait IntoPredFn<P: PredParam, M: PredId, A: ReadOnlySystemParam>: Sized {
+pub trait IntoPredFn<P: PredParam, M: PredId, A: ReadOnlySystemParam, Marker>: Sized {
 	fn into_pred_fn(self) -> impl PredFn<P, M, A>;
 	
 	fn into_events(self) -> ChimeEventBuilder<P, M, A, impl PredFn<P, M, A>>
@@ -138,10 +142,10 @@ macro_rules! impl_into_pred_fn {
 		$(impl_into_pred_fn!(@all $($rest),*);)?
 	};
 	($($param:ident),*) => {
-		impl<F, P, M, $($param: ReadOnlySystemParam),*> IntoPredFn<P, M, ($($param,)*)> for F
+		impl<F, P, M, $($param: ReadOnlySystemParam),*> IntoPredFn<P, M, ($($param,)*), u8> for F
 		where
-			F: Fn(PredState<P, M>, $($param),*)
-				+ Fn(PredState<P, M>, $(SystemParamItem<$param>),*),
+			F: Fn(PredStateWithId<P, M>, $($param),*)
+				+ Fn(PredStateWithId<P, M>, $(SystemParamItem<$param>),*),
 			P: PredParam,
 			M: PredId,
 		{
@@ -149,6 +153,20 @@ macro_rules! impl_into_pred_fn {
 				move |state, misc| {
 					let ($($param,)*) = misc;
 					self(state, $($param),*);
+				}
+			}
+		}
+		
+		impl<F, P, $($param: ReadOnlySystemParam),*> IntoPredFn<P, (), ($($param,)*), u16> for F
+		where
+			F: Fn(PredState<P, ()>, $($param),*)
+				+ Fn(PredState<P, ()>, $(SystemParamItem<$param>),*),
+			P: PredParam,
+		{
+			fn into_pred_fn(self) -> impl PredFn<P, (), ($($param,)*)> {
+				move |state, misc| {
+					let ($($param,)*) = misc;
+					self(PredState { inner: state }, $($param),*);
 				}
 			}
 		}

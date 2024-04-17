@@ -409,7 +409,7 @@ where
 	's: 'p,
 	P: PredParam,
 {
-	inner: PredStateWithId<'p, 's, P, M>,
+	pub(crate) inner: PredStateWithId<'p, 's, P, M>,
 }
 
 impl<'p, 's, P, M> PredState<'p, 's, P, M>
