@@ -1054,7 +1054,7 @@ where
 
 /// Produces all case combinations in need of a new prediction, alongside a
 /// [`PredStateCase`] for scheduling.
-pub struct PredCombWithId<'p, P, M, K>
+pub struct PredComb<'p, P, M, K>
 where
 	P: PredParam,
 	M: PredStateMisc,
@@ -1067,7 +1067,7 @@ where
 	node: NodeWriter<'p, PredStateCase<P::Id, M::Item>>,
 }
 
-impl<'p, P, M, K> PredCombWithId<'p, P, M, K>
+impl<'p, P, M, K> PredComb<'p, P, M, K>
 where
 	P: PredParam,
 	M: PredStateMisc,
@@ -1083,7 +1083,7 @@ where
 	}
 }
 
-impl<'p, P, M, K> Iterator for PredCombWithId<'p, P, WithId<M>, K>
+impl<'p, P, M, K> Iterator for PredComb<'p, P, WithId<M>, K>
 where
 	P: PredParam,
 	M: PredId,
@@ -1129,7 +1129,7 @@ where
 	}
 }
 
-impl<'p, P, K> Iterator for PredCombWithId<'p, P, (), K>
+impl<'p, P, K> Iterator for PredComb<'p, P, (), K>
 where
 	P: PredParam,
 	K: CombKind,
@@ -1201,8 +1201,8 @@ where
 	M: PredStateMisc,
 	K: CombKind,
 {
-	Diff(PredCombWithId<'p, P, M, K::Pal>),
-	Same(PredCombWithId<'p, P, M, <<K::Inv as CombKind>::Pal as CombKind>::Inv>),
+	Diff(PredComb<'p, P, M, K::Pal>),
+	Same(PredComb<'p, P, M, <<K::Inv as CombKind>::Pal as CombKind>::Inv>),
 }
 
 impl<'p, P, M, K> Iterator for PredCombWithIdSplit<'p, P, M, K>
@@ -1210,12 +1210,12 @@ where
 	P: PredParam,
 	M: PredStateMisc,
 	K: CombKind,
-	PredCombWithId<'p, P, M, K::Pal>:
+	PredComb<'p, P, M, K::Pal>:
 		Iterator,
-	PredCombWithId<'p, P, M, <<K::Inv as CombKind>::Pal as CombKind>::Inv>:
-		Iterator<Item = <PredCombWithId<'p, P, M, K::Pal> as Iterator>::Item>,
+	PredComb<'p, P, M, <<K::Inv as CombKind>::Pal as CombKind>::Inv>:
+		Iterator<Item = <PredComb<'p, P, M, K::Pal> as Iterator>::Item>,
 {
-	type Item = <PredCombWithId<'p, P, M, K::Pal> as Iterator>::Item;
+	type Item = <PredComb<'p, P, M, K::Pal> as Iterator>::Item;
 	fn next(&mut self) -> Option<Self::Item> {
 		match self {
 			Self::Diff(iter) => iter.next(),
