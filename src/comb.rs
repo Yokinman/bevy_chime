@@ -47,8 +47,8 @@ pub trait CombKind {
 	}
 	
 	#[inline]
-	fn state() -> (bool, bool) {
-		(Self::has_state(true), Self::has_state(false))
+	fn state() -> [bool; 2] {
+		[Self::has_state(true), Self::has_state(false)]
 	}
 }
 
@@ -360,8 +360,8 @@ where
 	}
 	fn size_hint(&self) -> (usize, Option<usize>) {
 		match K::state() {
-			(false, false) => (0, Some(0)),
-			(true, true) => self.iter.size_hint(),
+			[false, false] => (0, Some(0)),
+			[true, true] => self.iter.size_hint(),
 			_ => (0, self.iter.size_hint().1)
 		}
 	}
@@ -792,10 +792,10 @@ where
 		
 		 // Initialize Main Index:
 		if match K::state() {
-			(true, true) => false,
-			(false, false) => true,
-			(true, false) => iter.min_diff_index >= iter.slice.len(),
-			(false, true) => iter.min_same_index >= iter.slice.len(),
+			[true, true] => false,
+			[false, false] => true,
+			[true, false] => iter.min_diff_index >= iter.slice.len(),
+			[false, true] => iter.min_same_index >= iter.slice.len(),
 		} {
 			iter.index[N-1] = iter.slice.len();
 		} else if iter.index[N-1] < iter.slice.len() {
@@ -843,8 +843,8 @@ where
 		}
 		self.index[i] = match self.layer.cmp(&i) {
 			std::cmp::Ordering::Equal => match K::state() {
-				(true, true) => index + 1,
-				(false, false) => self.slice.len(),
+				[true, true] => index + 1,
+				[false, false] => self.slice.len(),
 				_ => {
 					let (case, next_index) = self.slice[index];
 					
@@ -1013,10 +1013,10 @@ where
 	fn next(&mut self) -> Option<Self::Item> {
 		if let Some(mut max_index) = self.inner.slice.len().checked_sub(N) {
 			max_index = max_index.min(match K::state() {
-				(true, true) => self.inner.slice.len(),
-				(false, false) => 0,
-				(true, false) => self.inner.max_diff_index,
-				(false, true) => self.inner.max_same_index,
+				[true, true] => self.inner.slice.len(),
+				[false, false] => 0,
+				[true, false] => self.inner.max_diff_index,
+				[false, true] => self.inner.max_same_index,
 			});
 			if self.inner.index >= max_index {
 				return None
@@ -1039,10 +1039,10 @@ where
 	fn size_hint(&self) -> (usize, Option<usize>) {
 		if let Some(mut max_index) = self.inner.slice.len().checked_sub(N) {
 			max_index = max_index.min(match K::state() {
-				(true, true) => self.inner.slice.len(),
-				(false, false) => 0,
-				(true, false) => self.inner.max_diff_index,
-				(false, true) => self.inner.max_same_index,
+				[true, true] => self.inner.slice.len(),
+				[false, false] => 0,
+				[true, false] => self.inner.max_diff_index,
+				[false, true] => self.inner.max_same_index,
 			});
 			let num = max_index - self.inner.index;
 			(num, Some(num))
