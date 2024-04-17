@@ -47,7 +47,7 @@ pub trait CombKind {
 	}
 	
 	#[inline]
-	fn state() -> [bool; 2] {
+	fn states() -> [bool; 2] {
 		[Self::has_state(true), Self::has_state(false)]
 	}
 }
@@ -165,7 +165,7 @@ where
 	type IntoKind<Kind: CombKind> = PredArrayComb<C, N, Kind>;
 	
 	fn into_kind<Kind: CombKind>(self) -> Self::IntoKind<Kind> {
-		if K::Pal::state() == Kind::Pal::state() {
+		if K::Pal::states() == Kind::Pal::states() {
 			PredArrayComb {
 				comb: self.comb,
 				slice: self.slice,
@@ -359,7 +359,7 @@ where
 		None
 	}
 	fn size_hint(&self) -> (usize, Option<usize>) {
-		match K::state() {
+		match K::states() {
 			[false, false] => (0, Some(0)),
 			[true, true] => self.iter.size_hint(),
 			_ => (0, self.iter.size_hint().1)
@@ -791,7 +791,7 @@ where
 		}
 		
 		 // Initialize Main Index:
-		if match K::state() {
+		if match K::states() {
 			[true, true] => false,
 			[false, false] => true,
 			[true, false] => iter.min_diff_index >= iter.slice.len(),
@@ -842,7 +842,7 @@ where
 			return true
 		}
 		self.index[i] = match self.layer.cmp(&i) {
-			std::cmp::Ordering::Equal => match K::state() {
+			std::cmp::Ordering::Equal => match K::states() {
 				[true, true] => index + 1,
 				[false, false] => self.slice.len(),
 				_ => {
@@ -1012,7 +1012,7 @@ where
 	type Item = (C::Case, PredSubComb<PredArrayComb<C, N>, K>);
 	fn next(&mut self) -> Option<Self::Item> {
 		if let Some(mut max_index) = self.inner.slice.len().checked_sub(N) {
-			max_index = max_index.min(match K::state() {
+			max_index = max_index.min(match K::states() {
 				[true, true] => self.inner.slice.len(),
 				[false, false] => 0,
 				[true, false] => self.inner.max_diff_index,
@@ -1038,7 +1038,7 @@ where
 	}
 	fn size_hint(&self) -> (usize, Option<usize>) {
 		if let Some(mut max_index) = self.inner.slice.len().checked_sub(N) {
-			max_index = max_index.min(match K::state() {
+			max_index = max_index.min(match K::states() {
 				[true, true] => self.inner.slice.len(),
 				[false, false] => 0,
 				[true, false] => self.inner.max_diff_index,
