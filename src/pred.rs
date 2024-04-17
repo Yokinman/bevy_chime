@@ -322,6 +322,57 @@ where
 	}
 }
 
+/// ...
+pub struct PredSubState<'p, 's, P, K>
+where
+	's: 'p,
+	P: PredParam,
+	K: CombKind,
+{
+	inner: PredSubStateWithId<'p, 's, P, (), K>,
+}
+
+impl<'p, 's, P, K> PredSubState<'p, 's, P, K>
+where
+	's: 'p,
+	P: PredParam,
+	K: CombKind,
+{
+	/// Sets all updated cases to the given times.
+	pub fn set<I>(self, times: TimeRanges<I>)
+	where
+		TimeRanges<I>: Iterator<Item = (Duration, Duration)> + Clone + Send + Sync + 'static
+	{
+		self.inner.set(times)
+	}
+}
+
+// impl<'p, 's, P, K> PredSubState<'p, 's, P, K>
+// where
+// 	's: 'p,
+// 	P: PredParamVec,
+// 	K: CombKind,
+// {
+// 	pub fn outer_iter(self) -> PredSubStateSplitIter<'p, 's, P, K> {
+// 		PredSubStateSplitIter {
+// 			inner: self.inner.outer_iter(),
+// 		}
+// 	}
+// }
+
+impl<'p, 's, P, K> IntoIterator for PredSubState<'p, 's, P, K>
+where
+	's: 'p,
+	P: PredParam,
+	K: CombKind,
+{
+	type Item = <Self::IntoIter as IntoIterator>::Item;
+	type IntoIter = PredComb<'p, P, K>;
+	fn into_iter(self) -> Self::IntoIter {
+		PredComb::new(self.inner.into_iter())
+	}
+}
+
 /// Collects predictions from "when" systems for later compilation. More general
 /// form of [`PredState`] for stepping through combinators layer-wise.
 pub struct PredSubStateWithId<'p, 's, P, M, K>
