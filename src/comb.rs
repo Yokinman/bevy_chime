@@ -1077,11 +1077,7 @@ where
 		<PredParamItem<'p, P> as PredItem>::Ref,
 	);
 	fn next(&mut self) -> Option<Self::Item> {
-		if let Some((case, item_ref, ())) = self.inner.next() {
-			Some((case, item_ref))
-		} else {
-			None
-		}
+		self.inner.next()
 	}
 	fn size_hint(&self) -> (usize, Option<usize>) {
 		self.inner.size_hint()
@@ -1119,16 +1115,16 @@ where
 	}
 }
 
-impl<'p, P, M, K> Iterator for PredCombWithId<'p, P, M, K>
+impl<'p, P, M, K> Iterator for PredCombWithId<'p, P, WithId<M>, K>
 where
 	P: PredParam,
-	M: PredStateMisc,
+	M: PredId,
 	K: CombKind,
 {
 	type Item = (
-		&'p mut PredStateCase<P::Id, M::Item>,
+		&'p mut PredStateCase<P::Id, M>,
 		<PredParamItem<'p, P> as PredItem>::Ref,
-		M::Item,
+		M,
 	);
 	fn next(&mut self) -> Option<Self::Item> {
 		while let Some(case) = self.curr {
@@ -1146,8 +1142,8 @@ where
 		None
 	}
 	fn size_hint(&self) -> (usize, Option<usize>) {
-		let (min, max) = self.iter.size_hint();
 		if self.curr.is_some() {
+			let (min, max) = self.iter.size_hint();
 			let misc_len = self.misc_state.clone()
 				.into_misc_iter()
 				.size_hint().1
@@ -1158,6 +1154,39 @@ where
 				max.and_then(|x| x
 					.checked_mul(misc_len)?
 					.checked_add(misc_max?))
+			)
+		} else {
+			(0, Some(0))
+		}
+	}
+}
+
+impl<'p, P, K> Iterator for PredCombWithId<'p, P, (), K>
+where
+	P: PredParam,
+	K: CombKind,
+{
+	type Item = (
+		&'p mut PredStateCase<P::Id, ()>,
+		<PredParamItem<'p, P> as PredItem>::Ref,
+	);
+	fn next(&mut self) -> Option<Self::Item> {
+		if let Some(case) = self.curr {
+			let (item, id) = case.into_parts();
+			self.curr = self.iter.next();
+			return Some((
+				self.node.write(PredStateCase::new(id, ())),
+				item,
+			))
+		}
+		None
+	}
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		if self.curr.is_some() {
+			let (min, max) = self.iter.size_hint();
+			(
+				min + 1,
+				max.map(|x| x + 1)
 			)
 		} else {
 			(0, Some(0))
@@ -1190,11 +1219,7 @@ where
 		<PredParamItem<'p, P> as PredItem>::Ref,
 	);
 	fn next(&mut self) -> Option<Self::Item> {
-		if let Some((case, item_ref, ())) = self.inner.next() {
-			Some((case, item_ref))
-		} else {
-			None
-		}
+		self.inner.next()
 	}
 	fn size_hint(&self) -> (usize, Option<usize>) {
 		self.inner.size_hint()
@@ -1217,12 +1242,12 @@ where
 	P: PredParam,
 	M: PredStateMisc,
 	K: CombKind,
+	PredCombWithId<'p, P, M, K::Pal>:
+		Iterator,
+	PredCombWithId<'p, P, M, <<K::Inv as CombKind>::Pal as CombKind>::Inv>:
+		Iterator<Item = <PredCombWithId<'p, P, M, K::Pal> as Iterator>::Item>,
 {
-	type Item = (
-		&'p mut PredStateCase<P::Id, M::Item>,
-		<PredParamItem<'p, P> as PredItem>::Ref,
-		M::Item,
-	);
+	type Item = <PredCombWithId<'p, P, M, K::Pal> as Iterator>::Item;
 	fn next(&mut self) -> Option<Self::Item> {
 		match self {
 			Self::Diff(iter) => iter.next(),

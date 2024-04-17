@@ -226,6 +226,11 @@ where
 	P: PredParam,
 	M: PredStateMisc,
 	K: CombKind,
+	PredCombWithIdSplit<'p, P, M, K>: Iterator,
+	PredSubStateWithId<'p, 's, P, M, <K as CombKind>::Pal>:
+		IntoIterator<IntoIter = PredCombWithId<'p, P, M, K::Pal>>,
+	PredSubStateWithId<'p, 's, P, M, <<K::Inv as CombKind>::Pal as CombKind>::Inv>:
+		IntoIterator<IntoIter = PredCombWithId<'p, P, M, <<K::Inv as CombKind>::Pal as CombKind>::Inv>>,
 {
 	type Item = <Self::IntoIter as Iterator>::Item;
 	type IntoIter = PredCombWithIdSplit<'p, P, M, K>;
@@ -495,7 +500,36 @@ where
 	) -> Self {
 		Self { comb, misc_state, node }
 	}
-	
+}
+
+impl<'p, 's, P, K> PredSubStateWithId<'p, 's, P, (), K>
+where
+	's: 'p,
+	P: PredParam,
+	K: CombKind,
+{
+	/// Sets all updated cases to the given times.
+	pub fn set<I>(self, times: TimeRanges<I>)
+	where
+		TimeRanges<I>: Iterator<Item = (Duration, Duration)> + Clone + Send + Sync + 'static
+	{
+		let mut iter = self.into_iter();
+		if let Some((first, ..)) = iter.next() {
+			for (case, ..) in iter {
+				case.set(times.clone());
+			}
+			first.set(times);
+		}
+	}
+}
+
+impl<'p, 's, P, M, K> PredSubStateWithId<'p, 's, P, WithId<M>, K>
+where
+	's: 'p,
+	P: PredParam,
+	M: PredId,
+	K: CombKind,
+{
 	/// Sets all updated cases to the given times.
 	pub fn set<I>(self, times: TimeRanges<I>)
 	where
@@ -536,6 +570,7 @@ where
 	P: PredParam,
 	M: PredStateMisc,
 	K: CombKind,
+	PredCombWithId<'p, P, M, K>: Iterator,
 {
 	type Item = <Self::IntoIter as IntoIterator>::Item;
 	type IntoIter = PredCombWithId<'p, P, M, K>;
@@ -632,6 +667,7 @@ where
 	's: 'p,
 	P: PredParam,
 	M: PredStateMisc,
+	PredSubStateWithId<'p, 's, P, M, CombAnyTrue>: IntoIterator,
 {
 	type Item = <Self::IntoIter as Iterator>::Item;
 	type IntoIter = <PredSubStateWithId<'p, 's, P, M, CombAnyTrue> as IntoIterator>::IntoIter;
