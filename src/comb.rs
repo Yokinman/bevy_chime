@@ -1162,38 +1162,6 @@ where
 	}
 }
 
-/// ...
-pub struct PredCombSplit<'p, P: PredParam, K: CombKind> {
-	inner: PredCombWithIdSplit<'p, P, (), K>,
-}
-
-impl<'p, P, K> PredCombSplit<'p, P, K>
-where
-	P: PredParam,
-	K: CombKind,
-{
-	pub fn new(inner: PredCombWithIdSplit<'p, P, (), K>) -> Self {
-		Self { inner }
-	}
-}
-
-impl<'p, P, K> Iterator for PredCombSplit<'p, P, K>
-where
-	P: PredParam,
-	K: CombKind,
-{
-	type Item = (
-		&'p mut PredStateCase<P::Id, ()>,
-		<PredParamItem<'p, P> as PredItem>::Ref,
-	);
-	fn next(&mut self) -> Option<Self::Item> {
-		self.inner.next()
-	}
-	fn size_hint(&self) -> (usize, Option<usize>) {
-		self.inner.size_hint()
-	}
-}
-
 /// Iterator of [`PredSubStateSplit`].
 pub enum PredCombWithIdSplit<'p, P, M, K>
 where
