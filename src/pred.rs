@@ -529,7 +529,7 @@ where
 }
 
 /// Collects predictions from "when" systems for later compilation.
-pub struct PredState<'p, 's, P, M>
+pub struct PredState<'p, 's, P, M = ()>
 where
 	's: 'p,
 	P: PredParam,
