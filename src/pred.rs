@@ -1,4 +1,5 @@
 use std::hash::Hash;
+use std::rc::Rc;
 use std::time::Duration;
 use bevy_ecs::change_detection::{DetectChanges, Ref, Res};
 use bevy_ecs::component::{Component, Tick};
@@ -150,7 +151,7 @@ where
 	K: CombKind,
 {
 	iter: <P as PredParamVec>::Split<'p, K>,
-	misc_state: Box<[M]>,
+	misc_state: Rc<[M]>,
 	branches: NodeWriter<'p, PredNodeBranch<'s, P, M>>,
 }
 
@@ -168,7 +169,7 @@ where
 	fn next(&mut self) -> Option<Self::Item> {
 		if let Some((head, tail)) = self.iter.next() {
 			let node = &mut self.branches.write((head.id(), PredNode::Blank)).1;
-			let misc_state = self.misc_state.clone();
+			let misc_state = Rc::clone(&self.misc_state);
 			let sub_state = match tail {
 				PredSubComb::Diff(comb) => PredSubStateWithIdSplit::Diff(PredSubStateWithId::new(comb, misc_state, node)),
 				PredSubComb::Same(comb) => PredSubStateWithIdSplit::Same(PredSubStateWithId::new(comb, misc_state, node)),
@@ -437,7 +438,7 @@ where
 	K: CombKind,
 {
 	pub(crate) comb: <P::Comb<'p> as PredCombinator>::IntoKind<K>,
-	pub(crate) misc_state: Box<[M]>,
+	pub(crate) misc_state: Rc<[M]>,
 	pub(crate) node: &'p mut PredNode<'s, P, M>,
 }
 
@@ -450,7 +451,7 @@ where
 {
 	fn new(
 		comb: <P::Comb<'p> as PredCombinator>::IntoKind<K>,
-		misc_state: Box<[M]>,
+		misc_state: Rc<[M]>,
 		node: &'p mut PredNode<'s, P, M>,
 	) -> Self {
 		Self {
@@ -570,7 +571,7 @@ where
 {
 	pub(crate) fn new(
 		comb: <P::Comb<'p> as PredCombinator>::IntoKind<CombAnyTrue>,
-		misc_state: Box<[M]>,
+		misc_state: Rc<[M]>,
 		node: &'p mut PredNode<'s, P, M>,
 	) -> Self {
 		Self {

@@ -1093,7 +1093,7 @@ where
 pub struct PredCombWithId<'p, P: PredParam, M, K: CombKind> {
 	iter: <<P::Comb<'p> as PredCombinator>::IntoKind<K> as IntoIterator>::IntoIter,
 	curr: Option<<<P::Comb<'p> as PredCombinator>::IntoKind<K> as IntoIterator>::Item>,
-	misc_state: Box<[M]>,
+	misc_state: Rc<[M]>,
 	misc_index: usize,
 	node: NodeWriter<'p, PredStateCase<P::Id, M>>,
 }

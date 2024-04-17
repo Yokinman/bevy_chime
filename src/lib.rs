@@ -73,7 +73,7 @@ impl AddChimeEvent for App {
 				pred_sys(
 					PredStateWithId::new(
 						P::comb(&state).into_kind(),
-						misc_state.clone(),
+						misc_state.clone().into(),
 						&mut node,
 					),
 					misc
