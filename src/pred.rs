@@ -111,38 +111,6 @@ macro_rules! impl_pred_param_vec_for_array {
 // method to [`PredSubState::outer_iter`] might be worthwhile for convenience.
 impl_pred_param_vec_for_array!(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12);
 
-/// ...
-pub struct PredSubStateSplitIter<'p, 's, P, K>
-where
-	's: 'p,
-	P: PredParamVec,
-	K: CombKind,
-{
-	inner: PredSubStateWithIdSplitIter<'p, 's, P, (), K>,
-}
-
-impl<'p, 's, P, K> Iterator for PredSubStateSplitIter<'p, 's, P, K>
-where
-	's: 'p,
-	P: PredParamVec,
-	K: CombKind,
-{
-	type Item = (
-		PredSubStateSplit<'p, 's, P::Tail, K>,
-		<PredParamItem<'p, P::Head> as PredItem>::Ref,
-	);
-	fn next(&mut self) -> Option<Self::Item> {
-		if let Some((inner, item_ref)) = self.inner.next() {
-			Some((PredSubStateSplit { inner }, item_ref))
-		} else {
-			None
-		}
-	}
-	fn size_hint(&self) -> (usize, Option<usize>) {
-		self.inner.size_hint()
-	}
-}
-
 /// Iterator of [`PredSubState::outer_iter`].
 pub struct PredSubStateWithIdSplitIter<'p, 's, P, M, K>
 where
