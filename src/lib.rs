@@ -10,7 +10,7 @@ mod node;
 use comb::*;
 use pred::*;
 
-pub use pred::{PredState, PredStateWithId, PredQuery};
+pub use pred::{PredState, PredStateWithId, PredQuery, WithId};
 
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, btree_map, BTreeMap, HashMap};
@@ -31,7 +31,7 @@ pub trait AddChimeEvent {
 	fn add_chime_events<P, M, A, F>(&mut self, events: ChimeEventBuilder<P, M, A, F>) -> &mut Self
 	where
 		P: PredParam + 'static,
-		M: PredId,
+		M: PredStateMisc,
 		A: ReadOnlySystemParam + 'static,
 		F: PredFn<P, M, A> + Send + Sync + 'static;
 }
@@ -40,7 +40,7 @@ impl AddChimeEvent for App {
 	fn add_chime_events<P, M, A, F>(&mut self, events: ChimeEventBuilder<P, M, A, F>) -> &mut Self
 	where
 		P: PredParam + 'static,
-		M: PredId,
+		M: PredStateMisc,
 		A: ReadOnlySystemParam + 'static,
 		F: PredFn<P, M, A> + Send + Sync + 'static,
 	{
@@ -58,7 +58,7 @@ impl AddChimeEvent for App {
 		assert!(begin_sys.is_some() || end_sys.is_some() || outlier_sys.is_some());
 		
 		let id = self.world.resource_mut::<ChimeEventMap>()
-			.setup_id::<(P::Id, M)>();
+			.setup_id::<(P::Id, M::Item)>();
 		
 		let mut state = system::SystemState::<(P::Param, A)>::new(
 			&mut self.world
@@ -73,7 +73,7 @@ impl AddChimeEvent for App {
 				pred_sys(
 					PredStateWithId::new(
 						P::comb(&state).into_kind(),
-						misc_state.clone().into(),
+						M::from_misc(misc_state.clone().into()),
 						&mut node,
 					),
 					misc
@@ -103,20 +103,29 @@ impl AddChimeEvent for App {
 
 /// Specialized function used for predicting and scheduling events, functionally
 /// similar to a read-only [`bevy_ecs::system::SystemParamFunction`].
-pub trait PredFn<P: PredParam, M: PredId, A: ReadOnlySystemParam>:
-	/*Fn(PredStateWithId<P>, A) + */ Fn(PredStateWithId<P, M>, SystemParamItem<A>)
+pub trait PredFn<P, M, A>:
+	Fn(PredStateWithId<P, M>, SystemParamItem<A>)
+where
+	P: PredParam,
+	M: PredStateMisc,
+	A: ReadOnlySystemParam,
 {}
 
 impl<P, M, A, F> PredFn<P, M, A> for F
 where
 	P: PredParam,
-	M: PredId,
+	M: PredStateMisc,
 	A: ReadOnlySystemParam,
-	F: /*Fn(PredStateWithId<P>, A) + */ Fn(PredStateWithId<P, M>, SystemParamItem<A>),
+	F: Fn(PredStateWithId<P, M>, SystemParamItem<A>),
 {}
 
 /// Types that can be converted into a [`PredFn`].
-pub trait IntoPredFn<P: PredParam, M: PredId, A: ReadOnlySystemParam, Marker>: Sized {
+pub trait IntoPredFn<P, M, A, Marker>: Sized
+where
+	P: PredParam,
+	M: PredStateMisc,
+	A: ReadOnlySystemParam,
+{
 	// !!! This should probably be split into two functions, with the two
 	// separate methods (`into_events` and `into_events_with_id`).
 	
@@ -125,14 +134,15 @@ pub trait IntoPredFn<P: PredParam, M: PredId, A: ReadOnlySystemParam, Marker>: S
 	fn into_events(self) -> ChimeEventBuilder<P, M, A, impl PredFn<P, M, A>>
 	where
 		(): std::borrow::Borrow<M>,
+		M: PredStateMisc<Item=()>,
 	{
 		ChimeEventBuilder::new(
 			self.into_pred_fn(),
-			std::iter::once(*std::borrow::Borrow::borrow(&()))
+			std::iter::once(())
 		)
 	}
 	
-	fn into_events_with_id(self, id: impl IntoIterator<Item=M>)
+	fn into_events_with_id(self, id: impl IntoIterator<Item=M::Item>)
 		-> ChimeEventBuilder<P, M, A, impl PredFn<P, M, A>>
 	{
 		ChimeEventBuilder::new(self.into_pred_fn(), id)
@@ -150,7 +160,7 @@ macro_rules! impl_into_pred_fn {
 			F: Fn(PredStateWithId<P, M>, $($param),*)
 				+ Fn(PredStateWithId<P, M>, $(SystemParamItem<$param>),*),
 			P: PredParam,
-			M: PredId,
+			M: PredStateMisc,
 		{
 			fn into_pred_fn(self) -> impl PredFn<P, M, ($($param,)*)> {
 				move |state, misc| {
@@ -202,26 +212,26 @@ where
 pub struct ChimeEventBuilder<P, M, A, F>
 where
 	P: PredParam,
-	M: PredId,
+	M: PredStateMisc,
 	A: ReadOnlySystemParam,
 	F: PredFn<P, M, A>,
 {
 	pred_sys: F,
-	begin_sys: Option<Box<dyn ChimeEventSystem<P::Id, M>>>,
-	end_sys: Option<Box<dyn ChimeEventSystem<P::Id, M>>>,
-	outlier_sys: Option<Box<dyn ChimeEventSystem<P::Id, M>>>,
-	misc_state: Box<[M]>,
+	begin_sys: Option<Box<dyn ChimeEventSystem<P::Id, M::Item>>>,
+	end_sys: Option<Box<dyn ChimeEventSystem<P::Id, M::Item>>>,
+	outlier_sys: Option<Box<dyn ChimeEventSystem<P::Id, M::Item>>>,
+	misc_state: Box<[M::Item]>,
 	_param: std::marker::PhantomData<fn(A)>,
 }
 
 impl<P, M, A, F> ChimeEventBuilder<P, M, A, F>
 where
 	P: PredParam,
-	M: PredId,
+	M: PredStateMisc,
 	A: ReadOnlySystemParam,
 	F: PredFn<P, M, A>,
 {
-	fn new(pred_sys: F, id: impl IntoIterator<Item=M>) -> Self {
+	fn new(pred_sys: F, id: impl IntoIterator<Item=M::Item>) -> Self {
 		ChimeEventBuilder {
 			pred_sys,
 			begin_sys: None,

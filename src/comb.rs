@@ -1090,64 +1090,74 @@ where
 
 /// Produces all case combinations in need of a new prediction, alongside a
 /// [`PredStateCase`] for scheduling.
-pub struct PredCombWithId<'p, P: PredParam, M, K: CombKind> {
+pub struct PredCombWithId<'p, P, M, K>
+where
+	P: PredParam,
+	M: PredStateMisc,
+	K: CombKind,
+{
 	iter: <<P::Comb<'p> as PredCombinator>::IntoKind<K> as IntoIterator>::IntoIter,
 	curr: Option<<<P::Comb<'p> as PredCombinator>::IntoKind<K> as IntoIterator>::Item>,
-	misc_state: Rc<[M]>,
-	misc_index: usize,
-	node: NodeWriter<'p, PredStateCase<P::Id, M>>,
+	misc_state: M,
+	misc_iter: M::MiscIter,
+	node: NodeWriter<'p, PredStateCase<P::Id, M::Item>>,
 }
 
-impl<'p, P: PredParam, M: PredId, K: CombKind> PredCombWithId<'p, P, M, K> {
+impl<'p, P, M, K> PredCombWithId<'p, P, M, K>
+where
+	P: PredParam,
+	M: PredStateMisc,
+	K: CombKind,
+{
 	pub fn new<'s: 'p>(state: PredSubStateWithId<'p, 's, P, M, K>) -> Self {
 		let mut iter = state.comb.into_iter();
 		let node = state.node.init_data(4 * iter.size_hint().0.max(1));
 		let curr = iter.next();
-		Self {
-			iter,
-			curr,
-			misc_state: state.misc_state,
-			misc_index: 0,
-			node,
-		}
+		let misc_state = state.misc_state;
+		let misc_iter = misc_state.clone().into_misc_iter();
+		Self { iter, curr, misc_state, misc_iter, node }
 	}
 }
 
 impl<'p, P, M, K> Iterator for PredCombWithId<'p, P, M, K>
 where
 	P: PredParam,
-	M: PredId,
+	M: PredStateMisc,
 	K: CombKind,
 {
 	type Item = (
-		&'p mut PredStateCase<P::Id, M>,
+		&'p mut PredStateCase<P::Id, M::Item>,
 		<PredParamItem<'p, P> as PredItem>::Ref,
-		M,
+		M::Item,
 	);
 	fn next(&mut self) -> Option<Self::Item> {
 		while let Some(case) = self.curr {
-			if let Some(misc) = self.misc_state.get(self.misc_index) {
-				self.misc_index += 1;
+			if let Some(misc) = self.misc_iter.next() {
 				let (item, id) = case.into_parts();
 				return Some((
-					self.node.write(PredStateCase::new(id, *misc)),
+					self.node.write(PredStateCase::new(id, misc)),
 					item,
-					*misc,
+					misc,
 				))
 			}
 			self.curr = self.iter.next();
-			self.misc_index = 0;
+			self.misc_iter = self.misc_state.clone().into_misc_iter();
 		}
 		None
 	}
 	fn size_hint(&self) -> (usize, Option<usize>) {
 		let (min, max) = self.iter.size_hint();
 		if self.curr.is_some() {
-			let misc_len = self.misc_state.len();
-			let misc_num = misc_len - self.misc_index;
+			let misc_len = self.misc_state.clone()
+				.into_misc_iter()
+				.size_hint().1
+				.unwrap();
+			let (misc_min, misc_max) = self.misc_iter.size_hint();
 			(
-				(min * misc_len) + misc_num,
-				max.map(|x| (x * misc_len) + misc_num)
+				(min * misc_len) + misc_min,
+				max.and_then(|x| x
+					.checked_mul(misc_len)?
+					.checked_add(misc_max?))
 			)
 		} else {
 			(0, Some(0))
@@ -1192,7 +1202,12 @@ where
 }
 
 /// Iterator of [`PredSubStateWithIdSplit`].
-pub enum PredCombWithIdSplit<'p, P: PredParam, M: PredId, K: CombKind> {
+pub enum PredCombWithIdSplit<'p, P, M, K>
+where
+	P: PredParam,
+	M: PredStateMisc,
+	K: CombKind,
+{
 	Diff(PredCombWithId<'p, P, M, K::Pal>),
 	Same(PredCombWithId<'p, P, M, <<K::Inv as CombKind>::Pal as CombKind>::Inv>),
 }
@@ -1200,13 +1215,13 @@ pub enum PredCombWithIdSplit<'p, P: PredParam, M: PredId, K: CombKind> {
 impl<'p, P, M, K> Iterator for PredCombWithIdSplit<'p, P, M, K>
 where
 	P: PredParam,
-	M: PredId,
+	M: PredStateMisc,
 	K: CombKind,
 {
 	type Item = (
-		&'p mut PredStateCase<P::Id, M>,
+		&'p mut PredStateCase<P::Id, M::Item>,
 		<PredParamItem<'p, P> as PredItem>::Ref,
-		M,
+		M::Item,
 	);
 	fn next(&mut self) -> Option<Self::Item> {
 		match self {

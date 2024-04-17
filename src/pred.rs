@@ -148,18 +148,19 @@ pub struct PredSubStateWithIdSplitIter<'p, 's, P, M, K>
 where
 	's: 'p,
 	P: PredParamVec,
+	M: PredStateMisc,
 	K: CombKind,
 {
 	iter: <P as PredParamVec>::Split<'p, K>,
-	misc_state: Rc<[M]>,
-	branches: NodeWriter<'p, PredNodeBranch<'s, P, M>>,
+	misc_state: M,
+	branches: NodeWriter<'p, PredNodeBranch<'s, P, M::Item>>,
 }
 
 impl<'p, 's, P, M, K> Iterator for PredSubStateWithIdSplitIter<'p, 's, P, M, K>
 where
 	's: 'p,
 	P: PredParamVec,
-	M: PredId,
+	M: PredStateMisc,
 	K: CombKind,
 {
 	type Item = (
@@ -169,7 +170,7 @@ where
 	fn next(&mut self) -> Option<Self::Item> {
 		if let Some((head, tail)) = self.iter.next() {
 			let node = &mut self.branches.write((head.id(), PredNode::Blank)).1;
-			let misc_state = Rc::clone(&self.misc_state);
+			let misc_state = self.misc_state.clone();
 			let sub_state = match tail {
 				PredSubComb::Diff(comb) => PredSubStateWithIdSplit::Diff(PredSubStateWithId::new(comb, misc_state, node)),
 				PredSubComb::Same(comb) => PredSubStateWithIdSplit::Same(PredSubStateWithId::new(comb, misc_state, node)),
@@ -212,6 +213,7 @@ pub enum PredSubStateWithIdSplit<'p, 's, P, M, K>
 where
 	's: 'p,
 	P: PredParam,
+	M: PredStateMisc,
 	K: CombKind,
 {
 	Diff(PredSubStateWithId<'p, 's, P, M, K::Pal>),
@@ -222,7 +224,7 @@ impl<'p, 's, P, M, K> IntoIterator for PredSubStateWithIdSplit<'p, 's, P, M, K>
 where
 	's: 'p,
 	P: PredParam,
-	M: PredId,
+	M: PredStateMisc,
 	K: CombKind,
 {
 	type Item = <Self::IntoIter as Iterator>::Item;
@@ -380,28 +382,37 @@ where
 
 /// ...
 #[derive(Clone)]
-pub struct WithId<I>(Rc<[I]>);
+pub struct WithId<I> {
+	inner: Rc<[I]>,
+}
 
 impl<I: PredId> PredStateMisc for WithId<I> {
 	type Item = I;
 	type MiscIter = std::vec::IntoIter<I>;
+	fn from_misc(inner: Box<[Self::Item]>) -> Self {
+		Self {
+			inner: inner.into(),
+		}
+	}
 	fn into_misc_iter(self) -> Self::MiscIter {
-		self.0.iter().copied().collect::<Vec<_>>().into_iter()
+		self.inner.iter().copied().collect::<Vec<_>>().into_iter()
 	}
 }
 
 /// ...
 pub trait PredStateMisc: Clone {
-	type Item;
+	type Item: PredId;
 	type MiscIter: Iterator<Item = Self::Item>;
+	fn from_misc(inner: Box<[Self::Item]>) -> Self;
 	fn into_misc_iter(self) -> Self::MiscIter;
 }
 
 impl PredStateMisc for () {
 	type Item = ();
-	type MiscIter = std::iter::Empty<()>;
+	type MiscIter = std::iter::Once<()>;
+	fn from_misc(_inner: Box<[Self::Item]>) -> Self {}
 	fn into_misc_iter(self) -> Self::MiscIter {
-		std::iter::empty()
+		std::iter::once(())
 	}
 }
 
@@ -462,30 +473,27 @@ pub struct PredSubStateWithId<'p, 's, P, M, K>
 where
 	's: 'p,
 	P: PredParam,
+	M: PredStateMisc,
 	K: CombKind,
 {
 	pub(crate) comb: <P::Comb<'p> as PredCombinator>::IntoKind<K>,
-	pub(crate) misc_state: Rc<[M]>,
-	pub(crate) node: &'p mut PredNode<'s, P, M>,
+	pub(crate) misc_state: M,
+	pub(crate) node: &'p mut PredNode<'s, P, M::Item>,
 }
 
 impl<'p, 's, P, M, K> PredSubStateWithId<'p, 's, P, M, K>
 where
 	's: 'p,
 	P: PredParam,
-	M: PredId,
+	M: PredStateMisc,
 	K: CombKind,
 {
 	fn new(
 		comb: <P::Comb<'p> as PredCombinator>::IntoKind<K>,
-		misc_state: Rc<[M]>,
-		node: &'p mut PredNode<'s, P, M>,
+		misc_state: M,
+		node: &'p mut PredNode<'s, P, M::Item>,
 	) -> Self {
-		Self {
-			comb,
-			misc_state,
-			node
-		}
+		Self { comb, misc_state, node }
 	}
 	
 	/// Sets all updated cases to the given times.
@@ -507,7 +515,7 @@ impl<'p, 's, P, M, K> PredSubStateWithId<'p, 's, P, M, K>
 where
 	's: 'p,
 	P: PredParamVec,
-	M: PredId,
+	M: PredStateMisc,
 	K: CombKind,
 {
 	pub fn outer_iter(self) -> PredSubStateWithIdSplitIter<'p, 's, P, M, K> {
@@ -526,7 +534,7 @@ impl<'p, 's, P, M, K> IntoIterator for PredSubStateWithId<'p, 's, P, M, K>
 where
 	's: 'p,
 	P: PredParam,
-	M: PredId,
+	M: PredStateMisc,
 	K: CombKind,
 {
 	type Item = <Self::IntoIter as IntoIterator>::Item;
@@ -586,6 +594,7 @@ pub struct PredStateWithId<'p, 's, P, M>
 where
 	's: 'p,
 	P: PredParam,
+	M: PredStateMisc,
 {
 	inner: PredSubStateWithId<'p, 's, P, M, CombAnyTrue>,
 }
@@ -594,12 +603,12 @@ impl<'p, 's, P, M> PredStateWithId<'p, 's, P, M>
 where
 	's: 'p,
 	P: PredParam,
-	M: PredId,
+	M: PredStateMisc,
 {
 	pub(crate) fn new(
 		comb: <P::Comb<'p> as PredCombinator>::IntoKind<CombAnyTrue>,
-		misc_state: Rc<[M]>,
-		node: &'p mut PredNode<'s, P, M>,
+		misc_state: M,
+		node: &'p mut PredNode<'s, P, M::Item>,
 	) -> Self {
 		Self {
 			inner: PredSubStateWithId::new(comb, misc_state, node),
@@ -611,7 +620,7 @@ impl<'p, 's, P, M> PredStateWithId<'p, 's, P, M>
 where
 	's: 'p,
 	P: PredParamVec,
-	M: PredId,
+	M: PredStateMisc,
 {
 	pub fn outer_iter(self) -> PredSubStateWithIdSplitIter<'p, 's, P, M, CombAnyTrue> {
 		self.inner.outer_iter()
@@ -622,7 +631,7 @@ impl<'p, 's, P, M> IntoIterator for PredStateWithId<'p, 's, P, M>
 where
 	's: 'p,
 	P: PredParam,
-	M: PredId,
+	M: PredStateMisc,
 {
 	type Item = <Self::IntoIter as Iterator>::Item;
 	type IntoIter = <PredSubStateWithId<'p, 's, P, M, CombAnyTrue> as IntoIterator>::IntoIter;
