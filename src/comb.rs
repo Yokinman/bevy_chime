@@ -37,23 +37,18 @@ pub trait CombKind {
 	fn has_state(state: bool) -> bool;
 	
 	#[inline]
-	fn has_true() -> bool {
-		Self::has_state(true)
-	}
-	
-	#[inline]
-	fn has_false() -> bool {
-		Self::has_state(false)
-	}
-	
-	#[inline]
 	fn has_all() -> bool {
-		Self::has_true() && Self::has_false()
+		Self::has_state(true) && Self::has_state(false)
 	}
 	
 	#[inline]
 	fn has_none() -> bool {
-		!(Self::has_true() || Self::has_false())
+		!(Self::has_state(true) || Self::has_state(false))
+	}
+	
+	#[inline]
+	fn state() -> (bool, bool) {
+		(Self::has_state(true), Self::has_state(false))
 	}
 }
 
@@ -170,9 +165,7 @@ where
 	type IntoKind<Kind: CombKind> = PredArrayComb<C, N, Kind>;
 	
 	fn into_kind<Kind: CombKind>(self) -> Self::IntoKind<Kind> {
-		if K::Pal::has_true() == Kind::Pal::has_true()
-			&& K::Pal::has_false() == Kind::Pal::has_false()
-		{
+		if K::Pal::state() == Kind::Pal::state() {
 			PredArrayComb {
 				comb: self.comb,
 				slice: self.slice,
@@ -366,7 +359,7 @@ where
 		None
 	}
 	fn size_hint(&self) -> (usize, Option<usize>) {
-		match (K::has_true(), K::has_false()) {
+		match K::state() {
 			(false, false) => (0, Some(0)),
 			(true, true) => self.iter.size_hint(),
 			_ => (0, self.iter.size_hint().1)
@@ -798,7 +791,7 @@ where
 		}
 		
 		 // Initialize Main Index:
-		if match (K::has_true(), K::has_false()) {
+		if match K::state() {
 			(true, true) => false,
 			(false, false) => true,
 			(true, false) => iter.min_diff_index >= iter.slice.len(),
@@ -849,7 +842,7 @@ where
 			return true
 		}
 		self.index[i] = match self.layer.cmp(&i) {
-			std::cmp::Ordering::Equal => match (K::has_true(), K::has_false()) {
+			std::cmp::Ordering::Equal => match K::state() {
 				(true, true) => index + 1,
 				(false, false) => self.slice.len(),
 				_ => {
@@ -862,7 +855,7 @@ where
 					
 					 // Find Next Matching Case:
 					else {
-						let first_index = if K::has_true() {
+						let first_index = if K::has_state(true) {
 							self.min_diff_index
 						} else {
 							self.min_same_index
@@ -955,7 +948,7 @@ where
 			let mut remaining = self.slice.len() - index;
 			let mut num = falling_factorial(remaining, i + 1);
 			if i >= self.layer && !K::has_all() {
-				let first_index = if K::has_true() {
+				let first_index = if K::has_state(true) {
 					self.min_diff_index
 				} else {
 					self.min_same_index
@@ -1019,7 +1012,7 @@ where
 	type Item = (C::Case, PredSubComb<PredArrayComb<C, N>, K>);
 	fn next(&mut self) -> Option<Self::Item> {
 		if let Some(mut max_index) = self.inner.slice.len().checked_sub(N) {
-			max_index = max_index.min(match (K::has_true(), K::has_false()) {
+			max_index = max_index.min(match K::state() {
 				(true, true) => self.inner.slice.len(),
 				(false, false) => 0,
 				(true, false) => self.inner.max_diff_index,
@@ -1045,7 +1038,7 @@ where
 	}
 	fn size_hint(&self) -> (usize, Option<usize>) {
 		if let Some(mut max_index) = self.inner.slice.len().checked_sub(N) {
-			max_index = max_index.min(match (K::has_true(), K::has_false()) {
+			max_index = max_index.min(match K::state() {
 				(true, true) => self.inner.slice.len(),
 				(false, false) => 0,
 				(true, false) => self.inner.max_diff_index,
