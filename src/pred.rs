@@ -626,10 +626,6 @@ impl<I: PredId, M: PredId> PredStateCase<I, M> {
 		((self.id, self.misc), self.times)
 	}
 	
-	pub fn misc_id(&self) -> M {
-		self.misc
-	}
-	
 	pub fn set<T>(&mut self, times: TimeRanges<T>)
 	where
 		TimeRanges<T>: Iterator<Item = (Duration, Duration)> + Send + Sync + 'static
