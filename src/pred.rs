@@ -514,7 +514,7 @@ where
 	's: 'p,
 	P: PredParam,
 {
-	inner: PredStateWithId<'p, 's, P, ()>,
+	inner: PredSubState<'p, 's, P, CombAnyTrue>,
 }
 
 impl<'p, 's, P> PredState<'p, 's, P>
@@ -523,7 +523,11 @@ where
 	P: PredParam,
 {
 	pub(crate) fn new(inner: PredStateWithId<'p, 's, P, ()>) -> Self {
-		Self { inner }
+		Self {
+			inner: PredSubState {
+				inner: inner.inner
+			},
+		}
 	}
 }
 
@@ -533,9 +537,7 @@ where
 	P: PredParamVec,
 {
 	pub fn outer_iter(self) -> PredSubStateSplitIter<'p, 's, P, CombAnyTrue> {
-		PredSubStateSplitIter {
-			inner: self.inner.outer_iter()
-		}
+		self.inner.outer_iter()
 	}
 }
 
@@ -545,41 +547,9 @@ where
 	P: PredParam,
 {
 	type Item = <Self::IntoIter as Iterator>::Item;
-	type IntoIter = PredStateIter<'p, 's, P>;
+	type IntoIter = <PredSubState<'p, 's, P, CombAnyTrue> as IntoIterator>::IntoIter;
 	fn into_iter(self) -> Self::IntoIter {
-		PredStateIter {
-			inner: self.inner.into_iter(),
-		}
-	}
-}
-
-/// ...
-pub struct PredStateIter<'p, 's, P>
-where
-	's: 'p,
-	P: PredParam,
-{
-	inner: <PredStateWithId<'p, 's, P, ()> as IntoIterator>::IntoIter,
-}
-
-impl<'p, 's, P> Iterator for PredStateIter<'p, 's, P>
-where
-	's: 'p,
-	P: PredParam,
-{
-	type Item = (
-		&'p mut PredStateCase<P::Id, ()>,
-		<PredParamItem<'p, P> as PredItem>::Ref,
-	);
-	fn next(&mut self) -> Option<Self::Item> {
-		if let Some((case, item_ref, ())) = self.inner.next() {
-			Some((case, item_ref))
-		} else {
-			None
-		}
-	}
-	fn size_hint(&self) -> (usize, Option<usize>) {
-		self.inner.size_hint()
+		self.inner.into_iter()
 	}
 }
 
