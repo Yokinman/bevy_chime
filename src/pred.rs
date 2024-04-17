@@ -108,10 +108,10 @@ macro_rules! impl_pred_param_vec_for_array {
 
 // `[P; 2]` splits into `A` and `[B; 1]`, which is kind of awkward/unintuitive.
 // However, I feel like the consistency has generic utility. An alternative
-// method to [`PredSubState::iter_step`] might be worthwhile for convenience.
+// method to [`PredSubState::outer_iter`] might be worthwhile for convenience.
 impl_pred_param_vec_for_array!(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12);
 
-/// Iterator of [`PredSubState::iter_step`].
+/// Iterator of [`PredSubState::outer_iter`].
 pub struct PredSubStateSplitIter<'p, 's, P, M, K>
 where
 	's: 'p,
@@ -153,7 +153,7 @@ where
 	}
 }
 
-/// Nested state of each [`PredSubState::iter_step`].
+/// Nested state of each [`PredSubState::outer_iter`].
 pub enum PredSubStateSplit<'p, 's, P, M, K>
 where
 	's: 'p,
@@ -378,7 +378,7 @@ where
 	M: PredId,
 	K: CombKind,
 {
-	pub fn iter_step(self) -> PredSubStateSplitIter<'p, 's, P, M, K> {
+	pub fn outer_iter(self) -> PredSubStateSplitIter<'p, 's, P, M, K> {
 		let PredSubState { comb, misc_state, node } = self;
 		let iter = P::split(comb);
 		let capacity = 4 * iter.size_hint().0.max(1);
@@ -437,8 +437,8 @@ where
 	P: PredParamVec,
 	M: PredId,
 {
-	pub fn iter_step(self) -> PredSubStateSplitIter<'p, 's, P, M, CombAnyTrue> {
-		self.inner.iter_step()
+	pub fn outer_iter(self) -> PredSubStateSplitIter<'p, 's, P, M, CombAnyTrue> {
+		self.inner.outer_iter()
 	}
 }
 
@@ -904,7 +904,7 @@ mod testing {
 			*index += 1;
 		}).into_events().on_begin(|| {}));
 		
-		 // Setup [`PredSubState::iter_step`] Testing:
+		 // Setup [`PredSubState::outer_iter`] Testing:
 		let update_vec = update_list.to_vec();
 		let b_update_vec = b_update_list.to_vec();
 		app.add_chime_events((move |
@@ -913,7 +913,7 @@ mod testing {
 			b_query: Query<Ref<TestB>>,
 			mut index: system::Local<usize>,
 		| {
-			let mut iter = state.iter_step();
+			let mut iter = state.outer_iter();
 			match *index {
 				0 => { // Full
 					// !!! This should be `(0, Some(A))`, and PredPairCombSplit
@@ -1096,14 +1096,14 @@ mod testing {
 			*index += 1;
 		}).into_events().on_begin(|| {}));
 		
-		 // Setup [`PredSubState::iter_step`] Testing:
+		 // Setup [`PredSubState::outer_iter`] Testing:
 		let update_vec = update_list.to_vec();
 		app.add_chime_events((move |
 			state: PredState<[Query<&Test>; R]>,
 			query: Query<Ref<Test>>,
 			mut index: system::Local<usize>,
 		| {
-			let mut iter = state.iter_step();
+			let mut iter = state.outer_iter();
 			match *index {
 				0 => { // Full
 					let count = N.checked_sub(R).map(|x| x + 1).unwrap_or(0);

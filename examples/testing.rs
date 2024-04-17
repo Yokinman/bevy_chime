@@ -276,7 +276,7 @@ fn outlier_func_b(query: PredQuery<&mut Pos>, time: Res<Time>) {
 fn when_func_c(pred: PredState<[Query<&Pos>; 2]>) {
 	// let mut n = 0;
 	// let a_time = Instant::now();
-	for (case, pos) in pred.iter_step() {
+	for (case, pos) in pred.outer_iter() {
 		let time = pos.max_base_time();
 		let pos_poly_vec = pos.poly_vec(time);
 		for (case, [b_pos]) in case {
