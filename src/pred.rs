@@ -377,7 +377,7 @@ where
 {
 	pub(crate) comb: <P::Comb<'p> as PredCombinator>::IntoKind<K>,
 	pub(crate) misc_state: M,
-	pub(crate) node: &'p mut PredNode<'s, P, M::Item>,
+	pub(crate) node: &'p mut PredNode<'s, crate::DynTimeRanges, P, M::Item>,
 }
 
 impl<'p, 's, P, M, K> PredSubState<'p, 's, P, M, K>
@@ -390,7 +390,7 @@ where
 	fn new(
 		comb: <P::Comb<'p> as PredCombinator>::IntoKind<K>,
 		misc_state: M,
-		node: &'p mut PredNode<'s, P, M::Item>,
+		node: &'p mut PredNode<'s, crate::DynTimeRanges, P, M::Item>,
 	) -> Self {
 		Self { comb, misc_state, node }
 	}
@@ -492,7 +492,7 @@ where
 	pub(crate) fn new(
 		comb: <P::Comb<'p> as PredCombinator>::IntoKind<CombAnyTrue>,
 		misc_state: M,
-		node: &'p mut PredNode<'s, P, M::Item>,
+		node: &'p mut PredNode<'s, crate::DynTimeRanges, P, M::Item>,
 	) -> Self {
 		Self {
 			inner: PredSubState::new(comb, misc_state, node),
@@ -557,13 +557,13 @@ impl<I: PredId> PredStateCase<I, crate::DynTimeRanges> {
 
 /// A one-way node that either stores an arbitrary amount of data or branches
 /// into sub-nodes.
-pub enum PredNode<'s, P: PredParam + 's, M> {
+pub enum PredNode<'s, T, P: PredParam + 's, M> {
 	Blank,
-	Data(Node<PredStateCase<(P::Id, M), crate::DynTimeRanges>>),
-	Branches(Box<dyn PredNodeBranches<'s, crate::DynTimeRanges, P, M> + 's>),
+	Data(Node<PredStateCase<(P::Id, M), T>>),
+	Branches(Box<dyn PredNodeBranches<'s, T, P, M> + 's>),
 }
 
-impl<'s, P: PredParam + 's, M: PredId> PredNode<'s, P, M> {
+impl<'s, P: PredParam + 's, M: PredId> PredNode<'s, crate::DynTimeRanges, P, M> {
 	pub fn init_data(&mut self, cap: usize) -> NodeWriter<PredStateCase<(P::Id, M), crate::DynTimeRanges>> {
 		if let Self::Blank = self {
 			*self = Self::Data(Node::with_capacity(cap));
@@ -594,9 +594,9 @@ impl<'s, P: PredParam + 's, M: PredId> PredNode<'s, P, M> {
 	}
 }
 
-impl<'s, P: PredParam, M: PredId> IntoIterator for PredNode<'s, P, M> {
-	type Item = PredStateCase<(P::Id, M), crate::DynTimeRanges>;
-	type IntoIter = PredNodeIter<'s, crate::DynTimeRanges, P, M>;
+impl<'s, T, P: PredParam, M: PredId> IntoIterator for PredNode<'s, T, P, M> {
+	type Item = PredStateCase<(P::Id, M), T>;
+	type IntoIter = PredNodeIter<'s, T, P, M>;
 	fn into_iter(self) -> Self::IntoIter {
 		match self {
 			Self::Blank => PredNodeIter::Blank,
@@ -634,7 +634,7 @@ impl<T, P: PredParam, M: PredId> Iterator for PredNodeIter<'_, T, P, M> {
 /// Individual branch of a [`PredNodeBranches`] type.
 type PredNodeBranch<'s, P, M> = (
 	<<P as PredParamVec>::Head as PredParam>::Id,
-	PredNode<'s, <P as PredParamVec>::Tail, M>,
+	PredNode<'s, crate::DynTimeRanges, <P as PredParamVec>::Tail, M>,
 );
 
 /// Used to define a trait object for dynamic branching in [`PredNode`], as not
