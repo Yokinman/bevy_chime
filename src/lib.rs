@@ -56,7 +56,7 @@ impl AddChimeEvent for App {
 		assert!(begin_sys.is_some() || end_sys.is_some() || outlier_sys.is_some());
 		
 		let id = self.world.resource_mut::<ChimeEventMap>()
-			.setup_id::<(P::Id, M::Item)>();
+			.setup_id::<(P::Id, M::Item), DynTimeRanges>();
 		
 		let mut state = system::SystemState::<(P::Param, A)>::new(
 			&mut self.world
@@ -448,8 +448,12 @@ impl ChimeEventMap {
 	}
 	
 	/// Initializes an `EventMap` and returns its stored index.
-	fn setup_id<I: PredId>(&mut self) -> usize {
-		self.table.push(Box::<EventMap<I, DynTimeRanges>>::default());
+	fn setup_id<I, T>(&mut self) -> usize
+	where
+		I: PredId,
+		T: Iterator<Item = (Duration, Duration)> + Send + Sync + 'static,
+	{
+		self.table.push(Box::<EventMap<I, T>>::default());
 		self.table.len() - 1
 	}
 	
