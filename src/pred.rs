@@ -112,7 +112,7 @@ macro_rules! impl_pred_param_vec_for_array {
 impl_pred_param_vec_for_array!(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12);
 
 /// Iterator of [`PredSubState::outer_iter`].
-pub struct PredSubStateSplitIter<'p, 's, P, M, K>
+pub struct PredSubStateSplitIter<'p, 's, T, P, M, K>
 where
 	's: 'p,
 	P: PredParamVec,
@@ -121,10 +121,10 @@ where
 {
 	iter: <P as PredParamVec>::Split<'p, K>,
 	misc_state: M,
-	branches: NodeWriter<'p, PredNodeBranch<'s, crate::DynTimeRanges, P, M::Item>>,
+	branches: NodeWriter<'p, PredNodeBranch<'s, T, P, M::Item>>,
 }
 
-impl<'p, 's, P, M, K> Iterator for PredSubStateSplitIter<'p, 's, P, M, K>
+impl<'p, 's, T, P, M, K> Iterator for PredSubStateSplitIter<'p, 's, T, P, M, K>
 where
 	's: 'p,
 	P: PredParamVec,
@@ -132,7 +132,7 @@ where
 	K: CombKind,
 {
 	type Item = (
-		PredSubStateSplit<'p, 's, crate::DynTimeRanges, P::Tail, M, K>,
+		PredSubStateSplit<'p, 's, T, P::Tail, M, K>,
 		<PredParamItem<'p, P::Head> as PredItem>::Ref,
 	);
 	fn next(&mut self) -> Option<Self::Item> {
@@ -439,14 +439,14 @@ where
 	}
 }
 
-impl<'p, 's, P, M, K> PredSubState<'p, 's, crate::DynTimeRanges, P, M, K>
+impl<'p, 's, T, P, M, K> PredSubState<'p, 's, T, P, M, K>
 where
 	's: 'p,
 	P: PredParamVec,
 	M: PredStateMisc,
 	K: CombKind,
 {
-	pub fn outer_iter(self) -> PredSubStateSplitIter<'p, 's, P, M, K> {
+	pub fn outer_iter(self) -> PredSubStateSplitIter<'p, 's, T, P, M, K> {
 		let PredSubState { comb, misc_state, node } = self;
 		let iter = P::split(comb);
 		let capacity = 4 * iter.size_hint().0.max(1);
@@ -506,7 +506,7 @@ where
 	P: PredParamVec,
 	M: PredStateMisc,
 {
-	pub fn outer_iter(self) -> PredSubStateSplitIter<'p, 's, P, M, CombAnyTrue> {
+	pub fn outer_iter(self) -> PredSubStateSplitIter<'p, 's, crate::DynTimeRanges, P, M, CombAnyTrue> {
 		self.inner.outer_iter()
 	}
 }
