@@ -26,7 +26,7 @@ use bevy_time::Time;
 
 /// Builder entry point for adding chime events to a [`World`].
 pub trait AddChimeEvent {
-	fn add_chime_events<P, M, A, F>(&mut self, events: ChimeEventBuilder<P, M, A, F>) -> &mut Self
+	fn add_chime_events<P, M, A, F>(&mut self, events: ChimeEventBuilder<DynTimeRanges, P, M, A, F>) -> &mut Self
 	where
 		P: PredParam + 'static,
 		M: PredStateMisc,
@@ -35,7 +35,7 @@ pub trait AddChimeEvent {
 }
 
 impl AddChimeEvent for App {
-	fn add_chime_events<P, M, A, F>(&mut self, events: ChimeEventBuilder<P, M, A, F>) -> &mut Self
+	fn add_chime_events<P, M, A, F>(&mut self, events: ChimeEventBuilder<DynTimeRanges, P, M, A, F>) -> &mut Self
 	where
 		P: PredParam + 'static,
 		M: PredStateMisc,
@@ -129,7 +129,7 @@ where
 	
 	fn into_pred_fn(self) -> impl PredFn<DynTimeRanges, P, M, A>;
 	
-	fn into_events(self) -> ChimeEventBuilder<P, M, A, impl PredFn<DynTimeRanges, P, M, A>>
+	fn into_events(self) -> ChimeEventBuilder<DynTimeRanges, P, M, A, impl PredFn<DynTimeRanges, P, M, A>>
 	where
 		(): std::borrow::Borrow<M>,
 		M: PredStateMisc<Item=()>,
@@ -141,7 +141,7 @@ where
 	}
 	
 	fn into_events_with_id(self, id: impl IntoIterator<Item=M::Item>)
-		-> ChimeEventBuilder<P, M, A, impl PredFn<DynTimeRanges, P, M, A>>
+		-> ChimeEventBuilder<DynTimeRanges, P, M, A, impl PredFn<DynTimeRanges, P, M, A>>
 	{
 		ChimeEventBuilder::new(self.into_pred_fn(), id)
 	}
@@ -193,27 +193,27 @@ where
 }
 
 /// Builder for inserting a chime event into a [`World`].  
-pub struct ChimeEventBuilder<P, M, A, F>
+pub struct ChimeEventBuilder<T, P, M, A, F>
 where
 	P: PredParam,
 	M: PredStateMisc,
 	A: ReadOnlySystemParam,
-	F: PredFn<DynTimeRanges, P, M, A>,
+	F: PredFn<T, P, M, A>,
 {
 	pred_sys: F,
 	begin_sys: Option<Box<dyn ChimeEventSystem<P::Id, M::Item>>>,
 	end_sys: Option<Box<dyn ChimeEventSystem<P::Id, M::Item>>>,
 	outlier_sys: Option<Box<dyn ChimeEventSystem<P::Id, M::Item>>>,
 	misc_state: Box<[M::Item]>,
-	_param: std::marker::PhantomData<fn(A)>,
+	_param: std::marker::PhantomData<fn(PredState<T, P, M>, SystemParamItem<A>)>,
 }
 
-impl<P, M, A, F> ChimeEventBuilder<P, M, A, F>
+impl<U, P, M, A, F> ChimeEventBuilder<U, P, M, A, F>
 where
 	P: PredParam,
 	M: PredStateMisc,
 	A: ReadOnlySystemParam,
-	F: PredFn<DynTimeRanges, P, M, A>,
+	F: PredFn<U, P, M, A>,
 {
 	fn new(pred_sys: F, id: impl IntoIterator<Item=M::Item>) -> Self {
 		ChimeEventBuilder {
