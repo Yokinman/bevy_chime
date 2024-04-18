@@ -161,8 +161,8 @@ where
 	M: PredStateMisc,
 	K: CombKind,
 {
-	Diff(PredSubState<'p, 's, P, M, K::Pal>),
-	Same(PredSubState<'p, 's, P, M, <<K::Inv as CombKind>::Pal as CombKind>::Inv>),
+	Diff(PredSubState<'p, 's, crate::DynTimeRanges, P, M, K::Pal>),
+	Same(PredSubState<'p, 's, crate::DynTimeRanges, P, M, <<K::Inv as CombKind>::Pal as CombKind>::Inv>),
 }
 
 impl<'p, 's, P, M, K> IntoIterator for PredSubStateSplit<'p, 's, P, M, K>
@@ -172,9 +172,9 @@ where
 	M: PredStateMisc,
 	K: CombKind,
 	PredCombSplit<'p, P, M, K>: Iterator,
-	PredSubState<'p, 's, P, M, <K as CombKind>::Pal>:
+	PredSubState<'p, 's, crate::DynTimeRanges, P, M, <K as CombKind>::Pal>:
 		IntoIterator<IntoIter = PredComb<'p, crate::DynTimeRanges, P, M, K::Pal>>,
-	PredSubState<'p, 's, P, M, <<K::Inv as CombKind>::Pal as CombKind>::Inv>:
+	PredSubState<'p, 's, crate::DynTimeRanges, P, M, <<K::Inv as CombKind>::Pal as CombKind>::Inv>:
 		IntoIterator<IntoIter = PredComb<'p, crate::DynTimeRanges, P, M, <<K::Inv as CombKind>::Pal as CombKind>::Inv>>,
 {
 	type Item = <Self::IntoIter as Iterator>::Item;
@@ -368,7 +368,7 @@ impl PredStateMisc for () {
 
 /// Collects predictions from "when" systems for later compilation. More general
 /// form of [`PredState`] for stepping through combinators layer-wise.
-pub struct PredSubState<'p, 's, P, M, K>
+pub struct PredSubState<'p, 's, T, P, M, K>
 where
 	's: 'p,
 	P: PredParam,
@@ -377,10 +377,10 @@ where
 {
 	pub(crate) comb: <P::Comb<'p> as PredCombinator>::IntoKind<K>,
 	pub(crate) misc_state: M,
-	pub(crate) node: &'p mut PredNode<'s, crate::DynTimeRanges, P, M::Item>,
+	pub(crate) node: &'p mut PredNode<'s, T, P, M::Item>,
 }
 
-impl<'p, 's, P, M, K> PredSubState<'p, 's, P, M, K>
+impl<'p, 's, T, P, M, K> PredSubState<'p, 's, T, P, M, K>
 where
 	's: 'p,
 	P: PredParam,
@@ -390,13 +390,13 @@ where
 	fn new(
 		comb: <P::Comb<'p> as PredCombinator>::IntoKind<K>,
 		misc_state: M,
-		node: &'p mut PredNode<'s, crate::DynTimeRanges, P, M::Item>,
+		node: &'p mut PredNode<'s, T, P, M::Item>,
 	) -> Self {
 		Self { comb, misc_state, node }
 	}
 }
 
-impl<'p, 's, P, K> PredSubState<'p, 's, P, (), K>
+impl<'p, 's, P, K> PredSubState<'p, 's, crate::DynTimeRanges, P, (), K>
 where
 	's: 'p,
 	P: PredParam,
@@ -417,7 +417,7 @@ where
 	}
 }
 
-impl<'p, 's, P, M, K> PredSubState<'p, 's, P, WithId<M>, K>
+impl<'p, 's, P, M, K> PredSubState<'p, 's, crate::DynTimeRanges, P, WithId<M>, K>
 where
 	's: 'p,
 	P: PredParam,
@@ -439,7 +439,7 @@ where
 	}
 }
 
-impl<'p, 's, P, M, K> PredSubState<'p, 's, P, M, K>
+impl<'p, 's, P, M, K> PredSubState<'p, 's, crate::DynTimeRanges, P, M, K>
 where
 	's: 'p,
 	P: PredParamVec,
@@ -458,7 +458,7 @@ where
 	}
 }
 
-impl<'p, 's, P, M, K> IntoIterator for PredSubState<'p, 's, P, M, K>
+impl<'p, 's, P, M, K> IntoIterator for PredSubState<'p, 's, crate::DynTimeRanges, P, M, K>
 where
 	's: 'p,
 	P: PredParam,
@@ -480,7 +480,7 @@ where
 	P: PredParam,
 	M: PredStateMisc,
 {
-	inner: PredSubState<'p, 's, P, M, CombAnyTrue>,
+	inner: PredSubState<'p, 's, crate::DynTimeRanges, P, M, CombAnyTrue>,
 }
 
 impl<'p, 's, P, M> PredState<'p, 's, P, M>
@@ -516,10 +516,10 @@ where
 	's: 'p,
 	P: PredParam,
 	M: PredStateMisc,
-	PredSubState<'p, 's, P, M, CombAnyTrue>: IntoIterator,
+	PredSubState<'p, 's, crate::DynTimeRanges, P, M, CombAnyTrue>: IntoIterator,
 {
 	type Item = <Self::IntoIter as Iterator>::Item;
-	type IntoIter = <PredSubState<'p, 's, P, M, CombAnyTrue> as IntoIterator>::IntoIter;
+	type IntoIter = <PredSubState<'p, 's, crate::DynTimeRanges, P, M, CombAnyTrue> as IntoIterator>::IntoIter;
 	fn into_iter(self) -> Self::IntoIter {
 		self.inner.into_iter()
 	}
