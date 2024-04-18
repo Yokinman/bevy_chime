@@ -560,7 +560,7 @@ impl<I: PredId> PredStateCase<I, crate::DynTimeRanges> {
 pub enum PredNode<'s, P: PredParam + 's, M> {
 	Blank,
 	Data(Node<PredStateCase<(P::Id, M), crate::DynTimeRanges>>),
-	Branches(Box<dyn PredNodeBranches<'s, P, M> + 's>),
+	Branches(Box<dyn PredNodeBranches<'s, crate::DynTimeRanges, P, M> + 's>),
 }
 
 impl<'s, P: PredParam + 's, M: PredId> PredNode<'s, P, M> {
@@ -644,15 +644,15 @@ type PredNodeBranch<'s, P, M> = (
 /// `PredParam` and implement empty defaults for scalar types. However, this
 /// would only support a subset of arrays instead of all sizes, which feels
 /// like an unnecessary constraint. Specialization would probably help here.
-pub trait PredNodeBranches<'s, P: PredParam, M> {
+pub trait PredNodeBranches<'s, T, P: PredParam, M> {
 	fn as_writer<'n>(&'n mut self) -> NodeWriter<'n, PredNodeBranch<'s, P, M>>
 	where
 		P: PredParamVec;
 	
-	fn into_branch_iter(&mut self) -> Box<dyn PredNodeBranchesIterator<'s, crate::DynTimeRanges, P, M> + 's>;
+	fn into_branch_iter(&mut self) -> Box<dyn PredNodeBranchesIterator<'s, T, P, M> + 's>;
 }
 
-impl<'s, P, M> PredNodeBranches<'s, P, M> for Node<PredNodeBranch<'s, P, M>>
+impl<'s, P, M> PredNodeBranches<'s, crate::DynTimeRanges, P, M> for Node<PredNodeBranch<'s, P, M>>
 where
 	P: PredParamVec + 's,
 	M: PredId,
