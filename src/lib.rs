@@ -345,8 +345,8 @@ fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule)
 }
 
 /// An individually scheduled event, generally owned by an `EventMap`.
-struct ChimeEvent {
-	times: Box<dyn Iterator<Item = (Duration, Duration)> + Send + Sync>,
+struct ChimeEvent<T> {
+	times: T,
 	next_time: Option<Duration>,
 	next_end_time: Option<Duration>,
 	curr_time: Option<Duration>,
@@ -359,10 +359,13 @@ struct ChimeEvent {
 	is_active: bool,
 }
 
-impl Default for ChimeEvent {
+impl<T> Default for ChimeEvent<T>
+where
+	T: Default,
+{
 	fn default() -> Self {
 		ChimeEvent {
-			times: Box::new(std::iter::empty()),
+			times: T::default(),
 			next_time: None,
 			next_end_time: None,
 			curr_time: None,
@@ -377,7 +380,10 @@ impl Default for ChimeEvent {
 	}
 }
 
-impl ChimeEvent {
+impl<T> ChimeEvent<T>
+where
+	T: Iterator<Item = (Duration, Duration)>
+{
 	fn next_time(&mut self) -> Option<Duration> {
 		let next_time = if self.is_active {
 			&mut self.next_end_time
@@ -394,6 +400,29 @@ impl ChimeEvent {
 		} else {
 			None
 		}
+	}
+}
+
+/// ...
+struct DynTimeRanges {
+	inner: Box<dyn Iterator<Item = (Duration, Duration)> + Send + Sync>,
+}
+
+impl Default for DynTimeRanges {
+	fn default() -> Self {
+		Self {
+			inner: Box::new(std::iter::empty()),
+		}
+	}
+}
+
+impl Iterator for DynTimeRanges {
+	type Item = (Duration, Duration);
+	fn next(&mut self) -> Option<Self::Item> {
+		self.inner.next()
+	}
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		self.inner.size_hint()
 	}
 }
 
@@ -447,7 +476,7 @@ impl ChimeEventMap {
 			
 			 // Fetch/Initialize Event:
 			let event = event_map.events.entry(case_id).or_insert_with(|| {
-				let mut event = ChimeEvent::default();
+				let mut event = ChimeEvent::<DynTimeRanges>::default();
 				
 				 // Initialize Systems:
 				world.insert_resource(PredSystemId {
@@ -468,7 +497,8 @@ impl ChimeEventMap {
 				event
 			});
 			event.times = case_times
-				.unwrap_or_else(|| Box::new(TimeRanges::empty()));
+				.map(|x| DynTimeRanges { inner: x })
+				.unwrap_or_default();
 			
 			 // Fetch Next Time:
 			event.next_time = None;
@@ -561,7 +591,7 @@ impl ChimeEventMap {
 
 /// A set of events related to a common method of scheduling.
 struct EventMap<K> {
-	events: HashMap<K, ChimeEvent>,
+	events: HashMap<K, ChimeEvent<DynTimeRanges>>,
 	
 	/// Reverse time-to-event map for quickly rescheduling events.
 	times: BTreeMap<Duration, Vec<K>>,
