@@ -610,7 +610,7 @@ impl<'s, P: PredParam, M: PredId> IntoIterator for PredNode<'s, P, M> {
 pub enum PredNodeIter<'s, P: PredParam, M> {
 	Blank,
 	Data(NodeIter<PredStateCase<(P::Id, M), crate::DynTimeRanges>>),
-	Branches(Box<dyn PredNodeBranchesIterator<'s, P, M> + 's>),
+	Branches(Box<dyn PredNodeBranchesIterator<'s, crate::DynTimeRanges, P, M> + 's>),
 }
 
 impl<P: PredParam, M: PredId> Iterator for PredNodeIter<'_, P, M> {
@@ -649,7 +649,7 @@ pub trait PredNodeBranches<'s, P: PredParam, M> {
 	where
 		P: PredParamVec;
 	
-	fn into_branch_iter(&mut self) -> Box<dyn PredNodeBranchesIterator<'s, P, M> + 's>;
+	fn into_branch_iter(&mut self) -> Box<dyn PredNodeBranchesIterator<'s, crate::DynTimeRanges, P, M> + 's>;
 }
 
 impl<'s, P, M> PredNodeBranches<'s, P, M> for Node<PredNodeBranch<'s, P, M>>
@@ -664,7 +664,7 @@ where
 		NodeWriter::new(self)
 	}
 	
-	fn into_branch_iter(&mut self) -> Box<dyn PredNodeBranchesIterator<'s, P, M> + 's> {
+	fn into_branch_iter(&mut self) -> Box<dyn PredNodeBranchesIterator<'s, crate::DynTimeRanges, P, M> + 's> {
 		Box::new(PredNodeBranchesIter {
 			node_iter: std::mem::take(self).into_iter(),
 			branch_id: None,
@@ -708,11 +708,11 @@ where
 
 /// Used to define a trait object for dynamic branching in [`PredNodeIter`], as
 /// not all [`PredParam`] types implement [`PredParamVec`].
-pub trait PredNodeBranchesIterator<'s, P: PredParam, M>:
-	Iterator<Item = PredStateCase<(P::Id, M), crate::DynTimeRanges>>
+pub trait PredNodeBranchesIterator<'s, T, P: PredParam, M>:
+	Iterator<Item = PredStateCase<(P::Id, M), T>>
 {}
 
-impl<'s, P, M> PredNodeBranchesIterator<'s, P, M> for PredNodeBranchesIter<'s, P, M>
+impl<'s, P, M> PredNodeBranchesIterator<'s, crate::DynTimeRanges, P, M> for PredNodeBranchesIter<'s, P, M>
 where
 	P: PredParamVec,
 	M: PredId,
