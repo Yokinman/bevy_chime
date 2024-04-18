@@ -26,21 +26,29 @@ use bevy_time::Time;
 
 /// Builder entry point for adding chime events to a [`World`].
 pub trait AddChimeEvent {
-	fn add_chime_events<P, M, A, F>(&mut self, events: ChimeEventBuilder<DynTimeRanges, P, M, A, F>) -> &mut Self
+	fn add_chime_events<T, P, M, A, F>(
+		&mut self,
+		events: ChimeEventBuilder<T, P, M, A, F>,
+	) -> &mut Self
 	where
+		T: Iterator<Item = (Duration, Duration)> + Default + Send + Sync + 'static,
 		P: PredParam + 'static,
 		M: PredStateMisc,
 		A: ReadOnlySystemParam + 'static,
-		F: PredFn<DynTimeRanges, P, M, A> + Send + Sync + 'static;
+		F: PredFn<T, P, M, A> + Send + Sync + 'static;
 }
 
 impl AddChimeEvent for App {
-	fn add_chime_events<P, M, A, F>(&mut self, events: ChimeEventBuilder<DynTimeRanges, P, M, A, F>) -> &mut Self
+	fn add_chime_events<T, P, M, A, F>(
+		&mut self,
+		events: ChimeEventBuilder<T, P, M, A, F>,
+	) -> &mut Self
 	where
+		T: Iterator<Item = (Duration, Duration)> + Default + Send + Sync + 'static,
 		P: PredParam + 'static,
 		M: PredStateMisc,
 		A: ReadOnlySystemParam + 'static,
-		F: PredFn<DynTimeRanges, P, M, A> + Send + Sync + 'static,
+		F: PredFn<T, P, M, A> + Send + Sync + 'static,
 	{
 		assert!(self.is_plugin_added::<ChimePlugin>());
 		
@@ -56,7 +64,7 @@ impl AddChimeEvent for App {
 		assert!(begin_sys.is_some() || end_sys.is_some() || outlier_sys.is_some());
 		
 		let id = self.world.resource_mut::<ChimeEventMap>()
-			.setup_id::<(P::Id, M::Item), DynTimeRanges>();
+			.setup_id::<(P::Id, M::Item), T>();
 		
 		let mut state = system::SystemState::<(P::Param, A)>::new(
 			&mut self.world
