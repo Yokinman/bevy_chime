@@ -526,12 +526,12 @@ where
 }
 
 /// A scheduled case of prediction, used in [`crate::PredState`].
-pub struct PredStateCase<I> {
+pub struct PredStateCase<I, T> {
 	id: I,
-	times: Option<Box<dyn Iterator<Item = (Duration, Duration)> + Send + Sync>>,
+	times: Option<T>,
 }
 
-impl<I: PredId> PredStateCase<I> {
+impl<I: PredId, T> PredStateCase<I, T> {
 	pub fn new(id: I) -> Self {
 		Self {
 			id,
@@ -539,17 +539,19 @@ impl<I: PredId> PredStateCase<I> {
 		}
 	}
 	
-	pub(crate) fn into_parts(self)
-		-> (I, Option<Box<dyn Iterator<Item = (Duration, Duration)> + Send + Sync>>)
-	{
+	pub(crate) fn into_parts(self) -> (I, Option<T>) {
 		(self.id, self.times)
 	}
-	
+}
+
+impl<I: PredId> PredStateCase<I, crate::DynTimeRanges> {
 	pub fn set<T>(&mut self, times: TimeRanges<T>)
 	where
 		TimeRanges<T>: Iterator<Item = (Duration, Duration)> + Send + Sync + 'static
 	{
-		self.times = Some(Box::new(times));
+		self.times = Some(crate::DynTimeRanges {
+			inner: Box::new(times)
+		});
 	}
 }
 
@@ -557,12 +559,12 @@ impl<I: PredId> PredStateCase<I> {
 /// into sub-nodes.
 pub enum PredNode<'s, P: PredParam + 's, M> {
 	Blank,
-	Data(Node<PredStateCase<(P::Id, M)>>),
+	Data(Node<PredStateCase<(P::Id, M), crate::DynTimeRanges>>),
 	Branches(Box<dyn PredNodeBranches<'s, P, M> + 's>),
 }
 
 impl<'s, P: PredParam + 's, M: PredId> PredNode<'s, P, M> {
-	pub fn init_data(&mut self, cap: usize) -> NodeWriter<PredStateCase<(P::Id, M)>> {
+	pub fn init_data(&mut self, cap: usize) -> NodeWriter<PredStateCase<(P::Id, M), crate::DynTimeRanges>> {
 		if let Self::Blank = self {
 			*self = Self::Data(Node::with_capacity(cap));
 			if let Self::Data(node) = self {
@@ -593,7 +595,7 @@ impl<'s, P: PredParam + 's, M: PredId> PredNode<'s, P, M> {
 }
 
 impl<'s, P: PredParam, M: PredId> IntoIterator for PredNode<'s, P, M> {
-	type Item = PredStateCase<(P::Id, M)>;
+	type Item = PredStateCase<(P::Id, M), crate::DynTimeRanges>;
 	type IntoIter = PredNodeIter<'s, P, M>;
 	fn into_iter(self) -> Self::IntoIter {
 		match self {
@@ -607,12 +609,12 @@ impl<'s, P: PredParam, M: PredId> IntoIterator for PredNode<'s, P, M> {
 /// Iterator of [`PredNode`]'s items.
 pub enum PredNodeIter<'s, P: PredParam, M> {
 	Blank,
-	Data(NodeIter<PredStateCase<(P::Id, M)>>),
+	Data(NodeIter<PredStateCase<(P::Id, M), crate::DynTimeRanges>>),
 	Branches(Box<dyn PredNodeBranchesIterator<'s, P, M> + 's>),
 }
 
 impl<P: PredParam, M: PredId> Iterator for PredNodeIter<'_, P, M> {
-	type Item = PredStateCase<(P::Id, M)>;
+	type Item = PredStateCase<(P::Id, M), crate::DynTimeRanges>;
 	fn next(&mut self) -> Option<Self::Item> {
 		match self {
 			Self::Blank => None,
@@ -683,7 +685,7 @@ where
 	P: PredParamVec,
 	M: PredId,
 {
-	type Item = PredStateCase<(P::Id, M)>;
+	type Item = PredStateCase<(P::Id, M), crate::DynTimeRanges>;
 	fn next(&mut self) -> Option<Self::Item> {
 		if let Some(case) = self.branch_iter.next() {
 			let (main_id, misc_id) = case.id;
@@ -707,7 +709,7 @@ where
 /// Used to define a trait object for dynamic branching in [`PredNodeIter`], as
 /// not all [`PredParam`] types implement [`PredParamVec`].
 pub trait PredNodeBranchesIterator<'s, P: PredParam, M>:
-	Iterator<Item = PredStateCase<(P::Id, M)>>
+	Iterator<Item = PredStateCase<(P::Id, M), crate::DynTimeRanges>>
 {}
 
 impl<'s, P, M> PredNodeBranchesIterator<'s, P, M> for PredNodeBranchesIter<'s, P, M>

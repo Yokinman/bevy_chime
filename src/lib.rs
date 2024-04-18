@@ -402,7 +402,7 @@ where
 }
 
 /// ...
-struct DynTimeRanges {
+pub struct DynTimeRanges {
 	inner: Box<dyn Iterator<Item = (Duration, Duration)> + Send + Sync>,
 }
 
@@ -455,7 +455,7 @@ impl ChimeEventMap {
 	
 	fn sched<I: PredId, M: PredId>(
 		&mut self,
-		input: impl IntoIterator<Item = PredStateCase<(I, M)>>,
+		input: impl IntoIterator<Item = PredStateCase<(I, M), DynTimeRanges>>,
 		pred_time: Duration,
 		event_id: usize,
 		begin_sys: Option<&dyn ChimeEventSystem<I, M>>,
@@ -495,7 +495,6 @@ impl ChimeEventMap {
 				event
 			});
 			event.times = case_times
-				.map(|x| DynTimeRanges { inner: x })
 				.unwrap_or_default();
 			
 			 // Fetch Next Time:

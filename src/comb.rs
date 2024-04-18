@@ -1064,7 +1064,7 @@ where
 	curr: Option<<<P::Comb<'p> as PredCombinator>::IntoKind<K> as IntoIterator>::Item>,
 	misc_state: M,
 	misc_iter: M::MiscIter,
-	node: NodeWriter<'p, PredStateCase<(P::Id, M::Item)>>,
+	node: NodeWriter<'p, PredStateCase<(P::Id, M::Item), crate::DynTimeRanges>>,
 }
 
 impl<'p, P, M, K> PredComb<'p, P, M, K>
@@ -1090,7 +1090,7 @@ where
 	K: CombKind,
 {
 	type Item = (
-		&'p mut PredStateCase<(P::Id, M)>,
+		&'p mut PredStateCase<(P::Id, M), crate::DynTimeRanges>,
 		<PredParamItem<'p, P> as PredItem>::Ref,
 		M,
 	);
@@ -1135,7 +1135,7 @@ where
 	K: CombKind,
 {
 	type Item = (
-		&'p mut PredStateCase<(P::Id, ())>,
+		&'p mut PredStateCase<(P::Id, ()), crate::DynTimeRanges>,
 		<PredParamItem<'p, P> as PredItem>::Ref,
 	);
 	fn next(&mut self) -> Option<Self::Item> {
