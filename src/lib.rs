@@ -102,7 +102,7 @@ impl AddChimeEvent for App {
 /// Specialized function used for predicting and scheduling events, functionally
 /// similar to a read-only [`bevy_ecs::system::SystemParamFunction`].
 pub trait PredFn<P, M, A>:
-	Fn(PredState<P, M>, SystemParamItem<A>)
+	Fn(PredState<DynTimeRanges, P, M>, SystemParamItem<A>)
 where
 	P: PredParam,
 	M: PredStateMisc,
@@ -114,7 +114,7 @@ where
 	P: PredParam,
 	M: PredStateMisc,
 	A: ReadOnlySystemParam,
-	F: Fn(PredState<P, M>, SystemParamItem<A>),
+	F: Fn(PredState<DynTimeRanges, P, M>, SystemParamItem<A>),
 {}
 
 /// Types that can be converted into a [`PredFn`].
@@ -155,8 +155,8 @@ macro_rules! impl_into_pred_fn {
 	($($param:ident),*) => {
 		impl<F, P, M, $($param: ReadOnlySystemParam),*> IntoPredFn<P, M, ($($param,)*)> for F
 		where
-			F: Fn(PredState<P, M>, $($param),*)
-				+ Fn(PredState<P, M>, $(SystemParamItem<$param>),*),
+			F: Fn(PredState<DynTimeRanges, P, M>, $($param),*)
+				+ Fn(PredState<DynTimeRanges, P, M>, $(SystemParamItem<$param>),*),
 			P: PredParam,
 			M: PredStateMisc,
 		{

@@ -202,7 +202,7 @@ fn add_many_dogs(world: &mut World) {
 	println!("COUNT: {n}");
 }
 
-fn when_func_a(state: PredState<Query<&Pos>>) {
+fn when_func_a(state: PredState<crate::DynTimeRanges, Query<&Pos>>) {
 	// let a_time = Instant::now();
 	for (state, pos) in state {
 		let times =
@@ -219,7 +219,7 @@ fn do_func_a(query: PredQuery<&mut Pos>, time: Res<Time>) {
 	pos_x.spd.val *= -1.;
 }
 
-fn when_func_b(state: PredState<Query<&Pos>>) {
+fn when_func_b(state: PredState<crate::DynTimeRanges, Query<&Pos>>) {
 	// let a_time = Instant::now();
 	// let time = time.elapsed();
 	for (state, pos) in state {
@@ -273,7 +273,7 @@ fn outlier_func_b(query: PredQuery<&mut Pos>, time: Res<Time>) {
 	// 	pos[1].poly(pos[1].base_time())));
 }
 
-fn when_func_c(state: PredState<[Query<&Pos>; 2]>) {
+fn when_func_c(state: PredState<crate::DynTimeRanges, [Query<&Pos>; 2]>) {
 	// let mut n = 0;
 	// let a_time = Instant::now();
 	for (state, pos) in state.outer_iter() {

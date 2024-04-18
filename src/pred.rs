@@ -474,16 +474,16 @@ where
 }
 
 /// Collects predictions from "when" systems for later compilation.
-pub struct PredState<'p, 's, P, M = ()>
+pub struct PredState<'p, 's, T, P, M = ()>
 where
 	's: 'p,
 	P: PredParam,
 	M: PredStateMisc,
 {
-	inner: PredSubState<'p, 's, crate::DynTimeRanges, P, M, CombAnyTrue>,
+	inner: PredSubState<'p, 's, T, P, M, CombAnyTrue>,
 }
 
-impl<'p, 's, P, M> PredState<'p, 's, P, M>
+impl<'p, 's, T, P, M> PredState<'p, 's, T, P, M>
 where
 	's: 'p,
 	P: PredParam,
@@ -492,7 +492,7 @@ where
 	pub(crate) fn new(
 		comb: <P::Comb<'p> as PredCombinator>::IntoKind<CombAnyTrue>,
 		misc_state: M,
-		node: &'p mut PredNode<'s, crate::DynTimeRanges, P, M::Item>,
+		node: &'p mut PredNode<'s, T, P, M::Item>,
 	) -> Self {
 		Self {
 			inner: PredSubState::new(comb, misc_state, node),
@@ -500,26 +500,26 @@ where
 	}
 }
 
-impl<'p, 's, P, M> PredState<'p, 's, P, M>
+impl<'p, 's, T, P, M> PredState<'p, 's, T, P, M>
 where
 	's: 'p,
 	P: PredParamVec,
 	M: PredStateMisc,
 {
-	pub fn outer_iter(self) -> PredSubStateSplitIter<'p, 's, crate::DynTimeRanges, P, M, CombAnyTrue> {
+	pub fn outer_iter(self) -> PredSubStateSplitIter<'p, 's, T, P, M, CombAnyTrue> {
 		self.inner.outer_iter()
 	}
 }
 
-impl<'p, 's, P, M> IntoIterator for PredState<'p, 's, P, M>
+impl<'p, 's, T, P, M> IntoIterator for PredState<'p, 's, T, P, M>
 where
 	's: 'p,
 	P: PredParam,
 	M: PredStateMisc,
-	PredSubState<'p, 's, crate::DynTimeRanges, P, M, CombAnyTrue>: IntoIterator,
+	PredSubState<'p, 's, T, P, M, CombAnyTrue>: IntoIterator,
 {
 	type Item = <Self::IntoIter as Iterator>::Item;
-	type IntoIter = <PredSubState<'p, 's, crate::DynTimeRanges, P, M, CombAnyTrue> as IntoIterator>::IntoIter;
+	type IntoIter = <PredSubState<'p, 's, T, P, M, CombAnyTrue> as IntoIterator>::IntoIter;
 	fn into_iter(self) -> Self::IntoIter {
 		self.inner.into_iter()
 	}
@@ -896,7 +896,7 @@ mod testing {
 		let update_vec = update_list.to_vec();
 		let b_update_vec = b_update_list.to_vec();
 		app.add_chime_events((move |
-			state: PredState<(Query<&Test>, Query<&TestB>)>,
+			state: PredState<crate::DynTimeRanges, (Query<&Test>, Query<&TestB>)>,
 			a_query: Query<&Test>,
 			b_query: Query<&TestB>,
 			mut index: system::Local<usize>,
@@ -957,7 +957,7 @@ mod testing {
 		let update_vec = update_list.to_vec();
 		let b_update_vec = b_update_list.to_vec();
 		app.add_chime_events((move |
-			state: PredState<(Query<&Test>, Query<&TestB>)>,
+			state: PredState<crate::DynTimeRanges, (Query<&Test>, Query<&TestB>)>,
 			a_query: Query<Ref<Test>>,
 			b_query: Query<Ref<TestB>>,
 			mut index: system::Local<usize>,
@@ -1100,7 +1100,7 @@ mod testing {
 		let n_choose_r = choose(N, R);
 		let update_vec = update_list.to_vec();
 		app.add_chime_events((move |
-			state: PredState<[Query<&Test>; R]>,
+			state: PredState<crate::DynTimeRanges, [Query<&Test>; R]>,
 			query: Query<&Test>,
 			mut index: system::Local<usize>,
 		| {
@@ -1148,7 +1148,7 @@ mod testing {
 		 // Setup [`PredSubState::outer_iter`] Testing:
 		let update_vec = update_list.to_vec();
 		app.add_chime_events((move |
-			state: PredState<[Query<&Test>; R]>,
+			state: PredState<crate::DynTimeRanges, [Query<&Test>; R]>,
 			query: Query<Ref<Test>>,
 			mut index: system::Local<usize>,
 		| {
