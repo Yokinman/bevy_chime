@@ -132,7 +132,7 @@ where
 	K: CombKind,
 {
 	type Item = (
-		PredSubStateSplit<'p, 's, P::Tail, M, K>,
+		PredSubStateSplit<'p, 's, crate::DynTimeRanges, P::Tail, M, K>,
 		<PredParamItem<'p, P::Head> as PredItem>::Ref,
 	);
 	fn next(&mut self) -> Option<Self::Item> {
@@ -154,31 +154,31 @@ where
 }
 
 /// Nested state of each [`PredSubState::outer_iter`].
-pub enum PredSubStateSplit<'p, 's, P, M, K>
+pub enum PredSubStateSplit<'p, 's, T, P, M, K>
 where
 	's: 'p,
 	P: PredParam,
 	M: PredStateMisc,
 	K: CombKind,
 {
-	Diff(PredSubState<'p, 's, crate::DynTimeRanges, P, M, K::Pal>),
-	Same(PredSubState<'p, 's, crate::DynTimeRanges, P, M, <<K::Inv as CombKind>::Pal as CombKind>::Inv>),
+	Diff(PredSubState<'p, 's, T, P, M, K::Pal>),
+	Same(PredSubState<'p, 's, T, P, M, <<K::Inv as CombKind>::Pal as CombKind>::Inv>),
 }
 
-impl<'p, 's, P, M, K> IntoIterator for PredSubStateSplit<'p, 's, P, M, K>
+impl<'p, 's, T, P, M, K> IntoIterator for PredSubStateSplit<'p, 's, T, P, M, K>
 where
 	's: 'p,
 	P: PredParam,
 	M: PredStateMisc,
 	K: CombKind,
-	PredCombSplit<'p, crate::DynTimeRanges, P, M, K>: Iterator,
-	PredSubState<'p, 's, crate::DynTimeRanges, P, M, <K as CombKind>::Pal>:
-		IntoIterator<IntoIter = PredComb<'p, crate::DynTimeRanges, P, M, K::Pal>>,
-	PredSubState<'p, 's, crate::DynTimeRanges, P, M, <<K::Inv as CombKind>::Pal as CombKind>::Inv>:
-		IntoIterator<IntoIter = PredComb<'p, crate::DynTimeRanges, P, M, <<K::Inv as CombKind>::Pal as CombKind>::Inv>>,
+	PredCombSplit<'p, T, P, M, K>: Iterator,
+	PredSubState<'p, 's, T, P, M, <K as CombKind>::Pal>:
+		IntoIterator<IntoIter = PredComb<'p, T, P, M, K::Pal>>,
+	PredSubState<'p, 's, T, P, M, <<K::Inv as CombKind>::Pal as CombKind>::Inv>:
+		IntoIterator<IntoIter = PredComb<'p, T, P, M, <<K::Inv as CombKind>::Pal as CombKind>::Inv>>,
 {
 	type Item = <Self::IntoIter as Iterator>::Item;
-	type IntoIter = PredCombSplit<'p, crate::DynTimeRanges, P, M, K>;
+	type IntoIter = PredCombSplit<'p, T, P, M, K>;
 	fn into_iter(self) -> Self::IntoIter {
 		match self {
 			Self::Diff(state) => PredCombSplit::Diff(state.into_iter()),
