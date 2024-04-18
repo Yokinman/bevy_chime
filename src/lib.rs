@@ -453,20 +453,25 @@ impl ChimeEventMap {
 		self.table.len() - 1
 	}
 	
-	fn sched<I: PredId, M: PredId>(
+	fn sched<T, I, M>(
 		&mut self,
-		input: impl IntoIterator<Item = PredStateCase<(I, M), DynTimeRanges>>,
+		input: impl IntoIterator<Item = PredStateCase<(I, M), T>>,
 		pred_time: Duration,
 		event_id: usize,
 		begin_sys: Option<&dyn ChimeEventSystem<I, M>>,
 		end_sys: Option<&dyn ChimeEventSystem<I, M>>,
 		outlier_sys: Option<&dyn ChimeEventSystem<I, M>>,
 		world: &mut World,
-	) {
+	)
+	where
+		I: PredId,
+		M: PredId,
+		T: Iterator<Item = (Duration, Duration)> + Default + 'static,
+	{
 		let event_map = self.table.get_mut(event_id)
 			.expect("id must be initialized with ChimeEventMap::setup_id")
 			.as_any_mut()
-			.downcast_mut::<EventMap<(I, M), DynTimeRanges>>()
+			.downcast_mut::<EventMap<(I, M), T>>()
 			.expect("should always work");
 		
 		for case in input {
@@ -474,7 +479,7 @@ impl ChimeEventMap {
 			
 			 // Fetch/Initialize Event:
 			let event = event_map.events.entry(case_id).or_insert_with(|| {
-				let mut event = ChimeEvent::<DynTimeRanges>::default();
+				let mut event = ChimeEvent::<T>::default();
 				
 				 // Initialize Systems:
 				world.insert_resource(PredSystemId {
