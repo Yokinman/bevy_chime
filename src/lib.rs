@@ -118,7 +118,7 @@ where
 {}
 
 /// Types that can be converted into a [`PredFn`].
-pub trait IntoPredFn<P, M, A>: Sized
+pub trait IntoPredFn<T, P, M, A>: Sized
 where
 	P: PredParam,
 	M: PredStateMisc,
@@ -127,9 +127,9 @@ where
 	// !!! This should probably be split into two traits, with the two separate
 	// methods (`into_events` and `into_events_with_id`).
 	
-	fn into_pred_fn(self) -> impl PredFn<DynTimeRanges, P, M, A>;
+	fn into_pred_fn(self) -> impl PredFn<T, P, M, A>;
 	
-	fn into_events(self) -> ChimeEventBuilder<DynTimeRanges, P, M, A, impl PredFn<DynTimeRanges, P, M, A>>
+	fn into_events(self) -> ChimeEventBuilder<T, P, M, A, impl PredFn<T, P, M, A>>
 	where
 		(): std::borrow::Borrow<M>,
 		M: PredStateMisc<Item=()>,
@@ -141,7 +141,7 @@ where
 	}
 	
 	fn into_events_with_id(self, id: impl IntoIterator<Item=M::Item>)
-		-> ChimeEventBuilder<DynTimeRanges, P, M, A, impl PredFn<DynTimeRanges, P, M, A>>
+		-> ChimeEventBuilder<T, P, M, A, impl PredFn<T, P, M, A>>
 	{
 		ChimeEventBuilder::new(self.into_pred_fn(), id)
 	}
@@ -153,14 +153,14 @@ macro_rules! impl_into_pred_fn {
 		$(impl_into_pred_fn!(@all $($rest),*);)?
 	};
 	($($param:ident),*) => {
-		impl<F, P, M, $($param: ReadOnlySystemParam),*> IntoPredFn<P, M, ($($param,)*)> for F
+		impl<F, T, P, M, $($param: ReadOnlySystemParam),*> IntoPredFn<T, P, M, ($($param,)*)> for F
 		where
-			F: Fn(PredState<DynTimeRanges, P, M>, $($param),*)
-				+ Fn(PredState<DynTimeRanges, P, M>, $(SystemParamItem<$param>),*),
+			F: Fn(PredState<T, P, M>, $($param),*)
+				+ Fn(PredState<T, P, M>, $(SystemParamItem<$param>),*),
 			P: PredParam,
 			M: PredStateMisc,
 		{
-			fn into_pred_fn(self) -> impl PredFn<DynTimeRanges, P, M, ($($param,)*)> {
+			fn into_pred_fn(self) -> impl PredFn<T, P, M, ($($param,)*)> {
 				move |state, misc| {
 					let ($($param,)*) = misc;
 					self(state, $($param),*);
