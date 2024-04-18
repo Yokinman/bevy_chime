@@ -1165,27 +1165,27 @@ where
 }
 
 /// Iterator of [`PredSubStateSplit`].
-pub enum PredCombSplit<'p, P, M, K>
+pub enum PredCombSplit<'p, T, P, M, K>
 where
 	P: PredParam,
 	M: PredStateMisc,
 	K: CombKind,
 {
-	Diff(PredComb<'p, crate::DynTimeRanges, P, M, K::Pal>),
-	Same(PredComb<'p, crate::DynTimeRanges, P, M, <<K::Inv as CombKind>::Pal as CombKind>::Inv>),
+	Diff(PredComb<'p, T, P, M, K::Pal>),
+	Same(PredComb<'p, T, P, M, <<K::Inv as CombKind>::Pal as CombKind>::Inv>),
 }
 
-impl<'p, P, M, K> Iterator for PredCombSplit<'p, P, M, K>
+impl<'p, T, P, M, K> Iterator for PredCombSplit<'p, T, P, M, K>
 where
 	P: PredParam,
 	M: PredStateMisc,
 	K: CombKind,
-	PredComb<'p, crate::DynTimeRanges, P, M, K::Pal>:
+	PredComb<'p, T, P, M, K::Pal>:
 		Iterator,
-	PredComb<'p, crate::DynTimeRanges, P, M, <<K::Inv as CombKind>::Pal as CombKind>::Inv>:
-		Iterator<Item = <PredComb<'p, crate::DynTimeRanges, P, M, K::Pal> as Iterator>::Item>,
+	PredComb<'p, T, P, M, <<K::Inv as CombKind>::Pal as CombKind>::Inv>:
+		Iterator<Item = <PredComb<'p, T, P, M, K::Pal> as Iterator>::Item>,
 {
-	type Item = <PredComb<'p, crate::DynTimeRanges, P, M, K::Pal> as Iterator>::Item;
+	type Item = <PredComb<'p, T, P, M, K::Pal> as Iterator>::Item;
 	fn next(&mut self) -> Option<Self::Item> {
 		match self {
 			Self::Diff(iter) => iter.next(),

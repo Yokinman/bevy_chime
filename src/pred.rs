@@ -171,14 +171,14 @@ where
 	P: PredParam,
 	M: PredStateMisc,
 	K: CombKind,
-	PredCombSplit<'p, P, M, K>: Iterator,
+	PredCombSplit<'p, crate::DynTimeRanges, P, M, K>: Iterator,
 	PredSubState<'p, 's, crate::DynTimeRanges, P, M, <K as CombKind>::Pal>:
 		IntoIterator<IntoIter = PredComb<'p, crate::DynTimeRanges, P, M, K::Pal>>,
 	PredSubState<'p, 's, crate::DynTimeRanges, P, M, <<K::Inv as CombKind>::Pal as CombKind>::Inv>:
 		IntoIterator<IntoIter = PredComb<'p, crate::DynTimeRanges, P, M, <<K::Inv as CombKind>::Pal as CombKind>::Inv>>,
 {
 	type Item = <Self::IntoIter as Iterator>::Item;
-	type IntoIter = PredCombSplit<'p, P, M, K>;
+	type IntoIter = PredCombSplit<'p, crate::DynTimeRanges, P, M, K>;
 	fn into_iter(self) -> Self::IntoIter {
 		match self {
 			Self::Diff(state) => PredCombSplit::Diff(state.into_iter()),
