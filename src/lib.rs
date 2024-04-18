@@ -31,7 +31,7 @@ pub trait AddChimeEvent {
 		P: PredParam + 'static,
 		M: PredStateMisc,
 		A: ReadOnlySystemParam + 'static,
-		F: PredFn<P, M, A> + Send + Sync + 'static;
+		F: PredFn<DynTimeRanges, P, M, A> + Send + Sync + 'static;
 }
 
 impl AddChimeEvent for App {
@@ -40,7 +40,7 @@ impl AddChimeEvent for App {
 		P: PredParam + 'static,
 		M: PredStateMisc,
 		A: ReadOnlySystemParam + 'static,
-		F: PredFn<P, M, A> + Send + Sync + 'static,
+		F: PredFn<DynTimeRanges, P, M, A> + Send + Sync + 'static,
 	{
 		assert!(self.is_plugin_added::<ChimePlugin>());
 		
@@ -101,20 +101,20 @@ impl AddChimeEvent for App {
 
 /// Specialized function used for predicting and scheduling events, functionally
 /// similar to a read-only [`bevy_ecs::system::SystemParamFunction`].
-pub trait PredFn<P, M, A>:
-	Fn(PredState<DynTimeRanges, P, M>, SystemParamItem<A>)
+pub trait PredFn<T, P, M, A>:
+	Fn(PredState<T, P, M>, SystemParamItem<A>)
 where
 	P: PredParam,
 	M: PredStateMisc,
 	A: ReadOnlySystemParam,
 {}
 
-impl<P, M, A, F> PredFn<P, M, A> for F
+impl<T, P, M, A, F> PredFn<T, P, M, A> for F
 where
 	P: PredParam,
 	M: PredStateMisc,
 	A: ReadOnlySystemParam,
-	F: Fn(PredState<DynTimeRanges, P, M>, SystemParamItem<A>),
+	F: Fn(PredState<T, P, M>, SystemParamItem<A>),
 {}
 
 /// Types that can be converted into a [`PredFn`].
@@ -127,9 +127,9 @@ where
 	// !!! This should probably be split into two traits, with the two separate
 	// methods (`into_events` and `into_events_with_id`).
 	
-	fn into_pred_fn(self) -> impl PredFn<P, M, A>;
+	fn into_pred_fn(self) -> impl PredFn<DynTimeRanges, P, M, A>;
 	
-	fn into_events(self) -> ChimeEventBuilder<P, M, A, impl PredFn<P, M, A>>
+	fn into_events(self) -> ChimeEventBuilder<P, M, A, impl PredFn<DynTimeRanges, P, M, A>>
 	where
 		(): std::borrow::Borrow<M>,
 		M: PredStateMisc<Item=()>,
@@ -141,7 +141,7 @@ where
 	}
 	
 	fn into_events_with_id(self, id: impl IntoIterator<Item=M::Item>)
-		-> ChimeEventBuilder<P, M, A, impl PredFn<P, M, A>>
+		-> ChimeEventBuilder<P, M, A, impl PredFn<DynTimeRanges, P, M, A>>
 	{
 		ChimeEventBuilder::new(self.into_pred_fn(), id)
 	}
@@ -160,7 +160,7 @@ macro_rules! impl_into_pred_fn {
 			P: PredParam,
 			M: PredStateMisc,
 		{
-			fn into_pred_fn(self) -> impl PredFn<P, M, ($($param,)*)> {
+			fn into_pred_fn(self) -> impl PredFn<DynTimeRanges, P, M, ($($param,)*)> {
 				move |state, misc| {
 					let ($($param,)*) = misc;
 					self(state, $($param),*);
@@ -198,7 +198,7 @@ where
 	P: PredParam,
 	M: PredStateMisc,
 	A: ReadOnlySystemParam,
-	F: PredFn<P, M, A>,
+	F: PredFn<DynTimeRanges, P, M, A>,
 {
 	pred_sys: F,
 	begin_sys: Option<Box<dyn ChimeEventSystem<P::Id, M::Item>>>,
@@ -213,7 +213,7 @@ where
 	P: PredParam,
 	M: PredStateMisc,
 	A: ReadOnlySystemParam,
-	F: PredFn<P, M, A>,
+	F: PredFn<DynTimeRanges, P, M, A>,
 {
 	fn new(pred_sys: F, id: impl IntoIterator<Item=M::Item>) -> Self {
 		ChimeEventBuilder {
