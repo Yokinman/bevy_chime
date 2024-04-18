@@ -1064,7 +1064,7 @@ where
 	curr: Option<<<P::Comb<'p> as PredCombinator>::IntoKind<K> as IntoIterator>::Item>,
 	misc_state: M,
 	misc_iter: M::MiscIter,
-	node: NodeWriter<'p, PredStateCase<P::Id, M::Item>>,
+	node: NodeWriter<'p, PredStateCase<(P::Id, M::Item)>>,
 }
 
 impl<'p, P, M, K> PredComb<'p, P, M, K>
@@ -1090,7 +1090,7 @@ where
 	K: CombKind,
 {
 	type Item = (
-		&'p mut PredStateCase<P::Id, M>,
+		&'p mut PredStateCase<(P::Id, M)>,
 		<PredParamItem<'p, P> as PredItem>::Ref,
 		M,
 	);
@@ -1099,7 +1099,7 @@ where
 			if let Some(misc) = self.misc_iter.next() {
 				let (item, id) = case.into_parts();
 				return Some((
-					self.node.write(PredStateCase::new(id, misc)),
+					self.node.write(PredStateCase::new((id, misc))),
 					item,
 					misc,
 				))
@@ -1135,7 +1135,7 @@ where
 	K: CombKind,
 {
 	type Item = (
-		&'p mut PredStateCase<P::Id, ()>,
+		&'p mut PredStateCase<(P::Id, ())>,
 		<PredParamItem<'p, P> as PredItem>::Ref,
 	);
 	fn next(&mut self) -> Option<Self::Item> {
@@ -1143,7 +1143,7 @@ where
 			let (item, id) = case.into_parts();
 			self.curr = self.iter.next();
 			return Some((
-				self.node.write(PredStateCase::new(id, ())),
+				self.node.write(PredStateCase::new((id, ()))),
 				item,
 			))
 		}
