@@ -1054,7 +1054,7 @@ where
 
 /// Produces all case combinations in need of a new prediction, alongside a
 /// [`PredStateCase`] for scheduling.
-pub struct PredComb<'p, P, M, K>
+pub struct PredComb<'p, T, P, M, K>
 where
 	P: PredParam,
 	M: PredStateMisc,
@@ -1064,10 +1064,10 @@ where
 	curr: Option<<<P::Comb<'p> as PredCombinator>::IntoKind<K> as IntoIterator>::Item>,
 	misc_state: M,
 	misc_iter: M::MiscIter,
-	node: NodeWriter<'p, PredStateCase<(P::Id, M::Item), crate::DynTimeRanges>>,
+	node: NodeWriter<'p, PredStateCase<(P::Id, M::Item), T>>,
 }
 
-impl<'p, P, M, K> PredComb<'p, P, M, K>
+impl<'p, P, M, K> PredComb<'p, crate::DynTimeRanges, P, M, K>
 where
 	P: PredParam,
 	M: PredStateMisc,
@@ -1083,14 +1083,15 @@ where
 	}
 }
 
-impl<'p, P, M, K> Iterator for PredComb<'p, P, WithId<M>, K>
+impl<'p, T, P, M, K> Iterator for PredComb<'p, T, P, WithId<M>, K>
 where
+	T: Iterator<Item = (std::time::Duration, std::time::Duration)>,
 	P: PredParam,
 	M: PredId,
 	K: CombKind,
 {
 	type Item = (
-		&'p mut PredStateCase<(P::Id, M), crate::DynTimeRanges>,
+		&'p mut PredStateCase<(P::Id, M), T>,
 		<PredParamItem<'p, P> as PredItem>::Ref,
 		M,
 	);
@@ -1129,13 +1130,14 @@ where
 	}
 }
 
-impl<'p, P, K> Iterator for PredComb<'p, P, (), K>
+impl<'p, T, P, K> Iterator for PredComb<'p, T, P, (), K>
 where
+	T: Iterator<Item = (std::time::Duration, std::time::Duration)>,
 	P: PredParam,
 	K: CombKind,
 {
 	type Item = (
-		&'p mut PredStateCase<(P::Id, ()), crate::DynTimeRanges>,
+		&'p mut PredStateCase<(P::Id, ()), T>,
 		<PredParamItem<'p, P> as PredItem>::Ref,
 	);
 	fn next(&mut self) -> Option<Self::Item> {
@@ -1169,8 +1171,8 @@ where
 	M: PredStateMisc,
 	K: CombKind,
 {
-	Diff(PredComb<'p, P, M, K::Pal>),
-	Same(PredComb<'p, P, M, <<K::Inv as CombKind>::Pal as CombKind>::Inv>),
+	Diff(PredComb<'p, crate::DynTimeRanges, P, M, K::Pal>),
+	Same(PredComb<'p, crate::DynTimeRanges, P, M, <<K::Inv as CombKind>::Pal as CombKind>::Inv>),
 }
 
 impl<'p, P, M, K> Iterator for PredCombSplit<'p, P, M, K>
@@ -1178,12 +1180,12 @@ where
 	P: PredParam,
 	M: PredStateMisc,
 	K: CombKind,
-	PredComb<'p, P, M, K::Pal>:
+	PredComb<'p, crate::DynTimeRanges, P, M, K::Pal>:
 		Iterator,
-	PredComb<'p, P, M, <<K::Inv as CombKind>::Pal as CombKind>::Inv>:
-		Iterator<Item = <PredComb<'p, P, M, K::Pal> as Iterator>::Item>,
+	PredComb<'p, crate::DynTimeRanges, P, M, <<K::Inv as CombKind>::Pal as CombKind>::Inv>:
+		Iterator<Item = <PredComb<'p, crate::DynTimeRanges, P, M, K::Pal> as Iterator>::Item>,
 {
-	type Item = <PredComb<'p, P, M, K::Pal> as Iterator>::Item;
+	type Item = <PredComb<'p, crate::DynTimeRanges, P, M, K::Pal> as Iterator>::Item;
 	fn next(&mut self) -> Option<Self::Item> {
 		match self {
 			Self::Diff(iter) => iter.next(),
