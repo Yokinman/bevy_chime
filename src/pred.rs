@@ -121,7 +121,7 @@ where
 {
 	iter: <P as PredParamVec>::Split<'p, K>,
 	misc_state: M,
-	branches: NodeWriter<'p, PredNodeBranch<'s, P, M::Item>>,
+	branches: NodeWriter<'p, PredNodeBranch<'s, crate::DynTimeRanges, P, M::Item>>,
 }
 
 impl<'p, 's, P, M, K> Iterator for PredSubStateSplitIter<'p, 's, P, M, K>
@@ -577,7 +577,7 @@ impl<'s, P: PredParam + 's, M: PredId> PredNode<'s, crate::DynTimeRanges, P, M> 
 		}
 	}
 	
-	fn init_branches(&mut self, cap: usize) -> NodeWriter<PredNodeBranch<'s, P, M>>
+	fn init_branches(&mut self, cap: usize) -> NodeWriter<PredNodeBranch<'s, crate::DynTimeRanges, P, M>>
 	where
 		P: PredParamVec
 	{
@@ -632,9 +632,9 @@ impl<T, P: PredParam, M: PredId> Iterator for PredNodeIter<'_, T, P, M> {
 }
 
 /// Individual branch of a [`PredNodeBranches`] type.
-type PredNodeBranch<'s, P, M> = (
+type PredNodeBranch<'s, T, P, M> = (
 	<<P as PredParamVec>::Head as PredParam>::Id,
-	PredNode<'s, crate::DynTimeRanges, <P as PredParamVec>::Tail, M>,
+	PredNode<'s, T, <P as PredParamVec>::Tail, M>,
 );
 
 /// Used to define a trait object for dynamic branching in [`PredNode`], as not
@@ -645,19 +645,19 @@ type PredNodeBranch<'s, P, M> = (
 /// would only support a subset of arrays instead of all sizes, which feels
 /// like an unnecessary constraint. Specialization would probably help here.
 pub trait PredNodeBranches<'s, T, P: PredParam, M> {
-	fn as_writer<'n>(&'n mut self) -> NodeWriter<'n, PredNodeBranch<'s, P, M>>
+	fn as_writer<'n>(&'n mut self) -> NodeWriter<'n, PredNodeBranch<'s, T, P, M>>
 	where
 		P: PredParamVec;
 	
 	fn into_branch_iter(&mut self) -> Box<dyn PredNodeBranchesIterator<'s, T, P, M> + 's>;
 }
 
-impl<'s, P, M> PredNodeBranches<'s, crate::DynTimeRanges, P, M> for Node<PredNodeBranch<'s, P, M>>
+impl<'s, P, M> PredNodeBranches<'s, crate::DynTimeRanges, P, M> for Node<PredNodeBranch<'s, crate::DynTimeRanges, P, M>>
 where
 	P: PredParamVec + 's,
 	M: PredId,
 {
-	fn as_writer<'n>(&'n mut self) -> NodeWriter<'n, PredNodeBranch<'s, P, M>>
+	fn as_writer<'n>(&'n mut self) -> NodeWriter<'n, PredNodeBranch<'s, crate::DynTimeRanges, P, M>>
 	where
 		P: PredParamVec
 	{
@@ -675,7 +675,7 @@ where
 
 /// Specific type of [`PredNodeBranchesIterator`] trait objects.
 pub struct PredNodeBranchesIter<'s, P: PredParamVec, M> {
-	node_iter: NodeIter<PredNodeBranch<'s, P, M>>,
+	node_iter: NodeIter<PredNodeBranch<'s, crate::DynTimeRanges, P, M>>,
 	branch_id: Option<<P::Head as PredParam>::Id>,
 	branch_iter: PredNodeIter<'s, crate::DynTimeRanges, P::Tail, M>,
 }
