@@ -458,16 +458,16 @@ where
 	}
 }
 
-impl<'p, 's, P, M, K> IntoIterator for PredSubState<'p, 's, crate::DynTimeRanges, P, M, K>
+impl<'p, 's, T, P, M, K> IntoIterator for PredSubState<'p, 's, T, P, M, K>
 where
 	's: 'p,
 	P: PredParam,
 	M: PredStateMisc,
 	K: CombKind,
-	PredComb<'p, crate::DynTimeRanges, P, M, K>: Iterator,
+	PredComb<'p, T, P, M, K>: Iterator,
 {
 	type Item = <Self::IntoIter as IntoIterator>::Item;
-	type IntoIter = PredComb<'p, crate::DynTimeRanges, P, M, K>;
+	type IntoIter = PredComb<'p, T, P, M, K>;
 	fn into_iter(self) -> Self::IntoIter {
 		PredComb::new(self)
 	}
@@ -557,14 +557,19 @@ impl<I: PredId> PredStateCase<I, crate::DynTimeRanges> {
 
 /// A one-way node that either stores an arbitrary amount of data or branches
 /// into sub-nodes.
-pub enum PredNode<'s, T, P: PredParam + 's, M> {
+pub enum PredNode<'s, T: 's, P: PredParam + 's, M> {
 	Blank,
 	Data(Node<PredStateCase<(P::Id, M), T>>),
 	Branches(Box<dyn PredNodeBranches<'s, T, P, M> + 's>),
 }
 
-impl<'s, P: PredParam + 's, M: PredId> PredNode<'s, crate::DynTimeRanges, P, M> {
-	pub fn init_data(&mut self, cap: usize) -> NodeWriter<PredStateCase<(P::Id, M), crate::DynTimeRanges>> {
+impl<'s, T, P, M> PredNode<'s, T, P, M>
+where
+	T: 's,
+	P: PredParam + 's,
+	M: PredId,
+{
+	pub fn init_data(&mut self, cap: usize) -> NodeWriter<PredStateCase<(P::Id, M), T>> {
 		if let Self::Blank = self {
 			*self = Self::Data(Node::with_capacity(cap));
 			if let Self::Data(node) = self {
@@ -577,7 +582,7 @@ impl<'s, P: PredParam + 's, M: PredId> PredNode<'s, crate::DynTimeRanges, P, M> 
 		}
 	}
 	
-	fn init_branches(&mut self, cap: usize) -> NodeWriter<PredNodeBranch<'s, crate::DynTimeRanges, P, M>>
+	fn init_branches(&mut self, cap: usize) -> NodeWriter<PredNodeBranch<'s, T, P, M>>
 	where
 		P: PredParamVec
 	{
@@ -652,19 +657,20 @@ pub trait PredNodeBranches<'s, T, P: PredParam, M> {
 	fn into_branch_iter(&mut self) -> Box<dyn PredNodeBranchesIterator<'s, T, P, M> + 's>;
 }
 
-impl<'s, P, M> PredNodeBranches<'s, crate::DynTimeRanges, P, M> for Node<PredNodeBranch<'s, crate::DynTimeRanges, P, M>>
+impl<'s, T, P, M> PredNodeBranches<'s, T, P, M> for Node<PredNodeBranch<'s, T, P, M>>
 where
+	T: 's,
 	P: PredParamVec + 's,
 	M: PredId,
 {
-	fn as_writer<'n>(&'n mut self) -> NodeWriter<'n, PredNodeBranch<'s, crate::DynTimeRanges, P, M>>
+	fn as_writer<'n>(&'n mut self) -> NodeWriter<'n, PredNodeBranch<'s, T, P, M>>
 	where
 		P: PredParamVec
 	{
 		NodeWriter::new(self)
 	}
 	
-	fn into_branch_iter(&mut self) -> Box<dyn PredNodeBranchesIterator<'s, crate::DynTimeRanges, P, M> + 's> {
+	fn into_branch_iter(&mut self) -> Box<dyn PredNodeBranchesIterator<'s, T, P, M> + 's> {
 		Box::new(PredNodeBranchesIter {
 			node_iter: std::mem::take(self).into_iter(),
 			branch_id: None,

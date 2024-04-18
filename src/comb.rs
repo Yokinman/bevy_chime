@@ -1067,13 +1067,13 @@ where
 	node: NodeWriter<'p, PredStateCase<(P::Id, M::Item), T>>,
 }
 
-impl<'p, P, M, K> PredComb<'p, crate::DynTimeRanges, P, M, K>
+impl<'p, T, P, M, K> PredComb<'p, T, P, M, K>
 where
 	P: PredParam,
 	M: PredStateMisc,
 	K: CombKind,
 {
-	pub fn new<'s: 'p>(state: PredSubState<'p, 's, crate::DynTimeRanges, P, M, K>) -> Self {
+	pub fn new<'s: 'p>(state: PredSubState<'p, 's, T, P, M, K>) -> Self {
 		let mut iter = state.comb.into_iter();
 		let node = state.node.init_data(4 * iter.size_hint().0.max(1));
 		let curr = iter.next();
