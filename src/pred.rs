@@ -596,7 +596,7 @@ impl<'s, P: PredParam + 's, M: PredId> PredNode<'s, P, M> {
 
 impl<'s, P: PredParam, M: PredId> IntoIterator for PredNode<'s, P, M> {
 	type Item = PredStateCase<(P::Id, M), crate::DynTimeRanges>;
-	type IntoIter = PredNodeIter<'s, P, M>;
+	type IntoIter = PredNodeIter<'s, crate::DynTimeRanges, P, M>;
 	fn into_iter(self) -> Self::IntoIter {
 		match self {
 			Self::Blank => PredNodeIter::Blank,
@@ -607,14 +607,14 @@ impl<'s, P: PredParam, M: PredId> IntoIterator for PredNode<'s, P, M> {
 }
 
 /// Iterator of [`PredNode`]'s items.
-pub enum PredNodeIter<'s, P: PredParam, M> {
+pub enum PredNodeIter<'s, T, P: PredParam, M> {
 	Blank,
-	Data(NodeIter<PredStateCase<(P::Id, M), crate::DynTimeRanges>>),
-	Branches(Box<dyn PredNodeBranchesIterator<'s, crate::DynTimeRanges, P, M> + 's>),
+	Data(NodeIter<PredStateCase<(P::Id, M), T>>),
+	Branches(Box<dyn PredNodeBranchesIterator<'s, T, P, M> + 's>),
 }
 
-impl<P: PredParam, M: PredId> Iterator for PredNodeIter<'_, P, M> {
-	type Item = PredStateCase<(P::Id, M), crate::DynTimeRanges>;
+impl<T, P: PredParam, M: PredId> Iterator for PredNodeIter<'_, T, P, M> {
+	type Item = PredStateCase<(P::Id, M), T>;
 	fn next(&mut self) -> Option<Self::Item> {
 		match self {
 			Self::Blank => None,
@@ -677,7 +677,7 @@ where
 pub struct PredNodeBranchesIter<'s, P: PredParamVec, M> {
 	node_iter: NodeIter<PredNodeBranch<'s, P, M>>,
 	branch_id: Option<<P::Head as PredParam>::Id>,
-	branch_iter: PredNodeIter<'s, P::Tail, M>,
+	branch_iter: PredNodeIter<'s, crate::DynTimeRanges, P::Tail, M>,
 }
 
 impl<'s, P, M> Iterator for PredNodeBranchesIter<'s, P, M>
