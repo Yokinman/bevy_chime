@@ -674,18 +674,18 @@ where
 }
 
 /// Specific type of [`PredNodeBranchesIterator`] trait objects.
-pub struct PredNodeBranchesIter<'s, P: PredParamVec, M> {
-	node_iter: NodeIter<PredNodeBranch<'s, crate::DynTimeRanges, P, M>>,
+pub struct PredNodeBranchesIter<'s, T, P: PredParamVec, M> {
+	node_iter: NodeIter<PredNodeBranch<'s, T, P, M>>,
 	branch_id: Option<<P::Head as PredParam>::Id>,
-	branch_iter: PredNodeIter<'s, crate::DynTimeRanges, P::Tail, M>,
+	branch_iter: PredNodeIter<'s, T, P::Tail, M>,
 }
 
-impl<'s, P, M> Iterator for PredNodeBranchesIter<'s, P, M>
+impl<'s, T, P, M> Iterator for PredNodeBranchesIter<'s, T, P, M>
 where
 	P: PredParamVec,
 	M: PredId,
 {
-	type Item = PredStateCase<(P::Id, M), crate::DynTimeRanges>;
+	type Item = PredStateCase<(P::Id, M), T>;
 	fn next(&mut self) -> Option<Self::Item> {
 		if let Some(case) = self.branch_iter.next() {
 			let (main_id, misc_id) = case.id;
@@ -712,7 +712,7 @@ pub trait PredNodeBranchesIterator<'s, T, P: PredParam, M>:
 	Iterator<Item = PredStateCase<(P::Id, M), T>>
 {}
 
-impl<'s, P, M> PredNodeBranchesIterator<'s, crate::DynTimeRanges, P, M> for PredNodeBranchesIter<'s, P, M>
+impl<'s, T, P, M> PredNodeBranchesIterator<'s, T, P, M> for PredNodeBranchesIter<'s, T, P, M>
 where
 	P: PredParamVec,
 	M: PredId,
