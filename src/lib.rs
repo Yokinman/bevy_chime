@@ -451,7 +451,7 @@ impl ChimeEventMap {
 	
 	/// Initializes an `EventMap` and returns its stored index.
 	fn setup_id<I: PredId>(&mut self) -> usize {
-		self.table.push(Box::<EventMap<I>>::default());
+		self.table.push(Box::<EventMap<I, DynTimeRanges>>::default());
 		self.table.len() - 1
 	}
 	
@@ -468,7 +468,7 @@ impl ChimeEventMap {
 		let event_map = self.table.get_mut(event_id)
 			.expect("id must be initialized with ChimeEventMap::setup_id")
 			.as_any_mut()
-			.downcast_mut::<EventMap<(I, M)>>()
+			.downcast_mut::<EventMap<(I, M), DynTimeRanges>>()
 			.expect("should always work");
 		
 		for case in input {
@@ -590,14 +590,14 @@ impl ChimeEventMap {
 }
 
 /// A set of events related to a common method of scheduling.
-struct EventMap<K> {
-	events: HashMap<K, ChimeEvent<DynTimeRanges>>,
+struct EventMap<K, T> {
+	events: HashMap<K, ChimeEvent<T>>,
 	
 	/// Reverse time-to-event map for quickly rescheduling events.
 	times: BTreeMap<Duration, Vec<K>>,
 }
 
-impl<K> Default for EventMap<K> {
+impl<K, T> Default for EventMap<K, T> {
 	fn default() -> Self {
 		EventMap {
 			events: HashMap::new(),
@@ -606,7 +606,11 @@ impl<K> Default for EventMap<K> {
 	}
 }
 
-impl<K: PredId> EventMap<K> {
+impl<K, T> EventMap<K, T>
+where
+	K: PredId,
+	T: Iterator<Item = (Duration, Duration)>,
+{
 	fn first_time(&self) -> Option<Duration> {
 		if let Some((&duration, _)) = self.times.first_key_value() {
 			Some(duration)
@@ -717,7 +721,11 @@ trait AnyEventMap {
 	fn run_first(&mut self, world: &mut World);
 }
 
-impl<K: PredId> AnyEventMap for EventMap<K> {
+impl<K, T> AnyEventMap for EventMap<K, T>
+where
+	K: PredId,
+	T: Iterator<Item = (Duration, Duration)> + 'static,
+{
 	fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
 		self
 	}
