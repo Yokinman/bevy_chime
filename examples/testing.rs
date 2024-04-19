@@ -202,13 +202,13 @@ fn add_many_dogs(world: &mut World) {
 	println!("COUNT: {n}");
 }
 
-fn when_func_a(state: PredState<crate::DynTimeRanges, Query<&Pos>>) {
+fn when_func_a(state: PredState<DynTimeRanges, Query<&Pos>>) {
 	// let a_time = Instant::now();
 	for (state, pos) in state {
 		let times =
 			(pos[0].when_eq(&((RIGHT - pos.radius) as f64))/* & pos[0].spd.when(Ordering::Greater, &0.)*/) |
 			(pos[0].when_eq(&((LEFT  + pos.radius) as f64))/* & pos[0].spd.when(Ordering::Less, &0.)*/);
-		state.set(times.pre());
+		state.set(DynTimeRanges::new(times.pre()));
 	}
 	// println!("  when_func_a: {:?}", Instant::now().duration_since(a_time));
 }
@@ -219,14 +219,14 @@ fn do_func_a(query: PredQuery<&mut Pos>, time: Res<Time>) {
 	pos_x.spd.val *= -1.;
 }
 
-fn when_func_b(state: PredState<crate::DynTimeRanges, Query<&Pos>>) {
+fn when_func_b(state: PredState<DynTimeRanges, Query<&Pos>>) {
 	// let a_time = Instant::now();
 	// let time = time.elapsed();
 	for (state, pos) in state {
 		let/* mut*/ times =
 			(pos[1].when_eq(&((TOP    - pos.radius) as f64)) /*& pos[1].spd.when(Ordering::Greater, &0.)*/) |
 			(pos[1].when_eq(&((BOTTOM + pos.radius) as f64)) /*& pos[1].spd.when(Ordering::Less, &0.)*/);
-		state.set(times.pre()/*.clone()*/);
+		state.set(DynTimeRanges::new(times.pre()/*.clone()*/));
 		// if times.find(|t| *t > time).is_none() && pos[1].at(time).spd.acc.val != 0. {
 		// 	println!("Wow! {time:?}, {:?}, {:?}\n  {:?}, spd: {:?}",
 		// 		(pos[1].poly(time) - chime::Constant::from((BOTTOM + pos.radius) as f64).into()),
@@ -273,7 +273,7 @@ fn outlier_func_b(query: PredQuery<&mut Pos>, time: Res<Time>) {
 	// 	pos[1].poly(pos[1].base_time())));
 }
 
-fn when_func_c(state: PredState<crate::DynTimeRanges, [Query<&Pos>; 2]>) {
+fn when_func_c(state: PredState<DynTimeRanges, [Query<&Pos>; 2]>) {
 	// let mut n = 0;
 	// let a_time = Instant::now();
 	for (state, pos) in state.outer_iter() {
@@ -294,7 +294,7 @@ fn when_func_c(state: PredState<crate::DynTimeRanges, [Query<&Pos>; 2]>) {
 			// let a_time = Instant::now();
 			let /*mut*/ times = pos_poly_vec.when_dis_eq(b_pos_vec, dis);
 			// println!("B: {:?}", Instant::now().duration_since(a_time));
-			state.set(times.pre()/*.clone()*/);
+			state.set(DynTimeRanges::new(times.pre()/*.clone()*/));
 			// print!(" -- {:?}", ((entity, b_entity), times.clone().collect::<Vec<_>>()));
 			
 			// println!("    k0 HERE {:?}", (entity, b_entity, timm.elapsed()));

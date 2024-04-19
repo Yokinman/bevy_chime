@@ -8,7 +8,6 @@ use bevy_ecs::prelude::{Query, Resource, World};
 use bevy_ecs::query::ArchetypeFilter;
 use bevy_ecs::system::{ReadOnlySystemParam, SystemMeta, SystemParam, SystemParamItem};
 use bevy_ecs::world::{Mut, unsafe_world_cell::UnsafeWorldCell};
-use chime::time::TimeRanges;
 use crate::node::*;
 use crate::comb::*;
 
@@ -396,45 +395,47 @@ where
 	}
 }
 
-impl<'p, 's, P, K> PredSubState<'p, 's, crate::DynTimeRanges, P, (), K>
+impl<'p, 's, T, P, K> PredSubState<'p, 's, T, P, (), K>
 where
 	's: 'p,
+	T: Iterator<Item = (Duration, Duration)> + Send + Sync + 'static,
 	P: PredParam,
 	K: CombKind,
 {
 	/// Sets all updated cases to the given times.
-	pub fn set<I>(self, times: TimeRanges<I>)
+	pub fn set<S>(self, times: S)
 	where
-		TimeRanges<I>: Iterator<Item = (Duration, Duration)> + Clone + Send + Sync + 'static
+		S: IntoIterator<IntoIter = T> + Clone,
 	{
 		let mut iter = self.into_iter();
 		if let Some((first, ..)) = iter.next() {
 			for (case, ..) in iter {
-				case.set(times.clone());
+				case.set(times.clone().into_iter());
 			}
-			first.set(times);
+			first.set(times.into_iter());
 		}
 	}
 }
 
-impl<'p, 's, P, M, K> PredSubState<'p, 's, crate::DynTimeRanges, P, WithId<M>, K>
+impl<'p, 's, T, P, M, K> PredSubState<'p, 's, T, P, WithId<M>, K>
 where
 	's: 'p,
+	T: Iterator<Item = (Duration, Duration)> + Send + Sync + 'static,
 	P: PredParam,
 	M: PredId,
 	K: CombKind,
 {
 	/// Sets all updated cases to the given times.
-	pub fn set<I>(self, times: TimeRanges<I>)
+	pub fn set<S>(self, times: S)
 	where
-		TimeRanges<I>: Iterator<Item = (Duration, Duration)> + Clone + Send + Sync + 'static
+		S: IntoIterator<IntoIter = T> + Clone,
 	{
 		let mut iter = self.into_iter();
 		if let Some((first, ..)) = iter.next() {
 			for (case, ..) in iter {
-				case.set(times.clone());
+				case.set(times.clone().into_iter());
 			}
-			first.set(times);
+			first.set(times.into_iter());
 		}
 	}
 }
@@ -544,14 +545,13 @@ impl<I: PredId, T> PredStateCase<I, T> {
 	}
 }
 
-impl<I: PredId> PredStateCase<I, crate::DynTimeRanges> {
-	pub fn set<T>(&mut self, times: TimeRanges<T>)
-	where
-		TimeRanges<T>: Iterator<Item = (Duration, Duration)> + Send + Sync + 'static
-	{
-		self.times = Some(crate::DynTimeRanges {
-			inner: Box::new(times)
-		});
+impl<I, T> PredStateCase<I, T>
+where
+	I: PredId,
+	T: Iterator<Item = (Duration, Duration)> + Send + Sync + 'static,
+{
+	pub fn set(&mut self, times: impl IntoIterator<IntoIter = T>) {
+		self.times = Some(times.into_iter());
 	}
 }
 
@@ -896,7 +896,7 @@ mod testing {
 		let update_vec = update_list.to_vec();
 		let b_update_vec = b_update_list.to_vec();
 		app.add_chime_events((move |
-			state: PredState<crate::DynTimeRanges, (Query<&Test>, Query<&TestB>)>,
+			state: PredState<DynTimeRanges, (Query<&Test>, Query<&TestB>)>,
 			a_query: Query<&Test>,
 			b_query: Query<&TestB>,
 			mut index: system::Local<usize>,
@@ -957,7 +957,7 @@ mod testing {
 		let update_vec = update_list.to_vec();
 		let b_update_vec = b_update_list.to_vec();
 		app.add_chime_events((move |
-			state: PredState<crate::DynTimeRanges, (Query<&Test>, Query<&TestB>)>,
+			state: PredState<DynTimeRanges, (Query<&Test>, Query<&TestB>)>,
 			a_query: Query<Ref<Test>>,
 			b_query: Query<Ref<TestB>>,
 			mut index: system::Local<usize>,
@@ -1100,7 +1100,7 @@ mod testing {
 		let n_choose_r = choose(N, R);
 		let update_vec = update_list.to_vec();
 		app.add_chime_events((move |
-			state: PredState<crate::DynTimeRanges, [Query<&Test>; R]>,
+			state: PredState<DynTimeRanges, [Query<&Test>; R]>,
 			query: Query<&Test>,
 			mut index: system::Local<usize>,
 		| {
@@ -1148,7 +1148,7 @@ mod testing {
 		 // Setup [`PredSubState::outer_iter`] Testing:
 		let update_vec = update_list.to_vec();
 		app.add_chime_events((move |
-			state: PredState<crate::DynTimeRanges, [Query<&Test>; R]>,
+			state: PredState<DynTimeRanges, [Query<&Test>; R]>,
 			query: Query<Ref<Test>>,
 			mut index: system::Local<usize>,
 		| {
