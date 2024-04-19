@@ -33,7 +33,7 @@ pub trait AddChimeEvent {
 		events: ChimeEventBuilder<T, P, M, A, F>,
 	) -> &mut Self
 	where
-		T: Iterator<Item = (Duration, Duration)> + Default + Send + Sync + 'static,
+		T: Iterator<Item = (Duration, Duration)> + Send + Sync + 'static,
 		P: PredParam + 'static,
 		M: PredStateMisc,
 		A: ReadOnlySystemParam + 'static,
@@ -46,7 +46,7 @@ impl AddChimeEvent for App {
 		events: ChimeEventBuilder<T, P, M, A, F>,
 	) -> &mut Self
 	where
-		T: Iterator<Item = (Duration, Duration)> + Default + Send + Sync + 'static,
+		T: Iterator<Item = (Duration, Duration)> + Send + Sync + 'static,
 		P: PredParam + 'static,
 		M: PredStateMisc,
 		A: ReadOnlySystemParam + 'static,
@@ -354,7 +354,7 @@ fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule)
 
 /// An individually scheduled event, generally owned by an `EventMap`.
 struct ChimeEvent<T> {
-	times: T,
+	times: Option<T>,
 	next_time: Option<Duration>,
 	next_end_time: Option<Duration>,
 	curr_time: Option<Duration>,
@@ -367,13 +367,10 @@ struct ChimeEvent<T> {
 	is_active: bool,
 }
 
-impl<T> Default for ChimeEvent<T>
-where
-	T: Default,
-{
+impl<T> Default for ChimeEvent<T> {
 	fn default() -> Self {
 		ChimeEvent {
-			times: T::default(),
+			times: None,
 			next_time: None,
 			next_end_time: None,
 			curr_time: None,
@@ -401,13 +398,14 @@ where
 		if next_time.is_some() {
 			return std::mem::take(next_time)
 		}
-		if let Some((a, b)) = self.times.next() {
-			self.next_time = Some(a);
-			self.next_end_time = Some(b);
-			self.next_time()
-		} else {
-			None
+		if let Some(times) = self.times.as_mut() {
+			if let Some((a, b)) = times.next() {
+				self.next_time = Some(a);
+				self.next_end_time = Some(b);
+				return self.next_time()
+			}
 		}
+		None
 	}
 }
 
@@ -488,7 +486,7 @@ impl ChimeEventMap {
 	where
 		I: PredId,
 		M: PredId,
-		T: Iterator<Item = (Duration, Duration)> + Default + 'static,
+		T: Iterator<Item = (Duration, Duration)> + 'static,
 	{
 		let event_map = self.table.get_mut(event_id)
 			.expect("id must be initialized with ChimeEventMap::setup_id")
@@ -521,8 +519,7 @@ impl ChimeEventMap {
 				
 				event
 			});
-			event.times = case_times
-				.unwrap_or_default();
+			event.times = case_times;
 			
 			 // Fetch Next Time:
 			event.next_time = None;
