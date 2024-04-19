@@ -422,14 +422,6 @@ impl DynTimeRanges {
 	}
 }
 
-impl Default for DynTimeRanges {
-	fn default() -> Self {
-		Self {
-			inner: Box::new(std::iter::empty()),
-		}
-	}
-}
-
 impl Iterator for DynTimeRanges {
 	type Item = (Duration, Duration);
 	fn next(&mut self) -> Option<Self::Item> {
