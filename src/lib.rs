@@ -410,11 +410,11 @@ where
 }
 
 /// ...
-pub struct DynTimeRanges {
+pub struct DynPred {
 	inner: Box<dyn Iterator<Item = (Duration, Duration)> + Send + Sync>,
 }
 
-impl DynTimeRanges {
+impl DynPred {
 	pub fn new(times: TimeRanges<impl TimeRangeIter>) -> Self {
 		Self {
 			inner: Box::new(times)
@@ -422,7 +422,7 @@ impl DynTimeRanges {
 	}
 }
 
-impl Iterator for DynTimeRanges {
+impl Iterator for DynPred {
 	type Item = (Duration, Duration);
 	fn next(&mut self) -> Option<Self::Item> {
 		self.inner.next()

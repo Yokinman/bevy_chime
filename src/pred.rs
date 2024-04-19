@@ -896,7 +896,7 @@ mod testing {
 		let update_vec = update_list.to_vec();
 		let b_update_vec = b_update_list.to_vec();
 		app.add_chime_events((move |
-			state: PredState<DynTimeRanges, (Query<&Test>, Query<&TestB>)>,
+			state: PredState<DynPred, (Query<&Test>, Query<&TestB>)>,
 			a_query: Query<&Test>,
 			b_query: Query<&TestB>,
 			mut index: system::Local<usize>,
@@ -957,7 +957,7 @@ mod testing {
 		let update_vec = update_list.to_vec();
 		let b_update_vec = b_update_list.to_vec();
 		app.add_chime_events((move |
-			state: PredState<DynTimeRanges, (Query<&Test>, Query<&TestB>)>,
+			state: PredState<DynPred, (Query<&Test>, Query<&TestB>)>,
 			a_query: Query<Ref<Test>>,
 			b_query: Query<Ref<TestB>>,
 			mut index: system::Local<usize>,
@@ -1100,7 +1100,7 @@ mod testing {
 		let n_choose_r = choose(N, R);
 		let update_vec = update_list.to_vec();
 		app.add_chime_events((move |
-			state: PredState<DynTimeRanges, [Query<&Test>; R]>,
+			state: PredState<DynPred, [Query<&Test>; R]>,
 			query: Query<&Test>,
 			mut index: system::Local<usize>,
 		| {
@@ -1148,7 +1148,7 @@ mod testing {
 		 // Setup [`PredSubState::outer_iter`] Testing:
 		let update_vec = update_list.to_vec();
 		app.add_chime_events((move |
-			state: PredState<DynTimeRanges, [Query<&Test>; R]>,
+			state: PredState<DynPred, [Query<&Test>; R]>,
 			query: Query<Ref<Test>>,
 			mut index: system::Local<usize>,
 		| {
