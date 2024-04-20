@@ -1085,7 +1085,7 @@ where
 
 impl<'p, T, P, M, K> Iterator for PredComb<'p, T, P, WithId<M>, K>
 where
-	T: Iterator<Item = (std::time::Duration, std::time::Duration)>,
+	T: chime::kind::Prediction,
 	P: PredParam,
 	M: PredId,
 	K: CombKind,
@@ -1132,7 +1132,7 @@ where
 
 impl<'p, T, P, K> Iterator for PredComb<'p, T, P, (), K>
 where
-	T: Iterator<Item = (std::time::Duration, std::time::Duration)>,
+	T: chime::kind::Prediction,
 	P: PredParam,
 	K: CombKind,
 {

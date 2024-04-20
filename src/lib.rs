@@ -33,7 +33,8 @@ pub trait AddChimeEvent {
 		events: ChimeEventBuilder<T, P, M, A, F>,
 	) -> &mut Self
 	where
-		T: Iterator<Item = (Duration, Duration)> + Send + Sync + 'static,
+		T: chime::kind::Prediction,
+		T::TimeRanges: Send + Sync + 'static,
 		P: PredParam + 'static,
 		M: PredStateMisc,
 		A: ReadOnlySystemParam + 'static,
@@ -46,7 +47,8 @@ impl AddChimeEvent for App {
 		events: ChimeEventBuilder<T, P, M, A, F>,
 	) -> &mut Self
 	where
-		T: Iterator<Item = (Duration, Duration)> + Send + Sync + 'static,
+		T: chime::kind::Prediction,
+		T::TimeRanges: Send + Sync + 'static,
 		P: PredParam + 'static,
 		M: PredStateMisc,
 		A: ReadOnlySystemParam + 'static,
@@ -66,7 +68,7 @@ impl AddChimeEvent for App {
 		assert!(begin_sys.is_some() || end_sys.is_some() || outlier_sys.is_some());
 		
 		let id = self.world.resource_mut::<ChimeEventMap>()
-			.setup_id::<(P::Id, M::Item), T>();
+			.setup_id::<(P::Id, M::Item), T::TimeRanges>();
 		
 		let mut state = system::SystemState::<(P::Param, A)>::new(
 			&mut self.world
@@ -409,32 +411,6 @@ where
 	}
 }
 
-/// ...
-pub struct DynPred {
-	inner: Box<dyn Iterator<Item = (Duration, Duration)> + Send + Sync>,
-}
-
-impl DynPred {
-	pub fn new<I: IntoIterator<Item = (Duration, Duration)>>(times: I) -> Self
-	where
-		<I as IntoIterator>::IntoIter: Send + Sync + 'static
-	{
-		Self {
-			inner: Box::new(times.into_iter())
-		}
-	}
-}
-
-impl Iterator for DynPred {
-	type Item = (Duration, Duration);
-	fn next(&mut self) -> Option<Self::Item> {
-		self.inner.next()
-	}
-	fn size_hint(&self) -> (usize, Option<usize>) {
-		self.inner.size_hint()
-	}
-}
-
 /// A set of independent `EventMap` values.
 #[derive(system::Resource, Default)]
 struct ChimeEventMap {
@@ -481,12 +457,13 @@ impl ChimeEventMap {
 	where
 		I: PredId,
 		M: PredId,
-		T: Iterator<Item = (Duration, Duration)> + 'static,
+		T: chime::kind::Prediction,
+		T::TimeRanges: 'static,
 	{
 		let event_map = self.table.get_mut(event_id)
 			.expect("id must be initialized with ChimeEventMap::setup_id")
 			.as_any_mut()
-			.downcast_mut::<EventMap<(I, M), T>>()
+			.downcast_mut::<EventMap<(I, M), T::TimeRanges>>()
 			.expect("should always work");
 		
 		for case in input {
@@ -494,7 +471,7 @@ impl ChimeEventMap {
 			
 			 // Fetch/Initialize Event:
 			let event = event_map.events.entry(case_id).or_insert_with(|| {
-				let mut event = ChimeEvent::<T>::default();
+				let mut event = ChimeEvent::<T::TimeRanges>::default();
 				
 				 // Initialize Systems:
 				world.insert_resource(PredSystemId {
@@ -514,7 +491,7 @@ impl ChimeEventMap {
 				
 				event
 			});
-			event.times = case_times;
+			event.times = case_times.map(|x| x.into_time_ranges());
 			
 			 // Fetch Next Time:
 			event.next_time = None;

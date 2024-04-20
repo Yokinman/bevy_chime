@@ -398,21 +398,18 @@ where
 impl<'p, 's, T, P, K> PredSubState<'p, 's, T, P, (), K>
 where
 	's: 'p,
-	T: Iterator<Item = (Duration, Duration)> + Send + Sync + 'static,
+	T: chime::kind::Prediction + Clone,
 	P: PredParam,
 	K: CombKind,
 {
 	/// Sets all updated cases to the given times.
-	pub fn set<S>(self, times: S)
-	where
-		S: IntoIterator<IntoIter = T> + Clone,
-	{
+	pub fn set(self, pred: T) {
 		let mut iter = self.into_iter();
 		if let Some((first, ..)) = iter.next() {
 			for (case, ..) in iter {
-				case.set(times.clone().into_iter());
+				case.set(pred.clone());
 			}
-			first.set(times.into_iter());
+			first.set(pred);
 		}
 	}
 }
@@ -420,22 +417,19 @@ where
 impl<'p, 's, T, P, M, K> PredSubState<'p, 's, T, P, WithId<M>, K>
 where
 	's: 'p,
-	T: Iterator<Item = (Duration, Duration)> + Send + Sync + 'static,
+	T: chime::kind::Prediction + Clone,
 	P: PredParam,
 	M: PredId,
 	K: CombKind,
 {
 	/// Sets all updated cases to the given times.
-	pub fn set<S>(self, times: S)
-	where
-		S: IntoIterator<IntoIter = T> + Clone,
-	{
+	pub fn set(self, pred: T) {
 		let mut iter = self.into_iter();
 		if let Some((first, ..)) = iter.next() {
 			for (case, ..) in iter {
-				case.set(times.clone().into_iter());
+				case.set(pred.clone());
 			}
-			first.set(times.into_iter());
+			first.set(pred);
 		}
 	}
 }
@@ -548,10 +542,10 @@ impl<I: PredId, T> PredStateCase<I, T> {
 impl<I, T> PredStateCase<I, T>
 where
 	I: PredId,
-	T: Iterator<Item = (Duration, Duration)> + Send + Sync + 'static,
+	T: chime::kind::Prediction,
 {
-	pub fn set(&mut self, times: impl IntoIterator<IntoIter = T>) {
-		self.times = Some(times.into_iter());
+	pub fn set(&mut self, pred: T) {
+		self.times = Some(pred);
 	}
 }
 
@@ -859,6 +853,7 @@ unsafe impl<D: PredQueryData, M: PredId> SystemParam for PredQuery<'_, '_, D, M>
 #[cfg(test)]
 mod testing {
 	use super::*;
+	use chime::kind::DynPred;
 	
 	#[derive(Component, Copy, Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
 	struct Test(usize);

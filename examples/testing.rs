@@ -5,7 +5,7 @@ use bevy::prelude::*;
 use bevy::window::PresentMode;
 
 use chime::*;
-use chime::kind::{Prediction, WhenDisEq, /*WhenDis, WhenEq, When*/};
+use chime::kind::{DynPred, Prediction, WhenDisEq, /*WhenDis, WhenEq, When*/};
 
 use std::time::{Duration, /*Instant*/};
 
@@ -205,10 +205,10 @@ fn add_many_dogs(world: &mut World) {
 fn when_func_a(state: PredState<DynPred, Query<&Pos>>) {
 	// let a_time = Instant::now();
 	for (state, pos) in state {
-		let times =
+		let pred =
 			(pos[0].when_eq(&((RIGHT - pos.radius) as f64))/* & pos[0].spd.when(Ordering::Greater, &0.)*/) |
 			(pos[0].when_eq(&((LEFT  + pos.radius) as f64))/* & pos[0].spd.when(Ordering::Less, &0.)*/);
-		state.set(DynPred::new(times.pre()));
+		state.set(DynPred::new(pred.pre()));
 	}
 	// println!("  when_func_a: {:?}", Instant::now().duration_since(a_time));
 }
@@ -223,11 +223,11 @@ fn when_func_b(state: PredState<DynPred, Query<&Pos>>) {
 	// let a_time = Instant::now();
 	// let time = time.elapsed();
 	for (state, pos) in state {
-		let/* mut*/ times =
+		let/* mut*/ pred =
 			(pos[1].when_eq(&((TOP    - pos.radius) as f64)) /*& pos[1].spd.when(Ordering::Greater, &0.)*/) |
 			(pos[1].when_eq(&((BOTTOM + pos.radius) as f64)) /*& pos[1].spd.when(Ordering::Less, &0.)*/);
-		state.set(DynPred::new(times.pre()/*.clone()*/));
-		// if times.find(|t| *t > time).is_none() && pos[1].at(time).spd.acc.val != 0. {
+		state.set(DynPred::new(pred.pre()/*.clone()*/));
+		// if pred.find(|t| *t > time).is_none() && pos[1].at(time).spd.acc.val != 0. {
 		// 	println!("Wow! {time:?}, {:?}, {:?}\n  {:?}, spd: {:?}",
 		// 		(pos[1].poly(time) - chime::Constant::from((BOTTOM + pos.radius) as f64).into()),
 		// 		(pos[1].poly(time) - chime::Constant::from((BOTTOM + pos.radius) as f64).into()).real_roots().collect::<Vec<_>>(),
@@ -292,18 +292,18 @@ fn when_func_c(state: PredState<DynPred, [Query<&Pos>; 2]>) {
 			let b_pos_vec = b_pos.poly_vec(b_pos.max_base_time());
 			// println!("A: {:?}", Instant::now().duration_since(a_time));
 			// let a_time = Instant::now();
-			let /*mut*/ times = pos_poly_vec.when_dis_eq(b_pos_vec, dis);
+			let /*mut*/ pred = pos_poly_vec.when_dis_eq(b_pos_vec, dis);
 			// println!("B: {:?}", Instant::now().duration_since(a_time));
-			state.set(DynPred::new(times.pre()/*.clone()*/));
-			// print!(" -- {:?}", ((entity, b_entity), times.clone().collect::<Vec<_>>()));
+			state.set(DynPred::new(pred.pre()/*.clone()*/));
+			// print!(" -- {:?}", ((entity, b_entity), pred.clone().collect::<Vec<_>>()));
 			
 			// println!("    k0 HERE {:?}", (entity, b_entity, timm.elapsed()));
-			// let me = times.clone().collect::<Vec<_>>();
+			// let me = pred.clone().collect::<Vec<_>>();
 			// println!("    k {:?}", (entity, b_entity, me));
 			
 			// let poss = pos;
 			// let b_poss = b_pos;
-			// for (mut t, z) in times.clone() {
+			// for (mut t, z) in pred.clone() {
 			// 	if z >= timm.elapsed() && t.max(timm.elapsed()) - timm.elapsed() <= 20*time::SEC {
 			// 		// https://www.desmos.com/calculator/pzgzy75bch
 			// 		// https://play.rust-lang.org/?version=nightly&mode=debug&edition=2021&gist=f8d1aa69f2cfca047d6411e0c23ab05d
