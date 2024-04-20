@@ -415,9 +415,12 @@ pub struct DynPred {
 }
 
 impl DynPred {
-	pub fn new(times: TimeRanges<impl TimeRangeIter>) -> Self {
+	pub fn new<I: IntoIterator<Item = (Duration, Duration)>>(times: I) -> Self
+	where
+		<I as IntoIterator>::IntoIter: Send + Sync + 'static
+	{
 		Self {
-			inner: Box::new(times)
+			inner: Box::new(times.into_iter())
 		}
 	}
 }

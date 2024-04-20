@@ -5,7 +5,7 @@ use bevy::prelude::*;
 use bevy::window::PresentMode;
 
 use chime::*;
-use chime::kind::{WhenDisEq, /*WhenDis, WhenEq, When*/};
+use chime::kind::{Prediction, WhenDisEq, /*WhenDis, WhenEq, When*/};
 
 use std::time::{Duration, /*Instant*/};
 
