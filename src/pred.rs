@@ -7,6 +7,7 @@ use bevy_ecs::prelude::{Query, Resource, World};
 use bevy_ecs::query::ArchetypeFilter;
 use bevy_ecs::system::{ReadOnlySystemParam, SystemMeta, SystemParam, SystemParamItem};
 use bevy_ecs::world::{Mut, unsafe_world_cell::UnsafeWorldCell};
+use chime::pred::Prediction;
 use crate::node::*;
 use crate::comb::*;
 
@@ -397,7 +398,7 @@ where
 impl<'p, 's, T, P, K> PredSubState<'p, 's, T, P, (), K>
 where
 	's: 'p,
-	T: chime::kind::Prediction + Clone,
+	T: Prediction + Clone,
 	P: PredParam,
 	K: CombKind,
 {
@@ -416,7 +417,7 @@ where
 impl<'p, 's, T, P, M, K> PredSubState<'p, 's, T, P, WithId<M>, K>
 where
 	's: 'p,
-	T: chime::kind::Prediction + Clone,
+	T: Prediction + Clone,
 	P: PredParam,
 	M: PredId,
 	K: CombKind,
@@ -541,7 +542,7 @@ impl<I: PredId, T> PredStateCase<I, T> {
 impl<I, T> PredStateCase<I, T>
 where
 	I: PredId,
-	T: chime::kind::Prediction,
+	T: Prediction,
 {
 	pub fn set(&mut self, pred: T) {
 		self.times = Some(pred);
@@ -852,7 +853,7 @@ unsafe impl<D: PredQueryData, M: PredId> SystemParam for PredQuery<'_, '_, D, M>
 #[cfg(test)]
 mod testing {
 	use super::*;
-	use chime::kind::DynPred;
+	use chime::pred::DynPred;
 	
 	#[derive(Component, Copy, Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
 	struct Test(usize);

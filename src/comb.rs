@@ -5,6 +5,7 @@ use bevy_ecs::component::Component;
 use bevy_ecs::entity::Entity;
 use bevy_ecs::query::{ArchetypeFilter, QueryIter};
 use bevy_ecs::system::{Query, Resource};
+use chime::pred::Prediction;
 use crate::node::NodeWriter;
 use crate::pred::*;
 
@@ -1085,7 +1086,7 @@ where
 
 impl<'p, T, P, M, K> Iterator for PredComb<'p, T, P, WithId<M>, K>
 where
-	T: chime::kind::Prediction,
+	T: Prediction,
 	P: PredParam,
 	M: PredId,
 	K: CombKind,
@@ -1132,7 +1133,7 @@ where
 
 impl<'p, T, P, K> Iterator for PredComb<'p, T, P, (), K>
 where
-	T: chime::kind::Prediction,
+	T: Prediction,
 	P: PredParam,
 	K: CombKind,
 {

@@ -24,6 +24,8 @@ use bevy_ecs::system::{IntoSystem, ReadOnlySystemParam, System, SystemParamItem}
 use bevy_ecs::world::{Mut, World};
 use bevy_time::Time;
 
+use chime::pred::Prediction;
+
 /// Builder entry point for adding chime events to a [`World`].
 pub trait AddChimeEvent {
 	fn add_chime_events<T, P, M, A, F>(
@@ -31,7 +33,7 @@ pub trait AddChimeEvent {
 		events: ChimeEventBuilder<T, P, M, A, F>,
 	) -> &mut Self
 	where
-		T: chime::kind::Prediction,
+		T: Prediction,
 		T::TimeRanges: Send + Sync + 'static,
 		P: PredParam + 'static,
 		M: PredStateMisc,
@@ -45,7 +47,7 @@ impl AddChimeEvent for App {
 		events: ChimeEventBuilder<T, P, M, A, F>,
 	) -> &mut Self
 	where
-		T: chime::kind::Prediction,
+		T: Prediction,
 		T::TimeRanges: Send + Sync + 'static,
 		P: PredParam + 'static,
 		M: PredStateMisc,
@@ -455,7 +457,7 @@ impl ChimeEventMap {
 	where
 		I: PredId,
 		M: PredId,
-		T: chime::kind::Prediction,
+		T: Prediction,
 		T::TimeRanges: 'static,
 	{
 		let event_map = self.table.get_mut(event_id)
