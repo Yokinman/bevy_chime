@@ -24,8 +24,6 @@ use bevy_ecs::system::{IntoSystem, ReadOnlySystemParam, System, SystemParamItem}
 use bevy_ecs::world::{Mut, World};
 use bevy_time::Time;
 
-use chime::time::{TimeRangeIter, TimeRanges};
-
 /// Builder entry point for adding chime events to a [`World`].
 pub trait AddChimeEvent {
 	fn add_chime_events<T, P, M, A, F>(
