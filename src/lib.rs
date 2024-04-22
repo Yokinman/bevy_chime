@@ -139,7 +139,7 @@ where
 	A: ReadOnlySystemParam,
 {
 	// !!! This should probably be split into two traits, with the two separate
-	// methods (`into_events` and `into_events_with_id`).
+	// methods (`into_events` and `into_events_with_input`).
 	
 	fn into_pred_fn(self) -> impl PredFn<T, P, M, A>;
 	
@@ -154,7 +154,7 @@ where
 		)
 	}
 	
-	fn into_events_with_id(self, id: impl IntoIterator<Item=M::Item>)
+	fn into_events_with_input(self, id: impl IntoIterator<Item=M::Item>)
 		-> ChimeEventBuilder<T, P, M, A, impl PredFn<T, P, M, A>>
 	{
 		ChimeEventBuilder::new(self.into_pred_fn(), id)
