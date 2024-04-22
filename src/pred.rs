@@ -796,17 +796,12 @@ impl<A: PredQueryData, B: PredQueryData> PredQueryData for (A, B) {
 
 /// Prediction data fed as a parameter to an event's systems.
 pub struct PredQuery<'world, D: PredQueryData> {
-    world: UnsafeWorldCell<'world>,
-    state: D::Id,
+    inner: D::Output<'world>,
 }
 
 impl<'w, D: PredQueryData> PredQuery<'w, D> {
 	pub fn get_inner(self) -> D::Output<'w> {
-		unsafe {
-			// SAFETY: Right now this method consumes `self`. If it could be
-			// called multiple times, the returned values would overlap.
-			<D as PredQueryData>::get_inner(self.world, self.state)
-		}
+		self.inner
 	}
 }
 
@@ -835,8 +830,10 @@ unsafe impl<D: PredQueryData> SystemParam for PredQuery<'_, D> {
 	// }
 	unsafe fn get_param<'world, 'state>(state: &'state mut Self::State, _system_meta: &SystemMeta, world: UnsafeWorldCell<'world>, _change_tick: Tick) -> Self::Item<'world, 'state> {
 		PredQuery {
-			world,
-			state: *state,
+			inner: unsafe {
+				// SAFETY: ...
+				D::get_inner(world, *state)
+			}
 		}
 	}
 }
