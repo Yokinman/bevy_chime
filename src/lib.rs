@@ -474,7 +474,7 @@ impl ChimeEventMap {
 				let mut event = ChimeEvent::<T::TimeRanges>::default();
 				
 				 // Initialize Systems:
-				world.insert_resource(PredSystemId {
+				world.insert_resource(PredSystemInput {
 					id: Box::new(case_id.0),
 					misc_id: Box::new(case_id.1),
 				});
@@ -487,7 +487,7 @@ impl ChimeEventMap {
 				if let Some(sys) = outlier_sys {
 					sys.init_sys(&mut event.outlier_sys, world);
 				}
-				world.remove_resource::<PredSystemId>();
+				world.remove_resource::<PredSystemInput>();
 				
 				event
 			});

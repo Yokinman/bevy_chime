@@ -13,7 +13,7 @@ use crate::comb::*;
 
 /// Resource for passing an event's unique ID to its system parameters. 
 #[derive(Resource)]
-pub(crate) struct PredSystemId {
+pub(crate) struct PredSystemInput {
 	pub id: Box<dyn std::any::Any + Send + Sync>,
 	pub misc_id: Box<dyn std::any::Any + Send + Sync>,
 }
@@ -815,8 +815,8 @@ unsafe impl<D: PredQueryData> SystemParam for PredQuery<'_, D> {
 	type Item<'world, 'state> = PredQuery<'world, D>;
 	fn init_state(world: &mut World, system_meta: &mut SystemMeta) -> Self::State {
 		// !!! Check for component access overlap. This isn't safe right now.
-		if let Some(PredSystemId { id, .. }) = world
-			.get_resource::<PredSystemId>()
+		if let Some(PredSystemInput { id, .. }) = world
+			.get_resource::<PredSystemInput>()
 		{
 			if let Some(id) = id.downcast_ref::<D::Id>() {
 				*id
@@ -851,8 +851,8 @@ where
 	type State = M;
 	type Item<'world, 'state> = PredMisc<M>;
 	fn init_state(world: &mut World, system_meta: &mut SystemMeta) -> Self::State {
-		if let Some(PredSystemId { misc_id, .. }) = world
-			.get_resource::<PredSystemId>()
+		if let Some(PredSystemInput { misc_id, .. }) = world
+			.get_resource::<PredSystemInput>()
 		{
 			if let Some(misc_id) = misc_id.downcast_ref::<M>() {
 				*misc_id
