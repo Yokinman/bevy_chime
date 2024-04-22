@@ -189,14 +189,12 @@ impl_into_pred_fn!(@all
 );
 
 /// Begin/end-type system for a chime event (object-safe).
-trait ChimeEventSystem<I: PredId, M: PredId>: System<In=(), Out=()> + Send + Sync {
+trait ChimeEventSystem: System<In=(), Out=()> + Send + Sync {
 	fn init_sys(&self, store: &mut Option<Box<dyn System<In=(), Out=()>>>, world: &mut World);
 }
 
-impl<I, M, T> ChimeEventSystem<I, M> for T
+impl<T> ChimeEventSystem for T
 where
-	I: PredId,
-	M: PredId,
 	T: System<In=(), Out=()> + Send + Sync + Clone,
 {
 	fn init_sys(&self, store: &mut Option<Box<dyn System<In=(), Out=()>>>, world: &mut World) {
@@ -215,9 +213,9 @@ where
 	F: PredFn<T, P, M, A>,
 {
 	pred_sys: F,
-	begin_sys: Option<Box<dyn ChimeEventSystem<P::Id, M::Item>>>,
-	end_sys: Option<Box<dyn ChimeEventSystem<P::Id, M::Item>>>,
-	outlier_sys: Option<Box<dyn ChimeEventSystem<P::Id, M::Item>>>,
+	begin_sys: Option<Box<dyn ChimeEventSystem>>,
+	end_sys: Option<Box<dyn ChimeEventSystem>>,
+	outlier_sys: Option<Box<dyn ChimeEventSystem>>,
 	misc_state: Box<[M::Item]>,
 	_param: std::marker::PhantomData<fn(PredState<T, P, M>, SystemParamItem<A>)>,
 }
@@ -451,9 +449,9 @@ impl ChimeEventMap {
 		input: impl IntoIterator<Item = PredStateCase<(I, M), T>>,
 		pred_time: Duration,
 		event_id: usize,
-		begin_sys: Option<&dyn ChimeEventSystem<I, M>>,
-		end_sys: Option<&dyn ChimeEventSystem<I, M>>,
-		outlier_sys: Option<&dyn ChimeEventSystem<I, M>>,
+		begin_sys: Option<&dyn ChimeEventSystem>,
+		end_sys: Option<&dyn ChimeEventSystem>,
+		outlier_sys: Option<&dyn ChimeEventSystem>,
 		world: &mut World,
 	)
 	where
