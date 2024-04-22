@@ -799,6 +799,7 @@ impl<A: PredQueryData, B: PredQueryData> PredQueryData for (A, B) {
 /// Prediction data fed as a parameter to an event's systems.
 pub struct PredQuery<'world, D: PredQueryData> {
     inner: D::Output<'world>,
+	time: std::time::Duration,
 }
 
 impl<'w, D: PredQueryData> PredQuery<'w, D> {
@@ -816,7 +817,7 @@ where
 	pub fn moment(&self)
 		-> MomentRef<<<D::Output<'w> as Deref>::Target as Flux>::Moment>
 	{
-		self.inner.at(std::time::Duration::ZERO)
+		self.inner.at(self.time)
 	}
 	
 	/// ...
@@ -825,7 +826,7 @@ where
 	where
 		D::Output<'w>: DerefMut,
 	{
-		self.inner.at_mut(std::time::Duration::ZERO)
+		self.inner.at_mut(self.time)
 	}
 }
 
@@ -854,10 +855,10 @@ unsafe impl<D: PredQueryData> SystemParam for PredQuery<'_, D> {
 	// }
 	unsafe fn get_param<'world, 'state>(state: &'state mut Self::State, _system_meta: &SystemMeta, world: UnsafeWorldCell<'world>, _change_tick: Tick) -> Self::Item<'world, 'state> {
 		PredQuery {
-			inner: unsafe {
-				// SAFETY: ...
-				D::get_inner(world, *state)
-			}
+			inner: D::get_inner(world, *state),
+			time: world.get_resource::<bevy_time::Time>()
+				.expect("world must have a Time value")
+				.elapsed(),
 		}
 	}
 }
