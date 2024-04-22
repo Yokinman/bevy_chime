@@ -871,6 +871,13 @@ where
 	}
 }
 
+impl<M> std::ops::Deref for PredInput<M> {
+	type Target = M;
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
 #[cfg(test)]
 mod testing {
 	use super::*;
