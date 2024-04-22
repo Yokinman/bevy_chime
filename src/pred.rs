@@ -795,49 +795,37 @@ impl<A: PredQueryData, B: PredQueryData> PredQueryData for (A, B) {
 }
 
 /// Prediction data fed as a parameter to an event's systems.
-pub struct PredQuery<'world, 'state, D: PredQueryData, M = ()> {
+pub struct PredQuery<'world, D: PredQueryData> {
     world: UnsafeWorldCell<'world>,
-    state: &'state (D::Id, M),
+    state: D::Id,
 }
 
-impl<'w, D: PredQueryData, M: PredId> PredQuery<'w, '_, D, M> {
+impl<'w, D: PredQueryData> PredQuery<'w, D> {
 	pub fn get_inner(self) -> D::Output<'w> {
 		unsafe {
 			// SAFETY: Right now this method consumes `self`. If it could be
 			// called multiple times, the returned values would overlap.
-			<D as PredQueryData>::get_inner(self.world, self.state.0)
+			<D as PredQueryData>::get_inner(self.world, self.state)
 		}
-	}
-	pub fn misc_id(&self) -> M {
-		self.state.1
 	}
 }
 
-unsafe impl<D: PredQueryData, M: PredId> SystemParam for PredQuery<'_, '_, D, M> {
-	type State = (D::Id, M);
-	type Item<'world, 'state> = PredQuery<'world, 'state, D, M>;
+unsafe impl<D: PredQueryData> SystemParam for PredQuery<'_, D> {
+	type State = D::Id;
+	type Item<'world, 'state> = PredQuery<'world, D>;
 	fn init_state(world: &mut World, system_meta: &mut SystemMeta) -> Self::State {
 		// !!! Check for component access overlap. This isn't safe right now.
-		if let Some(PredSystemId { id, misc_id }) = world
+		if let Some(PredSystemId { id, .. }) = world
 			.get_resource::<PredSystemId>()
 		{
-			let id = if let Some(id) = id.downcast_ref::<D::Id>() {
+			if let Some(id) = id.downcast_ref::<D::Id>() {
 				*id
 			} else {
 				panic!(
 					"!!! parameter is for wrong ID type. got {:?}",
 					std::any::type_name::<D::Id>()
 				);
-			};
-			let misc_id = if let Some(misc_id) = misc_id.downcast_ref::<M>() {
-				*misc_id
-			} else {
-				panic!(
-					"!!! misc parameter is for wrong ID type. got {:?}",
-					std::any::type_name::<M>()
-				);
-			};
-			(id, misc_id)
+			}
 		} else {
 			panic!("!!! {:?} is not a Chime event system, it can't use this parameter type", system_meta.name());
 		}
@@ -846,7 +834,10 @@ unsafe impl<D: PredQueryData, M: PredId> SystemParam for PredQuery<'_, '_, D, M>
 	// 	todo!()
 	// }
 	unsafe fn get_param<'world, 'state>(state: &'state mut Self::State, _system_meta: &SystemMeta, world: UnsafeWorldCell<'world>, _change_tick: Tick) -> Self::Item<'world, 'state> {
-		PredQuery { world, state }
+		PredQuery {
+			world,
+			state: *state,
+		}
 	}
 }
 
@@ -863,15 +854,14 @@ where
 		if let Some(PredSystemId { misc_id, .. }) = world
 			.get_resource::<PredSystemId>()
 		{
-			let misc_id = if let Some(misc_id) = misc_id.downcast_ref::<M>() {
+			if let Some(misc_id) = misc_id.downcast_ref::<M>() {
 				*misc_id
 			} else {
 				panic!(
 					"!!! misc parameter is for wrong ID type. got {:?}",
 					std::any::type_name::<M>()
 				);
-			};
-			misc_id
+			}
 		} else {
 			panic!("!!! {:?} is not a Chime event system, it can't use this parameter type", system_meta.name());
 		}
