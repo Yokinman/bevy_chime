@@ -842,14 +842,14 @@ unsafe impl<D: PredQueryData> SystemParam for PredQuery<'_, D> {
 }
 
 /// Misc prediction data fed as a parameter to an event's systems.
-pub struct PredMisc<M>(pub M);
+pub struct PredInput<M>(pub M);
 
-unsafe impl<M> SystemParam for PredMisc<M>
+unsafe impl<M> SystemParam for PredInput<M>
 where
 	M: PredId
 {
 	type State = M;
-	type Item<'world, 'state> = PredMisc<M>;
+	type Item<'world, 'state> = PredInput<M>;
 	fn init_state(world: &mut World, system_meta: &mut SystemMeta) -> Self::State {
 		if let Some(PredSystemInput { misc_id, .. }) = world
 			.get_resource::<PredSystemInput>()
@@ -867,7 +867,7 @@ where
 		}
 	}
 	unsafe fn get_param<'world, 'state>(state: &'state mut Self::State, _system_meta: &SystemMeta, _world: UnsafeWorldCell<'world>, _change_tick: Tick) -> Self::Item<'world, 'state> {
-		PredMisc(*state)
+		PredInput(*state)
 	}
 }
 
