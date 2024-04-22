@@ -800,18 +800,18 @@ impl<A: PredQueryData, B: PredQueryData> PredQueryData for (A, B) {
 }
 
 /// Prediction data fed as a parameter to an event's systems.
-pub struct PredQuery<'world, D: PredQueryData> {
+pub struct PredFetch<'world, D: PredQueryData> {
     inner: D::Output<'world>,
 	time: Duration,
 }
 
-impl<'w, D: PredQueryData> PredQuery<'w, D> {
+impl<'w, D: PredQueryData> PredFetch<'w, D> {
 	pub fn get_inner(self) -> D::Output<'w> {
 		self.inner
 	}
 }
 
-impl<'w, D: PredQueryData> PredQuery<'w, D>
+impl<'w, D: PredQueryData> PredFetch<'w, D>
 where
 	D::Output<'w>: Deref,
 	<D::Output<'w> as Deref>::Target: Flux + Clone,
@@ -833,9 +833,9 @@ where
 	}
 }
 
-unsafe impl<D: PredQueryData> SystemParam for PredQuery<'_, D> {
+unsafe impl<D: PredQueryData> SystemParam for PredFetch<'_, D> {
 	type State = (D::Id, Arc<Mutex<Duration>>);
-	type Item<'world, 'state> = PredQuery<'world, D>;
+	type Item<'world, 'state> = PredFetch<'world, D>;
 	fn init_state(world: &mut World, system_meta: &mut SystemMeta) -> Self::State {
 		// !!! Check for component access overlap. This isn't safe right now.
 		if let Some(PredSystemInput { id, time, .. }) = world
@@ -857,7 +857,7 @@ unsafe impl<D: PredQueryData> SystemParam for PredQuery<'_, D> {
 	// 	todo!()
 	// }
 	unsafe fn get_param<'world, 'state>((id, time): &'state mut Self::State, _system_meta: &SystemMeta, world: UnsafeWorldCell<'world>, _change_tick: Tick) -> Self::Item<'world, 'state> {
-		PredQuery {
+		PredFetch {
 			inner: D::get_inner(world, *id),
 			time: *time.lock().expect("should be available"),
 		}

@@ -213,7 +213,7 @@ fn when_func_a(state: PredState<DynPred, Query<&Pos>>) {
 	// println!("  when_func_a: {:?}", Instant::now().duration_since(a_time));
 }
 
-fn do_func_a(query: PredQuery<&mut Pos>, time: Res<Time>) {
+fn do_func_a(query: PredFetch<&mut Pos>, time: Res<Time>) {
 	let mut pos = query.get_inner();
 	let mut pos_x = pos[0].at_mut(time.elapsed());
 	pos_x.spd.val *= -1.;
@@ -239,7 +239,7 @@ fn when_func_b(state: PredState<DynPred, Query<&Pos>>) {
 	// println!("  when_func_b: {:?}", Instant::now().duration_since(a_time));
 }
 
-fn do_func_b(query: PredQuery<&mut Pos>, time: Res<Time>) {
+fn do_func_b(query: PredFetch<&mut Pos>, time: Res<Time>) {
 	let mut pos = query.get_inner();
 	let mut poss = pos.at_vec_mut(time.elapsed());
 	let pos_y = &mut poss[1];
@@ -261,7 +261,7 @@ fn do_func_b(query: PredQuery<&mut Pos>, time: Res<Time>) {
 	// ));
 }
 
-fn outlier_func_b(query: PredQuery<&mut Pos>, time: Res<Time>) {
+fn outlier_func_b(query: PredFetch<&mut Pos>, time: Res<Time>) {
 	let mut pos = query.get_inner();
 	let mut pos_y = pos[1].at_mut(time.elapsed());
 	pos_y.spd.val = 0.;
@@ -360,7 +360,7 @@ fn when_func_c(state: PredState<DynPred, [Query<&Pos>; 2]>) {
 	// println!("  when_func_c ({n}): {:?}", Instant::now().duration_since(a_time));
 }
 
-fn do_func_c(query: PredQuery<[&mut Pos; 2]>, time: Res<Time>) {
+fn do_func_c(query: PredFetch<[&mut Pos; 2]>, time: Res<Time>) {
 	let [mut poss, mut b_poss] = query.get_inner();
 	
 	let poly = (poss[0].poly(poss[0].base_time()) - b_poss[0].poly(b_poss[0].base_time())).sqr()
@@ -441,7 +441,7 @@ fn do_func_c(query: PredQuery<[&mut Pos; 2]>, time: Res<Time>) {
 	// assert!(poly.rate_at(time.elapsed()) >= 0., "{:?}", poly);
 }
 
-fn outlier_func_c(query: PredQuery<[&mut Pos; 2]>, time: Res<Time>) {
+fn outlier_func_c(query: PredFetch<[&mut Pos; 2]>, time: Res<Time>) {
 	let [mut poss, mut b_poss] = query.get_inner();
 	let mut pos = poss.at_vec_mut(time.elapsed());
 	let mut b_pos = b_poss.at_vec_mut(time.elapsed());
