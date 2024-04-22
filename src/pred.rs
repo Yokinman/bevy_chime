@@ -1,6 +1,8 @@
 use std::hash::Hash;
 use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use bevy_ecs::change_detection::{DetectChanges, Ref, Res};
 use bevy_ecs::component::{Component, Tick};
 use bevy_ecs::entity::Entity;
@@ -18,6 +20,7 @@ use crate::comb::*;
 pub(crate) struct PredSystemInput {
 	pub id: Box<dyn std::any::Any + Send + Sync>,
 	pub misc_id: Box<dyn std::any::Any + Send + Sync>,
+	pub time: Arc<Mutex<Duration>>,
 }
 
 /// A hashable unique identifier for a case of prediction.
@@ -799,7 +802,7 @@ impl<A: PredQueryData, B: PredQueryData> PredQueryData for (A, B) {
 /// Prediction data fed as a parameter to an event's systems.
 pub struct PredQuery<'world, D: PredQueryData> {
     inner: D::Output<'world>,
-	time: std::time::Duration,
+	time: Duration,
 }
 
 impl<'w, D: PredQueryData> PredQuery<'w, D> {
@@ -831,15 +834,15 @@ where
 }
 
 unsafe impl<D: PredQueryData> SystemParam for PredQuery<'_, D> {
-	type State = D::Id;
+	type State = (D::Id, Arc<Mutex<Duration>>);
 	type Item<'world, 'state> = PredQuery<'world, D>;
 	fn init_state(world: &mut World, system_meta: &mut SystemMeta) -> Self::State {
 		// !!! Check for component access overlap. This isn't safe right now.
-		if let Some(PredSystemInput { id, .. }) = world
+		if let Some(PredSystemInput { id, time, .. }) = world
 			.get_resource::<PredSystemInput>()
 		{
 			if let Some(id) = id.downcast_ref::<D::Id>() {
-				*id
+				(*id, Arc::clone(time))
 			} else {
 				panic!(
 					"!!! parameter is for wrong ID type. got {:?}",
@@ -853,12 +856,10 @@ unsafe impl<D: PredQueryData> SystemParam for PredQuery<'_, D> {
 	// fn new_archetype(_state: &mut Self::State, _archetype: &Archetype, _system_meta: &mut SystemMeta) {
 	// 	todo!()
 	// }
-	unsafe fn get_param<'world, 'state>(state: &'state mut Self::State, _system_meta: &SystemMeta, world: UnsafeWorldCell<'world>, _change_tick: Tick) -> Self::Item<'world, 'state> {
+	unsafe fn get_param<'world, 'state>((id, time): &'state mut Self::State, _system_meta: &SystemMeta, world: UnsafeWorldCell<'world>, _change_tick: Tick) -> Self::Item<'world, 'state> {
 		PredQuery {
-			inner: D::get_inner(world, *state),
-			time: world.get_resource::<bevy_time::Time>()
-				.expect("world must have a Time value")
-				.elapsed(),
+			inner: D::get_inner(world, *id),
+			time: *time.lock().expect("should be available"),
 		}
 	}
 }

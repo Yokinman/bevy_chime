@@ -356,6 +356,7 @@ fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule)
 
 /// An individually scheduled event, generally owned by an `EventMap`.
 struct ChimeEvent<T> {
+	time: std::sync::Arc<std::sync::Mutex<Duration>>,
 	times: Option<InclusiveTimeRanges<T>>,
 	next_time: Option<Duration>,
 	next_end_time: Option<Duration>,
@@ -372,6 +373,7 @@ struct ChimeEvent<T> {
 impl<T> Default for ChimeEvent<T> {
 	fn default() -> Self {
 		ChimeEvent {
+			time: std::sync::Arc::new(std::sync::Mutex::new(Duration::ZERO)),
 			times: None,
 			next_time: None,
 			next_end_time: None,
@@ -477,6 +479,7 @@ impl ChimeEventMap {
 				world.insert_resource(PredSystemInput {
 					id: Box::new(case_id.0),
 					misc_id: Box::new(case_id.1),
+					time: event.time,
 				});
 				if let Some(sys) = begin_sys {
 					sys.init_sys(&mut event.begin_sys, world);
@@ -487,7 +490,11 @@ impl ChimeEventMap {
 				if let Some(sys) = outlier_sys {
 					sys.init_sys(&mut event.outlier_sys, world);
 				}
-				world.remove_resource::<PredSystemInput>();
+				if let Some(input) = world.remove_resource::<PredSystemInput>() {
+					event.time = input.time;
+				} else {
+					unreachable!()
+				}
 				
 				event
 			});
@@ -553,6 +560,9 @@ impl ChimeEventMap {
 					} else {
 						list.insert(0, case_id); // Begin events (run last)
 					}
+					
+					 // Update Time Used by `Pred` Parameters:
+					*event.time.lock().expect("should be available") = time;
 				}
 			}
 		}
