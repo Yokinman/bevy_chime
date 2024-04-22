@@ -1,4 +1,5 @@
 use std::hash::Hash;
+use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 use bevy_ecs::change_detection::{DetectChanges, Ref, Res};
 use bevy_ecs::component::{Component, Tick};
@@ -7,6 +8,7 @@ use bevy_ecs::prelude::{Query, Resource, World};
 use bevy_ecs::query::ArchetypeFilter;
 use bevy_ecs::system::{ReadOnlySystemParam, SystemMeta, SystemParam, SystemParamItem};
 use bevy_ecs::world::{Mut, unsafe_world_cell::UnsafeWorldCell};
+use chime::{Flux, MomentRef, MomentRefMut};
 use chime::pred::Prediction;
 use crate::node::*;
 use crate::comb::*;
@@ -805,6 +807,28 @@ impl<'w, D: PredQueryData> PredQuery<'w, D> {
 	}
 }
 
+impl<'w, D: PredQueryData> PredQuery<'w, D>
+where
+	D::Output<'w>: Deref,
+	<D::Output<'w> as Deref>::Target: Flux + Clone,
+{
+	/// ...
+	pub fn moment(&self)
+		-> MomentRef<<<D::Output<'w> as Deref>::Target as Flux>::Moment>
+	{
+		self.inner.at(std::time::Duration::ZERO)
+	}
+	
+	/// ...
+	pub fn moment_mut(&mut self)
+		-> MomentRefMut<<<D::Output<'w> as Deref>::Target as Flux>::Moment>
+	where
+		D::Output<'w>: DerefMut,
+	{
+		self.inner.at_mut(std::time::Duration::ZERO)
+	}
+}
+
 unsafe impl<D: PredQueryData> SystemParam for PredQuery<'_, D> {
 	type State = D::Id;
 	type Item<'world, 'state> = PredQuery<'world, D>;
@@ -868,7 +892,7 @@ where
 	}
 }
 
-impl<M> std::ops::Deref for PredInput<M> {
+impl<M> Deref for PredInput<M> {
 	type Target = M;
 	fn deref(&self) -> &Self::Target {
 		&self.0
@@ -1097,7 +1121,7 @@ mod testing {
 				as PredCombinatorCase>::Item
 				as PredItem>::Ref
 				as IntoIterator>::Item:
-					std::ops::Deref<Target = Test>,
+					Deref<Target = Test>,
 	{
 		use crate::*;
 		
