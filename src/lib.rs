@@ -25,6 +25,8 @@ use bevy_ecs::world::{Mut, World};
 use bevy_time::Time;
 
 use chime::pred::Prediction;
+use chime::time;
+use chime::time::InclusiveTimeRanges;
 
 /// Builder entry point for adding chime events to a [`World`].
 pub trait AddChimeEvent {
@@ -356,7 +358,7 @@ fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule)
 
 /// An individually scheduled event, generally owned by an `EventMap`.
 struct ChimeEvent<T> {
-	times: Option<T>,
+	times: Option<InclusiveTimeRanges<T>>,
 	next_time: Option<Duration>,
 	next_end_time: Option<Duration>,
 	curr_time: Option<Duration>,
@@ -389,7 +391,7 @@ impl<T> Default for ChimeEvent<T> {
 
 impl<T> ChimeEvent<T>
 where
-	T: Iterator<Item = (Duration, Duration)>
+	T: time::TimeRanges
 {
 	fn next_time(&mut self) -> Option<Duration> {
 		let next_time = if self.is_active {
@@ -438,7 +440,7 @@ impl ChimeEventMap {
 	fn setup_id<I, T>(&mut self) -> usize
 	where
 		I: PredId,
-		T: Iterator<Item = (Duration, Duration)> + Send + Sync + 'static,
+		T: time::TimeRanges + Send + Sync + 'static,
 	{
 		self.table.push(Box::<EventMap<I, T>>::default());
 		self.table.len() - 1
@@ -491,7 +493,9 @@ impl ChimeEventMap {
 				
 				event
 			});
-			event.times = case_times.map(|x| x.into_time_ranges());
+			event.times = case_times
+				.map(Prediction::into_ranges)
+				.map(time::TimeRanges::inclusive);
 			
 			 // Fetch Next Time:
 			event.next_time = None;
@@ -602,7 +606,7 @@ impl<K, T> Default for EventMap<K, T> {
 impl<K, T> EventMap<K, T>
 where
 	K: PredId,
-	T: Iterator<Item = (Duration, Duration)>,
+	T: time::TimeRanges,
 {
 	fn first_time(&self) -> Option<Duration> {
 		if let Some((&duration, _)) = self.times.first_key_value() {
@@ -717,7 +721,7 @@ trait AnyEventMap {
 impl<K, T> AnyEventMap for EventMap<K, T>
 where
 	K: PredId,
-	T: Iterator<Item = (Duration, Duration)> + 'static,
+	T: time::TimeRanges + 'static,
 {
 	fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
 		self
