@@ -724,7 +724,7 @@ where
 {}
 
 /// Types that can be used to query for a specific entity.
-pub trait PredQueryData {
+pub trait PredFetchData {
 	type Id: PredId;
 	type Output<'w>;
 	unsafe fn get_inner(world: UnsafeWorldCell, id: Self::Id) -> Self::Output<'_>;
@@ -733,13 +733,13 @@ pub trait PredQueryData {
 	// would allow for query types that accept multiple IDs; support `() -> ()`.
 }
 
-impl PredQueryData for () {
+impl PredFetchData for () {
 	type Id = ();
 	type Output<'w> = ();
 	unsafe fn get_inner(_world: UnsafeWorldCell, _id: Self::Id) -> Self::Output<'_> {}
 }
 
-impl<C: Component> PredQueryData for &C {
+impl<C: Component> PredFetchData for &C {
 	type Id = Entity;
 	type Output<'w> = &'w C;
 	unsafe fn get_inner(world: UnsafeWorldCell, id: Self::Id) -> Self::Output<'_> {
@@ -752,7 +752,7 @@ impl<C: Component> PredQueryData for &C {
 	}
 }
 
-impl<C: Component> PredQueryData for &mut C {
+impl<C: Component> PredFetchData for &mut C {
 	type Id = Entity;
 	type Output<'w> = Mut<'w, C>;
 	unsafe fn get_inner(world: UnsafeWorldCell, id: Self::Id) -> Self::Output<'_> {
@@ -765,7 +765,7 @@ impl<C: Component> PredQueryData for &mut C {
 	}
 }
 
-impl<C: Component, const N: usize> PredQueryData for [&C; N] {
+impl<C: Component, const N: usize> PredFetchData for [&C; N] {
 	type Id = [Entity; N];
 	type Output<'w> = [&'w C; N];
 	unsafe fn get_inner(world: UnsafeWorldCell, id: Self::Id) -> Self::Output<'_> {
@@ -778,7 +778,7 @@ impl<C: Component, const N: usize> PredQueryData for [&C; N] {
 	}
 }
 
-impl<C: Component, const N: usize> PredQueryData for [&mut C; N] {
+impl<C: Component, const N: usize> PredFetchData for [&mut C; N] {
 	type Id = [Entity; N];
 	type Output<'w> = [Mut<'w, C>; N];
 	unsafe fn get_inner(world: UnsafeWorldCell, id: Self::Id) -> Self::Output<'_> {
@@ -791,7 +791,7 @@ impl<C: Component, const N: usize> PredQueryData for [&mut C; N] {
 	}
 }
 
-impl<A: PredQueryData, B: PredQueryData> PredQueryData for (A, B) {
+impl<A: PredFetchData, B: PredFetchData> PredFetchData for (A, B) {
 	type Id = (A::Id, B::Id);
 	type Output<'w> = (A::Output<'w>, B::Output<'w>);
 	unsafe fn get_inner(world: UnsafeWorldCell, (a, b): Self::Id) -> Self::Output<'_> {
@@ -800,18 +800,18 @@ impl<A: PredQueryData, B: PredQueryData> PredQueryData for (A, B) {
 }
 
 /// Prediction data fed as a parameter to an event's systems.
-pub struct PredFetch<'world, D: PredQueryData> {
+pub struct PredFetch<'world, D: PredFetchData> {
     inner: D::Output<'world>,
 	time: Duration,
 }
 
-impl<'w, D: PredQueryData> PredFetch<'w, D> {
+impl<'w, D: PredFetchData> PredFetch<'w, D> {
 	pub fn get_inner(self) -> D::Output<'w> {
 		self.inner
 	}
 }
 
-impl<'w, D: PredQueryData> PredFetch<'w, D>
+impl<'w, D: PredFetchData> PredFetch<'w, D>
 where
 	D::Output<'w>: Deref,
 	<D::Output<'w> as Deref>::Target: Flux + Clone,
@@ -833,7 +833,7 @@ where
 	}
 }
 
-unsafe impl<D: PredQueryData> SystemParam for PredFetch<'_, D> {
+unsafe impl<D: PredFetchData> SystemParam for PredFetch<'_, D> {
 	type State = (D::Id, Arc<Mutex<Duration>>);
 	type Item<'world, 'state> = PredFetch<'world, D>;
 	fn init_state(world: &mut World, system_meta: &mut SystemMeta) -> Self::State {
