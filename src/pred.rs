@@ -850,6 +850,37 @@ unsafe impl<D: PredQueryData, M: PredId> SystemParam for PredQuery<'_, '_, D, M>
 	}
 }
 
+/// Misc prediction data fed as a parameter to an event's systems.
+pub struct PredMisc<M>(pub M);
+
+unsafe impl<M> SystemParam for PredMisc<M>
+where
+	M: PredId
+{
+	type State = M;
+	type Item<'world, 'state> = PredMisc<M>;
+	fn init_state(world: &mut World, system_meta: &mut SystemMeta) -> Self::State {
+		if let Some(PredSystemId { misc_id, .. }) = world
+			.get_resource::<PredSystemId>()
+		{
+			let misc_id = if let Some(misc_id) = misc_id.downcast_ref::<M>() {
+				*misc_id
+			} else {
+				panic!(
+					"!!! misc parameter is for wrong ID type. got {:?}",
+					std::any::type_name::<M>()
+				);
+			};
+			misc_id
+		} else {
+			panic!("!!! {:?} is not a Chime event system, it can't use this parameter type", system_meta.name());
+		}
+	}
+	unsafe fn get_param<'world, 'state>(state: &'state mut Self::State, _system_meta: &SystemMeta, _world: UnsafeWorldCell<'world>, _change_tick: Tick) -> Self::Item<'world, 'state> {
+		PredMisc(*state)
+	}
+}
+
 #[cfg(test)]
 mod testing {
 	use super::*;
