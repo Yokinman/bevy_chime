@@ -15,6 +15,9 @@ use chime::pred::Prediction;
 use crate::node::*;
 use crate::comb::*;
 
+/// For [`IntoInput`].
+pub use bevy_ecs::system::In;
+
 /// Resource for passing an event's unique ID to its system parameters. 
 #[derive(Resource)]
 pub(crate) struct PredSystemInput {
@@ -901,6 +904,62 @@ unsafe impl<D: PredFetchData> SystemParam for PredFetch<'_, D> {
 			inner: D::get_inner(world, *id),
 			time: *time.lock().expect("should be available"),
 		}
+	}
+}
+
+/// ...
+pub trait IntoInput<I> {
+	fn into_input(self) -> I;
+}
+
+impl<T> IntoInput<T> for ()
+where
+	T: Default
+{
+	fn into_input(self) -> T {
+		T::default()
+	}
+}
+
+impl<A, B> IntoInput<B> for In<A>
+where
+	A: Into<B>
+{
+	fn into_input(self) -> B {
+		self.0.into()
+	}
+}
+
+macro_rules! impl_into_input_for_tuples {
+	($(:$b:ident),*) => {};
+	($a0:ident : $b0:ident $(, $a:ident : $b:ident)*) => {
+		impl<$a0, $b0, $($a, $b,)*> IntoInput<($b0, $($b,)*)>
+			for ($a0, $($a,)*)
+		where
+			$a0: IntoInput<$b0>,
+			$($a: IntoInput<$b>,)*
+		{
+			fn into_input(self) -> ($b0, $($b,)*) {
+				#[allow(non_snake_case)]
+				let ($a0, $($a,)*) = self;
+				($a0.into_input(), $($a.into_input(),)*)
+			}
+		}
+		
+		impl_into_input_for_tuples!{$($a:$b),*}
+	};
+}
+
+impl_into_input_for_tuples!{
+	A0:B0, A1:B1, A2:B2, A3:B3
+}
+
+impl<A, B, const N: usize> IntoInput<[B; N]> for [A; N]
+where
+	A: IntoInput<B>,
+{
+	fn into_input(self) -> [B; N] {
+		self.map(A::into_input)
 	}
 }
 
