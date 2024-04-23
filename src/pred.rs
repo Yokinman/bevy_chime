@@ -207,7 +207,7 @@ pub trait PredParam {
 	type Id: PredId;
 	
 	/// ...
-	type Input: Clone + Send + Sync;
+	type Input: Clone;
 	
 	/// Creates combinator iterators over [`Self::Param`]'s items.
 	type Comb<'w>: PredCombinator<Id=Self::Id>;
@@ -989,7 +989,8 @@ mod testing {
 		for<'w, 's, 'a, 'w1, 's1, 'a1>
 			<(Query<'w, 's, &'a Test>, Query<'w1, 's1, &'a1 TestB>)
 				as PredParam>::Input:
-					Default
+					Default + IntoInput<<(Query<'w, 's, &'a Test>, Query<'w1, 's1, &'a1 TestB>)
+				as PredParam>::Input> + Send + Sync + 'static,
 	{
 		use crate::*;
 		
@@ -1188,7 +1189,7 @@ mod testing {
 				as IntoIterator>::Item:
 					Deref<Target = Test>,
 		for<'w, 's, 'a> <[Query<'w, 's, &'a Test>; R] as PredParam>::Input:
-			Default
+			Default + IntoInput<<[Query<'w, 's, &'a Test>; R] as PredParam>::Input> + Send + Sync + 'static,
 	{
 		use crate::*;
 		

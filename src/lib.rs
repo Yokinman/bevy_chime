@@ -30,28 +30,30 @@ use chime::time::InclusiveTimeRanges;
 
 /// Builder entry point for adding chime events to a [`World`].
 pub trait AddChimeEvent {
-	fn add_chime_events<T, P, A, F>(
+	fn add_chime_events<T, P, A, I, F>(
 		&mut self,
-		events: ChimeEventBuilder<T, P, A, F>,
+		events: ChimeEventBuilder<T, P, A, I, F>,
 	) -> &mut Self
 	where
 		T: Prediction,
 		T::TimeRanges: Send + Sync + 'static,
 		P: PredParam + 'static,
 		A: ReadOnlySystemParam + 'static,
+		I: IntoInput<P::Input> + Clone + Send + Sync + 'static,
 		F: PredFn<T, P, A> + Send + Sync + 'static;
 }
 
 impl AddChimeEvent for App {
-	fn add_chime_events<T, P, A, F>(
+	fn add_chime_events<T, P, A, I, F>(
 		&mut self,
-		events: ChimeEventBuilder<T, P, A, F>,
+		events: ChimeEventBuilder<T, P, A, I, F>,
 	) -> &mut Self
 	where
 		T: Prediction,
 		T::TimeRanges: Send + Sync + 'static,
 		P: PredParam + 'static,
 		A: ReadOnlySystemParam + 'static,
+		I: IntoInput<P::Input> + Clone + Send + Sync + 'static,
 		F: PredFn<T, P, A> + Send + Sync + 'static,
 	{
 		assert!(self.is_plugin_added::<ChimePlugin>());
@@ -82,7 +84,7 @@ impl AddChimeEvent for App {
 				let (state, misc) = state.get(world);
 				pred_sys(
 					PredState::new(
-						P::comb(&state, input.clone()).into_kind(),
+						P::comb(&state, input.clone().into_input()).into_kind(),
 						&mut node,
 					),
 					misc
@@ -137,15 +139,15 @@ where
 	
 	fn into_pred_fn(self) -> impl PredFn<T, P, A>;
 	
-	fn into_events(self) -> ChimeEventBuilder<T, P, A, impl PredFn<T, P, A>>
+	fn into_events(self) -> ChimeEventBuilder<T, P, A, P::Input, impl PredFn<T, P, A>>
 	where
-		P::Input: Default
+		P::Input: Default + Send + Sync + 'static
 	{
 		ChimeEventBuilder::new(self.into_pred_fn(), P::Input::default())
 	}
 	
-	fn into_events_with_input(self, input: P::Input)
-		-> ChimeEventBuilder<T, P, A, impl PredFn<T, P, A>>
+	fn into_events_with_input<I>(self, input: I)
+		-> ChimeEventBuilder<T, P, A, I, impl PredFn<T, P, A>>
 	{
 		ChimeEventBuilder::new(self.into_pred_fn(), input)
 	}
@@ -194,7 +196,7 @@ where
 }
 
 /// Builder for inserting a chime event into a [`World`].  
-pub struct ChimeEventBuilder<T, P, A, F>
+pub struct ChimeEventBuilder<T, P, A, I, F>
 where
 	P: PredParam,
 	A: ReadOnlySystemParam,
@@ -204,17 +206,17 @@ where
 	begin_sys: Option<Box<dyn ChimeEventSystem>>,
 	end_sys: Option<Box<dyn ChimeEventSystem>>,
 	outlier_sys: Option<Box<dyn ChimeEventSystem>>,
-	input: P::Input,
+	input: I,
 	_param: std::marker::PhantomData<fn(PredState<T, P>, SystemParamItem<A>)>,
 }
 
-impl<U, P, A, F> ChimeEventBuilder<U, P, A, F>
+impl<U, P, A, I, F> ChimeEventBuilder<U, P, A, I, F>
 where
 	P: PredParam,
 	A: ReadOnlySystemParam,
 	F: PredFn<U, P, A>,
 {
-	fn new(pred_sys: F, input: P::Input) -> Self {
+	fn new(pred_sys: F, input: I) -> Self {
 		ChimeEventBuilder {
 			pred_sys,
 			begin_sys: None,
