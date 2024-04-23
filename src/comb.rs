@@ -183,6 +183,21 @@ where
 	}
 }
 
+impl<I, K> PredCombinator<K> for PredIdComb<I>
+where
+	I: PredId,
+	K: CombKind,
+{
+	type Id = I;
+	type Case = PredCombCase<WithId<I>, I>;
+	
+	type IntoKind<Kind: CombKind> = PredIdComb<I>;
+	
+	fn into_kind<Kind: CombKind>(self) -> Self::IntoKind<Kind> {
+		self
+	}
+}
+
 /// Combinator for each [`PredParamVec::Split`] case.
 pub enum PredSubComb<C: PredCombinator, K: CombKind> {
 	Diff(C::IntoKind<K::Pal>),
@@ -1050,6 +1065,57 @@ where
 		} else {
 			(0, Some(0))
 		}
+	}
+}
+
+/// ...
+#[derive(Clone)]
+pub struct PredIdComb<I> {
+	slice: Box<[I]>,
+}
+
+impl<I> PredIdComb<I> {
+	pub(crate) fn new(slice: Box<[I]>) -> Self {
+		Self { slice }
+	}
+}
+
+impl<I> IntoIterator for PredIdComb<I>
+where
+	I: PredId
+{
+	type Item = <Self::IntoIter as Iterator>::Item;
+	type IntoIter = PredIdCombIter<I>;
+	fn into_iter(self) -> Self::IntoIter {
+		PredIdCombIter {
+			slice: self.slice,
+			index: 0,
+		}
+	}
+}
+
+/// ...
+pub struct PredIdCombIter<I> {
+	slice: Box<[I]>,
+	index: usize,
+}
+
+impl<I> Iterator for PredIdCombIter<I>
+where
+	I: PredId
+{
+	type Item = PredCombCase<WithId<I>, I>;
+	fn next(&mut self) -> Option<Self::Item> {
+		if let Some(id) = self.slice.get(self.index) {
+			self.index += 1;
+			Some(PredCombCase::Same(*id, *id))
+		} else {
+			None
+		}
+	}
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		let len = self.slice.len() - self.index;
+		(len, Some(len))
 	}
 }
 

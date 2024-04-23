@@ -307,15 +307,22 @@ where
 // 		QueryComb::new(param)
 // 	}
 // }
-// 
-// impl<I> PredParam<I> for WithId<I> {
-// 	type Param = ();
-// 	type Id = I;
-// 	type Comb<'w> = ();
-// 	fn comb<'w>(param: &'w SystemParamItem<Self::Param>) -> Self::Comb<'w> {
-// 		todo!()
-// 	}
-// }
+
+impl<I> PredParam for WithId<I>
+where
+	I: PredId
+{
+	type Param = ();
+	type Input = Box<[I]>;
+	type Id = I;
+	type Comb<'w> = PredIdComb<I>;
+	fn comb<'w>(
+		_param: &'w SystemParamItem<Self::Param>,
+		input: Self::Input,
+	) -> Self::Comb<'w> {
+		PredIdComb::new(input)
+	}
+}
 
 /// A case of prediction.
 pub trait PredItem {
@@ -394,19 +401,20 @@ where
 /// ...
 #[derive(Clone)]
 pub struct WithId<I> {
-	inner: Rc<[I]>,
+	inner: I,
 }
 
-impl<I: PredId> PredStateMisc for WithId<I> {
-	type Item = I;
-	type MiscIter = std::vec::IntoIter<I>;
-	fn from_misc(inner: Box<[Self::Item]>) -> Self {
-		Self {
-			inner: inner.into(),
-		}
+impl<I> PredItem for WithId<I>
+where
+	I: PredId
+{
+	type Inner = I;
+	type Ref = I;
+	fn into_ref(item: Self) -> Self::Ref {
+		item.inner
 	}
-	fn into_misc_iter(self) -> Self::MiscIter {
-		self.inner.iter().copied().collect::<Vec<_>>().into_iter()
+	fn is_updated(_item: &Self) -> bool {
+		false
 	}
 }
 
