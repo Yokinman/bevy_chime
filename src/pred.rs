@@ -1,5 +1,5 @@
 use std::hash::Hash;
-use std::ops::{Deref, DerefMut, RangeTo, RangeFrom, RangeFull};
+use std::ops::{Deref, DerefMut, RangeTo, RangeFrom, RangeFull, Range};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -924,22 +924,16 @@ unsafe impl<D: PredFetchData> SystemParam for PredFetch<'_, D> {
 /// Tuples (up to size 12, including unit)
 /// ```text
 /// (A, B, C, D) -> (X, Y, Z, W) 
-/// (A,)..       -> (X,..,..,..) // Latter default
-///     ..(C, D) -> (..,..,Z, W) // Former default
-/// (A,)..(C, D) -> (X,.., Z, W) // Middle default
+/// (A,)..       -> (X,..,..,..) // Default Tail
+///     ..(C, D) -> (..,..,Z, W) // Default Head
 /// ```
 /// 
 /// Arrays (any length)
 /// ```text
 /// [A, B, C, D] -> [X, Y, Z, W] 
-/// [A,]..       -> [X,..,..,..] // Latter default
-///     ..[C, D] -> [..,..,Z, W] // Former default
-/// [A,]..[C, D] -> [X,.., Z, W] // Middle default
+/// [A,]..       -> [X,..,..,..] // Default Tail
+///     ..[C, D] -> [..,..,Z, W] // Default Head
 /// ```
-/// 
-/// TODO:
-/// - Middle range defaults for tuples.
-/// - Range defaults for arrays. 
 pub trait IntoInput<I> {
 	fn into_input(self) -> I;
 }
@@ -986,6 +980,7 @@ macro_rules! impl_into_input_for_tuples {
 		impl_into_input_for_tuples!{$($a:$b),*}
 	};
 	($(:$bx:ident,)+ $a0:ident : $b0:ident $(, $a:ident : $b:ident)*) => {
+		 // Range Head Defaults:
 		impl<$($bx,)+ $a0, $b0, $($a, $b,)*> IntoInput<($($bx,)+ $b0, $($b,)*)>
 			for RangeTo<($a0, $($a,)*)>
 		where
@@ -1000,6 +995,7 @@ macro_rules! impl_into_input_for_tuples {
 			}
 		}
 		
+		 // Range Tail Defaults:
 		impl<$($a, $b,)* $a0, $b0, $($bx,)+> IntoInput<($($b,)* $b0, $($bx,)+)>
 			for RangeFrom<($($a,)* $a0,)>
 		where
