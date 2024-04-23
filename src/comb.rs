@@ -1136,7 +1136,7 @@ where
 	K: CombKind,
 {
 	pub fn new<'s: 'p>(state: PredSubState<'p, 's, T, P, K>) -> Self {
-		let mut iter = state.comb.into_iter();
+		let iter = state.comb.into_iter();
 		let node = state.node.init_data(4 * iter.size_hint().0.max(1));
 		Self { iter, node }
 	}

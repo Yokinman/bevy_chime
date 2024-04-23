@@ -1,5 +1,5 @@
 use std::hash::Hash;
-use std::ops::{Deref, DerefMut, RangeTo, RangeFrom, RangeFull, Range};
+use std::ops::{Deref, DerefMut, RangeTo, RangeFrom, RangeFull};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
