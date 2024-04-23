@@ -960,24 +960,6 @@ impl IntoInput<()> for () {
 }
 
 macro_rules! impl_into_input_for_tuples {
-	($(:$b:ident),*) => {};
-	($a0:ident : $b0:ident $(, $a:ident : $b:ident)*) => {
-		impl<$a0, $b0, $($a, $b,)*> IntoInput<($b0, $($b,)*)>
-			for ($a0, $($a,)*)
-		where
-			$a0: IntoInput<$b0>,
-			$($a: IntoInput<$b>,)*
-		{
-			fn into_input(self) -> ($b0, $($b,)*) {
-				#[allow(non_snake_case)]
-				let ($a0, $($a,)*) = self;
-				($a0.into_input(), $($a.into_input(),)*)
-			}
-		}
-		
-		impl_into_input_for_tuples!{:$b0 $(, $a:$b)*}
-		impl_into_input_for_tuples!{$($a:$b),*}
-	};
 	($(:$bx:ident,)+ $a0:ident : $b0:ident $(, $a:ident : $b:ident)*) => {
 		 // Range Head Defaults:
 		impl<$($bx,)+ $a0, $b0, $($a, $b,)*> IntoInput<($($bx,)+ $b0, $($b,)*)>
@@ -1011,6 +993,24 @@ macro_rules! impl_into_input_for_tuples {
 		
 		impl_into_input_for_tuples!{$(:$bx,)+ :$b0 $(, $a:$b)*}
 	};
+	($a0:ident : $b0:ident $(, $a:ident : $b:ident)*) => {
+		impl<$a0, $b0, $($a, $b,)*> IntoInput<($b0, $($b,)*)>
+			for ($a0, $($a,)*)
+		where
+			$a0: IntoInput<$b0>,
+			$($a: IntoInput<$b>,)*
+		{
+			fn into_input(self) -> ($b0, $($b,)*) {
+				#[allow(non_snake_case)]
+				let ($a0, $($a,)*) = self;
+				($a0.into_input(), $($a.into_input(),)*)
+			}
+		}
+		
+		impl_into_input_for_tuples!{:$b0 $(, $a:$b)*}
+		impl_into_input_for_tuples!{$($a:$b),*}
+	};
+	($(:$b:ident),*) => {};
 }
 
 impl_into_input_for_tuples!{
