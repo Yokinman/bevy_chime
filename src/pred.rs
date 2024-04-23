@@ -210,6 +210,9 @@ pub trait PredParam {
 	/// Unique identifier for each of [`Self::Param`]'s items.
 	type Id: PredId;
 	
+	/// ...
+	type Input;
+	
 	/// Creates combinator iterators over [`Self::Param`]'s items.
 	type Comb<'w>: PredCombinator<Id=Self::Id>;
 	
@@ -224,6 +227,7 @@ where
 {
 	type Param = Query<'static, 'static, (Ref<'static, T>, Entity), F>;
 	type Id = Entity;
+	type Input = ();
 	type Comb<'w> = QueryComb<'w, T, F>;
 	fn comb<'w>(param: &'w SystemParamItem<Self::Param>) -> Self::Comb<'w> {
 		QueryComb::new(param)
@@ -236,6 +240,7 @@ where
 {
 	type Param = Res<'static, R>;
 	type Id = ();
+	type Input = ();
 	type Comb<'w> = ResComb<'w, R>;
 	fn comb<'w>(param: &'w SystemParamItem<Self::Param>) -> Self::Comb<'w> {
 		ResComb::new(Res::clone(param))
@@ -245,6 +250,7 @@ where
 impl PredParam for () {
 	type Param = ();
 	type Id = ();
+	type Input = ();
 	type Comb<'w> = EmptyComb;
 	fn comb<'w>(_param: &'w SystemParamItem<Self::Param>) -> Self::Comb<'w> {
 		EmptyComb::new()
@@ -258,6 +264,7 @@ where
 {
 	type Param = (A::Param, B::Param);
 	type Id = (A::Id, B::Id);
+	type Input = (A::Input, B::Input);
 	type Comb<'w> = PredPairComb<A::Comb<'w>, B::Comb<'w>>;
 	fn comb<'w>((a, b): &'w SystemParamItem<Self::Param>) -> Self::Comb<'w> {
 		PredPairComb::new(A::comb(a), B::comb(b))
@@ -271,6 +278,7 @@ where
 {
 	type Param = P::Param;
 	type Id = [P::Id; N];
+	type Input = [P::Input; N];
 	type Comb<'w> = PredArrayComb<P::Comb<'w>, N>;
 	fn comb<'w>(param: &'w SystemParamItem<Self::Param>) -> Self::Comb<'w> {
 		PredArrayComb::new(P::comb(param))
