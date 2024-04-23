@@ -827,6 +827,18 @@ impl<A: PredFetchData, B: PredFetchData> PredFetchData for (A, B) {
 	}
 }
 
+impl<I> PredFetchData for WithId<I>
+where
+	I: PredId
+{
+	type Id = I;
+	type Output<'w> = I;
+	unsafe fn get_inner(_world: UnsafeWorldCell, id: Self::Id) -> Self::Output<'_> {
+		// SAFETY: This doesn't access the world.
+		id
+	}
+}
+
 /// Prediction data fed as a parameter to an event's systems.
 pub struct PredFetch<'world, D: PredFetchData> {
     inner: D::Output<'world>,
