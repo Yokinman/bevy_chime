@@ -211,13 +211,16 @@ pub trait PredParam {
 	type Id: PredId;
 	
 	/// ...
-	type Input;
+	type Input: Clone + Send + Sync;
 	
 	/// Creates combinator iterators over [`Self::Param`]'s items.
 	type Comb<'w>: PredCombinator<Id=Self::Id>;
 	
 	/// Produces [`Self::Comb`].
-	fn comb<'w>(param: &'w SystemParamItem<Self::Param>) -> Self::Comb<'w>;
+	fn comb<'w>(
+		param: &'w SystemParamItem<Self::Param>,
+		input: Self::Input,
+	) -> Self::Comb<'w>;
 }
 
 impl<T, F> PredParam for Query<'_, '_, &T, F>
@@ -229,7 +232,10 @@ where
 	type Id = Entity;
 	type Input = ();
 	type Comb<'w> = QueryComb<'w, T, F>;
-	fn comb<'w>(param: &'w SystemParamItem<Self::Param>) -> Self::Comb<'w> {
+	fn comb<'w>(
+		param: &'w SystemParamItem<Self::Param>,
+		_input: Self::Input,
+	) -> Self::Comb<'w> {
 		QueryComb::new(param)
 	}
 }
@@ -242,7 +248,10 @@ where
 	type Id = ();
 	type Input = ();
 	type Comb<'w> = ResComb<'w, R>;
-	fn comb<'w>(param: &'w SystemParamItem<Self::Param>) -> Self::Comb<'w> {
+	fn comb<'w>(
+		param: &'w SystemParamItem<Self::Param>,
+		_input: Self::Input,
+	) -> Self::Comb<'w> {
 		ResComb::new(Res::clone(param))
 	}
 }
@@ -252,7 +261,10 @@ impl PredParam for () {
 	type Id = ();
 	type Input = ();
 	type Comb<'w> = EmptyComb;
-	fn comb<'w>(_param: &'w SystemParamItem<Self::Param>) -> Self::Comb<'w> {
+	fn comb<'w>(
+		_param: &'w SystemParamItem<Self::Param>,
+		_input: Self::Input,
+	) -> Self::Comb<'w> {
 		EmptyComb::new()
 	}
 }
@@ -266,8 +278,11 @@ where
 	type Id = (A::Id, B::Id);
 	type Input = (A::Input, B::Input);
 	type Comb<'w> = PredPairComb<A::Comb<'w>, B::Comb<'w>>;
-	fn comb<'w>((a, b): &'w SystemParamItem<Self::Param>) -> Self::Comb<'w> {
-		PredPairComb::new(A::comb(a), B::comb(b))
+	fn comb<'w>(
+		(a, b): &'w SystemParamItem<Self::Param>,
+		(a_in, b_in): Self::Input,
+	) -> Self::Comb<'w> {
+		PredPairComb::new(A::comb(a, a_in), B::comb(b, b_in))
 	}
 }
 
@@ -280,8 +295,11 @@ where
 	type Id = [P::Id; N];
 	type Input = [P::Input; N];
 	type Comb<'w> = PredArrayComb<P::Comb<'w>, N>;
-	fn comb<'w>(param: &'w SystemParamItem<Self::Param>) -> Self::Comb<'w> {
-		PredArrayComb::new(P::comb(param))
+	fn comb<'w>(
+		param: &'w SystemParamItem<Self::Param>,
+		input: Self::Input,
+	) -> Self::Comb<'w> {
+		PredArrayComb::new(P::comb(param, input[0].clone())) // !!! Fix input
 	}
 }
 
@@ -951,6 +969,10 @@ mod testing {
 					Tail = Query<'w1, 's1, &'a1 TestB>,
 					Comb<'b> = PredPairComb<QueryComb<'b, Test, ()>, QueryComb<'b, TestB, ()>>
 				>,
+		for<'w, 's, 'a, 'w1, 's1, 'a1>
+			<(Query<'w, 's, &'a Test>, Query<'w1, 's1, &'a1 TestB>)
+				as PredParam>::Input:
+					Default
 	{
 		use crate::*;
 		
@@ -1151,6 +1173,8 @@ mod testing {
 				as PredItem>::Ref
 				as IntoIterator>::Item:
 					Deref<Target = Test>,
+		for<'w, 's, 'a> <[Query<'w, 's, &'a Test>; R] as PredParam>::Input:
+			Default
 	{
 		use crate::*;
 		

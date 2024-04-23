@@ -84,8 +84,8 @@ impl AddChimeEvent for App {
 				let (state, misc) = state.get(world);
 				pred_sys(
 					PredState::new(
-						P::comb(&state).into_kind(),
-						M::from_misc(misc_state.clone().into()),
+						P::comb(&state, misc_state.clone()).into_kind(),
+						todo!(),
 						&mut node,
 					),
 					misc
@@ -145,19 +145,15 @@ where
 	
 	fn into_events(self) -> ChimeEventBuilder<T, P, M, A, impl PredFn<T, P, M, A>>
 	where
-		(): std::borrow::Borrow<M>,
-		M: PredStateMisc<Item=()>,
+		P::Input: Default
 	{
-		ChimeEventBuilder::new(
-			self.into_pred_fn(),
-			std::iter::once(())
-		)
+		ChimeEventBuilder::new(self.into_pred_fn(), P::Input::default())
 	}
 	
-	fn into_events_with_input(self, id: impl IntoIterator<Item=M::Item>)
+	fn into_events_with_input(self, input: P::Input)
 		-> ChimeEventBuilder<T, P, M, A, impl PredFn<T, P, M, A>>
 	{
-		ChimeEventBuilder::new(self.into_pred_fn(), id)
+		ChimeEventBuilder::new(self.into_pred_fn(), input)
 	}
 }
 
@@ -216,7 +212,7 @@ where
 	begin_sys: Option<Box<dyn ChimeEventSystem>>,
 	end_sys: Option<Box<dyn ChimeEventSystem>>,
 	outlier_sys: Option<Box<dyn ChimeEventSystem>>,
-	misc_state: Box<[M::Item]>,
+	misc_state: P::Input,
 	_param: std::marker::PhantomData<fn(PredState<T, P, M>, SystemParamItem<A>)>,
 }
 
@@ -227,13 +223,13 @@ where
 	A: ReadOnlySystemParam,
 	F: PredFn<U, P, M, A>,
 {
-	fn new(pred_sys: F, id: impl IntoIterator<Item=M::Item>) -> Self {
+	fn new(pred_sys: F, input: P::Input) -> Self {
 		ChimeEventBuilder {
 			pred_sys,
 			begin_sys: None,
 			end_sys: None,
 			outlier_sys: None,
-			misc_state: id.into_iter().collect(),
+			misc_state: input,
 			_param: std::marker::PhantomData,
 		}
 	}
