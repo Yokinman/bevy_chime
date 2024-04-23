@@ -912,26 +912,33 @@ unsafe impl<D: PredFetchData> SystemParam for PredFetch<'_, D> {
 /// 
 /// ## Types of Input
 /// 
-/// [`Into`] ([`In`])
+/// [`IntoIterator`] ([`In`])
 /// ```text
-/// In(A) -> X where A: Into<X>
-/// ```
-/// 
-/// [`Default`] ([`RangeFull`])
-/// ```text
-/// .. -> X where X: Default
+/// In<A> -> B
+/// where
+///     A: IntoIterator,
+///     B: FromIterator<A::Item>,
 /// ```
 /// 
 /// Tuples (up to size 4, including unit)
 /// ```text
-/// (A, B, C, D) -> (X, Y, Z, W) 
-/// (A,)..       -> (X,..,..,..) // Default Tail
-///     ..(C, D) -> (..,..,Z, W) // Default Head
+/// (A,) -> (B,)
+/// where
+///     A: IntoInput<B>
 /// ```
 /// 
 /// Arrays (any length)
 /// ```text
-/// [A; N] -> [X; N]
+/// [A; N] -> [B; N]
+/// where
+///     A: IntoInput<B>
+/// ```
+/// 
+/// [`Default`] ([`RangeFull`])
+/// ```text
+/// .. -> T where T: Default
+/// ..(A,) -> (*, B) where A: IntoInput<B>, *: Default
+/// (A,).. -> (B, *) where A: IntoInput<B>, *: Default
 /// ```
 pub trait IntoInput<I> {
 	fn into_input(self) -> I;
