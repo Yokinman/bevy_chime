@@ -958,10 +958,7 @@ mod testing {
 			match *index {
 				0 => { // Full
 					if A > 1 && B > 1 {
-						// !!! This shouldn't really be +1, but it's an issue
-						// with how `PredCombinator` adds 1 to the upper bound
-						// of `PredPairCombIter` which remains semi-constant:
-						assert_eq!(iter.size_hint(), (B, Some(A*B + 1)));
+						assert_eq!(iter.size_hint(), (B, Some(A*B)));
 					}
 					let mut n = 0;
 					for a in &a_query {
@@ -991,7 +988,7 @@ mod testing {
 						+ B*update_vec.len()
 						- update_vec.len()*b_update_vec.len();
 					if A > 1 && B > 1 {
-						assert_eq!(iter.size_hint(), (B, Some(A*B + 1)));
+						assert_eq!(iter.size_hint(), (B, Some(A*B)));
 					}
 					let mut n = 0;
 					for (_, (a, b)) in iter {
