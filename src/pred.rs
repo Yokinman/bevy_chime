@@ -931,7 +931,7 @@ unsafe impl<D: PredFetchData> SystemParam for PredFetch<'_, D> {
 ///     A: IntoInput<B>
 /// ```
 /// 
-/// [`Default`] ([`RangeFull`])
+/// [`Default`] ([`RangeFull`], [`RangeTo`], [`RangeFrom`])
 /// ```text
 /// .. -> T where T: Default
 /// ..(A,) -> (*, B) where A: IntoInput<B>, *: Default
