@@ -34,13 +34,13 @@ where
 {}
 
 /// Linear collections of [`PredParam`] types.
-pub trait PredParamVec: PredParam {
-	type Head: PredParam;
-	type Tail: PredParam;
+pub trait PredParamVec<I = ()>: PredParam<I> {
+	type Head: PredParam<I>;
+	type Tail: PredParam<I>;
 	
 	type Split<'p, K: CombKind>: Iterator<Item = (
-		<<Self::Head as PredParam>::Comb<'p> as IntoIterator>::Item,
-		PredSubComb<<Self::Tail as PredParam>::Comb<'p>, K>,
+		<<Self::Head as PredParam<I>>::Comb<'p> as IntoIterator>::Item,
+		PredSubComb<<Self::Tail as PredParam<I>>::Comb<'p>, K>,
 	)>;
 	
 	fn split<K: CombKind>(
@@ -48,12 +48,16 @@ pub trait PredParamVec: PredParam {
 	) -> Self::Split<'_, K>;
 	
 	fn join_id(
-		a: <Self::Head as PredParam>::Id,
-		b: <Self::Tail as PredParam>::Id,
+		a: <Self::Head as PredParam<I>>::Id,
+		b: <Self::Tail as PredParam<I>>::Id,
 	) -> Self::Id;
 }
 
-impl<A: PredParam, B: PredParam> PredParamVec for (A, B) {
+impl<A, B, I> PredParamVec<I> for (A, B)
+where
+	A: PredParam<I>,
+	B: PredParam<I>,
+{
 	type Head = A;
 	type Tail = B;
 	
@@ -70,8 +74,8 @@ impl<A: PredParam, B: PredParam> PredParamVec for (A, B) {
 	}
 	
 	fn join_id(
-		a: <Self::Head as PredParam>::Id,
-		b: <Self::Tail as PredParam>::Id,
+		a: <Self::Head as PredParam<I>>::Id,
+		b: <Self::Tail as PredParam<I>>::Id,
 	) -> Self::Id {
 		(a, b)
 	}
@@ -79,8 +83,9 @@ impl<A: PredParam, B: PredParam> PredParamVec for (A, B) {
 
 macro_rules! impl_pred_param_vec_for_array {
 	($size:literal) => {
-		impl<P: PredParam> PredParamVec for [P; $size]
+		impl<P, I> PredParamVec<I> for [P; $size]
 		where
+			P: PredParam<I>,
 			P::Id: Ord,
 		{
 			type Head = P;
@@ -96,8 +101,8 @@ macro_rules! impl_pred_param_vec_for_array {
 			}
 			
 			fn join_id(
-				a: <Self::Head as PredParam>::Id,
-				b: <Self::Tail as PredParam>::Id,
+				a: <Self::Head as PredParam<I>>::Id,
+				b: <Self::Tail as PredParam<I>>::Id,
 			) -> Self::Id {
 				let mut array = [a; $size];
 				array[1..].copy_from_slice(&b);
