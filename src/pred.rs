@@ -922,7 +922,7 @@ unsafe impl<D: PredFetchData> SystemParam for PredFetch<'_, D> {
 /// .. -> X where X: Default
 /// ```
 /// 
-/// Tuples (up to size 12, including unit)
+/// Tuples (up to size 4, including unit)
 /// ```text
 /// (A, B, C, D) -> (X, Y, Z, W) 
 /// (A,)..       -> (X,..,..,..) // Default Tail
@@ -931,9 +931,7 @@ unsafe impl<D: PredFetchData> SystemParam for PredFetch<'_, D> {
 /// 
 /// Arrays (any length)
 /// ```text
-/// [A, B, C, D] -> [X, Y, Z, W] 
-/// [A,]..       -> [X,..,..,..] // Default Tail
-///     ..[C, D] -> [..,..,Z, W] // Default Head
+/// [A; N] -> [X; N]
 /// ```
 pub trait IntoInput<I> {
 	fn into_input(self) -> I;
