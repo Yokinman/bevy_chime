@@ -16,7 +16,8 @@ use crate::node::*;
 use crate::comb::*;
 
 /// For [`IntoInput`].
-pub use bevy_ecs::system::In;
+#[derive(Copy, Clone, Default)]
+pub struct In<T>(pub T);
 
 /// Resource for passing an event's unique ID to its system parameters. 
 #[derive(Resource)]
