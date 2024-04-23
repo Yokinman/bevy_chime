@@ -37,7 +37,7 @@ pub trait AddChimeEvent {
 	where
 		T: Prediction,
 		T::TimeRanges: Send + Sync + 'static,
-		P: PredParam<M::Item> + 'static,
+		P: PredParam + 'static,
 		M: PredStateMisc,
 		A: ReadOnlySystemParam + 'static,
 		F: PredFn<T, P, M, A> + Send + Sync + 'static;
@@ -51,7 +51,7 @@ impl AddChimeEvent for App {
 	where
 		T: Prediction,
 		T::TimeRanges: Send + Sync + 'static,
-		P: PredParam<M::Item> + 'static,
+		P: PredParam + 'static,
 		M: PredStateMisc,
 		A: ReadOnlySystemParam + 'static,
 		F: PredFn<T, P, M, A> + Send + Sync + 'static,
@@ -118,14 +118,14 @@ impl AddChimeEvent for App {
 pub trait PredFn<T, P, M, A>:
 	Fn(PredState<T, P, M>, SystemParamItem<A>)
 where
-	P: PredParam<M::Item>,
+	P: PredParam,
 	M: PredStateMisc,
 	A: ReadOnlySystemParam,
 {}
 
 impl<T, P, M, A, F> PredFn<T, P, M, A> for F
 where
-	P: PredParam<M::Item>,
+	P: PredParam,
 	M: PredStateMisc,
 	A: ReadOnlySystemParam,
 	F: Fn(PredState<T, P, M>, SystemParamItem<A>),
@@ -134,7 +134,7 @@ where
 /// Types that can be converted into a [`PredFn`].
 pub trait IntoPredFn<T, P, M, A>: Sized
 where
-	P: PredParam<M::Item>,
+	P: PredParam,
 	M: PredStateMisc,
 	A: ReadOnlySystemParam,
 {
@@ -171,7 +171,7 @@ macro_rules! impl_into_pred_fn {
 		where
 			F: Fn(PredState<T, P, M>, $($param),*)
 				+ Fn(PredState<T, P, M>, $(SystemParamItem<$param>),*),
-			P: PredParam<M::Item>,
+			P: PredParam,
 			M: PredStateMisc,
 		{
 			fn into_pred_fn(self) -> impl PredFn<T, P, M, ($($param,)*)> {
@@ -207,7 +207,7 @@ where
 /// Builder for inserting a chime event into a [`World`].  
 pub struct ChimeEventBuilder<T, P, M, A, F>
 where
-	P: PredParam<M::Item>,
+	P: PredParam,
 	M: PredStateMisc,
 	A: ReadOnlySystemParam,
 	F: PredFn<T, P, M, A>,
@@ -222,7 +222,7 @@ where
 
 impl<U, P, M, A, F> ChimeEventBuilder<U, P, M, A, F>
 where
-	P: PredParam<M::Item>,
+	P: PredParam,
 	M: PredStateMisc,
 	A: ReadOnlySystemParam,
 	F: PredFn<U, P, M, A>,

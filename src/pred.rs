@@ -34,13 +34,13 @@ where
 {}
 
 /// Linear collections of [`PredParam`] types.
-pub trait PredParamVec<I = ()>: PredParam<I> {
-	type Head: PredParam<I>;
-	type Tail: PredParam<I>;
+pub trait PredParamVec: PredParam {
+	type Head: PredParam;
+	type Tail: PredParam;
 	
 	type Split<'p, K: CombKind>: Iterator<Item = (
-		<<Self::Head as PredParam<I>>::Comb<'p> as IntoIterator>::Item,
-		PredSubComb<<Self::Tail as PredParam<I>>::Comb<'p>, K>,
+		<<Self::Head as PredParam>::Comb<'p> as IntoIterator>::Item,
+		PredSubComb<<Self::Tail as PredParam>::Comb<'p>, K>,
 	)>;
 	
 	fn split<K: CombKind>(
@@ -48,15 +48,15 @@ pub trait PredParamVec<I = ()>: PredParam<I> {
 	) -> Self::Split<'_, K>;
 	
 	fn join_id(
-		a: <Self::Head as PredParam<I>>::Id,
-		b: <Self::Tail as PredParam<I>>::Id,
+		a: <Self::Head as PredParam>::Id,
+		b: <Self::Tail as PredParam>::Id,
 	) -> Self::Id;
 }
 
-impl<A, B, I> PredParamVec<I> for (A, B)
+impl<A, B> PredParamVec for (A, B)
 where
-	A: PredParam<I>,
-	B: PredParam<I>,
+	A: PredParam,
+	B: PredParam,
 {
 	type Head = A;
 	type Tail = B;
@@ -74,8 +74,8 @@ where
 	}
 	
 	fn join_id(
-		a: <Self::Head as PredParam<I>>::Id,
-		b: <Self::Tail as PredParam<I>>::Id,
+		a: <Self::Head as PredParam>::Id,
+		b: <Self::Tail as PredParam>::Id,
 	) -> Self::Id {
 		(a, b)
 	}
@@ -83,9 +83,9 @@ where
 
 macro_rules! impl_pred_param_vec_for_array {
 	($size:literal) => {
-		impl<P, I> PredParamVec<I> for [P; $size]
+		impl<P> PredParamVec for [P; $size]
 		where
-			P: PredParam<I>,
+			P: PredParam,
 			P::Id: Ord,
 		{
 			type Head = P;
@@ -101,8 +101,8 @@ macro_rules! impl_pred_param_vec_for_array {
 			}
 			
 			fn join_id(
-				a: <Self::Head as PredParam<I>>::Id,
-				b: <Self::Tail as PredParam<I>>::Id,
+				a: <Self::Head as PredParam>::Id,
+				b: <Self::Tail as PredParam>::Id,
 			) -> Self::Id {
 				let mut array = [a; $size];
 				array[1..].copy_from_slice(&b);
@@ -124,11 +124,11 @@ impl_pred_param_vec_for_array!(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12);
 pub struct PredSubStateSplitIter<'p, 's, T, P, M, K>
 where
 	's: 'p,
-	P: PredParamVec<M::Item>,
+	P: PredParamVec,
 	M: PredStateMisc,
 	K: CombKind,
 {
-	iter: <P as PredParamVec<M::Item>>::Split<'p, K>,
+	iter: <P as PredParamVec>::Split<'p, K>,
 	misc_state: M,
 	branches: NodeWriter<'p, PredNodeBranch<'s, T, P, M::Item>>,
 }
@@ -136,13 +136,13 @@ where
 impl<'p, 's, T, P, M, K> Iterator for PredSubStateSplitIter<'p, 's, T, P, M, K>
 where
 	's: 'p,
-	P: PredParamVec<M::Item>,
+	P: PredParamVec,
 	M: PredStateMisc,
 	K: CombKind,
 {
 	type Item = (
 		PredSubStateSplit<'p, 's, T, P::Tail, M, K>,
-		<PredParamItem<'p, P::Head, M::Item> as PredItem>::Ref,
+		<PredParamItem<'p, P::Head> as PredItem>::Ref,
 	);
 	fn next(&mut self) -> Option<Self::Item> {
 		if let Some((head, tail)) = self.iter.next() {
@@ -166,7 +166,7 @@ where
 pub enum PredSubStateSplit<'p, 's, T, P, M, K>
 where
 	's: 'p,
-	P: PredParam<M::Item>,
+	P: PredParam,
 	M: PredStateMisc,
 	K: CombKind,
 {
@@ -177,7 +177,7 @@ where
 impl<'p, 's, T, P, M, K> IntoIterator for PredSubStateSplit<'p, 's, T, P, M, K>
 where
 	's: 'p,
-	P: PredParam<M::Item>,
+	P: PredParam,
 	M: PredStateMisc,
 	K: CombKind,
 	PredCombSplit<'p, T, P, M, K>: Iterator,
@@ -197,13 +197,13 @@ where
 }
 
 /// Shortcut for accessing `PredParam::Comb::Case::Item`.
-pub type PredParamItem<'w, P, I = ()> = <<<P
-	as PredParam<I>>::Comb<'w>
+pub type PredParamItem<'w, P> = <<<P
+	as PredParam>::Comb<'w>
 	as PredCombinator>::Case
 	as PredCombinatorCase>::Item;
 
 /// A set of [`PredItem`] values used to predict & schedule events.
-pub trait PredParam<I = ()> {
+pub trait PredParam {
 	/// The equivalent [`bevy_ecs::system::SystemParam`].
 	type Param: ReadOnlySystemParam + 'static;
 	
@@ -217,7 +217,7 @@ pub trait PredParam<I = ()> {
 	fn comb<'w>(param: &'w SystemParamItem<Self::Param>) -> Self::Comb<'w>;
 }
 
-impl<T, F, I> PredParam<I> for Query<'_, '_, &T, F>
+impl<T, F> PredParam for Query<'_, '_, &T, F>
 where
 	T: Component,
 	F: ArchetypeFilter + 'static,
@@ -230,7 +230,7 @@ where
 	}
 }
 
-impl<R, I> PredParam<I> for Res<'_, R>
+impl<R> PredParam for Res<'_, R>
 where
 	R: Resource
 {
@@ -242,7 +242,7 @@ where
 	}
 }
 
-impl<I> PredParam<I> for () {
+impl PredParam for () {
 	type Param = ();
 	type Id = ();
 	type Comb<'w> = EmptyComb;
@@ -251,10 +251,10 @@ impl<I> PredParam<I> for () {
 	}
 }
 
-impl<A, B, I> PredParam<I> for (A, B)
+impl<A, B> PredParam for (A, B)
 where
-	A: PredParam<I>,
-	B: PredParam<I>,
+	A: PredParam,
+	B: PredParam,
 {
 	type Param = (A::Param, B::Param);
 	type Id = (A::Id, B::Id);
@@ -264,9 +264,9 @@ where
 	}
 }
 
-impl<P, const N: usize, I> PredParam<I> for [P; N]
+impl<P, const N: usize> PredParam for [P; N]
 where
-	P: PredParam<I>,
+	P: PredParam,
 	P::Id: Ord,
 {
 	type Param = P::Param;
@@ -276,6 +276,27 @@ where
 		PredArrayComb::new(P::comb(param))
 	}
 }
+
+// impl<C, I> PredParam<I> for &C
+// where
+// 	C: Component
+// {
+// 	type Param = Query<'static, 'static, (Ref<'static, C>, Entity)>;
+// 	type Id = Entity;
+// 	type Comb<'w> = QueryComb<'w, C, ()>;
+// 	fn comb<'w>(param: &'w SystemParamItem<Self::Param>) -> Self::Comb<'w> {
+// 		QueryComb::new(param)
+// 	}
+// }
+// 
+// impl<I> PredParam<I> for WithId<I> {
+// 	type Param = ();
+// 	type Id = I;
+// 	type Comb<'w> = ();
+// 	fn comb<'w>(param: &'w SystemParamItem<Self::Param>) -> Self::Comb<'w> {
+// 		todo!()
+// 	}
+// }
 
 /// A case of prediction.
 pub trait PredItem {
@@ -392,7 +413,7 @@ impl PredStateMisc for () {
 pub struct PredSubState<'p, 's, T, P, M, K>
 where
 	's: 'p,
-	P: PredParam<M::Item>,
+	P: PredParam,
 	M: PredStateMisc,
 	K: CombKind,
 {
@@ -404,7 +425,7 @@ where
 impl<'p, 's, T, P, M, K> PredSubState<'p, 's, T, P, M, K>
 where
 	's: 'p,
-	P: PredParam<M::Item>,
+	P: PredParam,
 	M: PredStateMisc,
 	K: CombKind,
 {
@@ -421,7 +442,7 @@ impl<'p, 's, T, P, M, K> PredSubState<'p, 's, T, P, M, K>
 where
 	's: 'p,
 	T: Prediction + Clone,
-	P: PredParam<M::Item>,
+	P: PredParam,
 	M: PredStateMisc,
 	K: CombKind,
 {
@@ -440,7 +461,7 @@ where
 impl<'p, 's, T, P, M, K> PredSubState<'p, 's, T, P, M, K>
 where
 	's: 'p,
-	P: PredParamVec<M::Item>,
+	P: PredParamVec,
 	M: PredStateMisc,
 	K: CombKind,
 {
@@ -459,7 +480,7 @@ where
 impl<'p, 's, T, P, M, K> IntoIterator for PredSubState<'p, 's, T, P, M, K>
 where
 	's: 'p,
-	P: PredParam<M::Item>,
+	P: PredParam,
 	M: PredStateMisc,
 	K: CombKind,
 	PredComb<'p, T, P, M, K>: Iterator,
@@ -475,7 +496,7 @@ where
 pub struct PredState<'p, 's, T, P, M = ()>
 where
 	's: 'p,
-	P: PredParam<M::Item>,
+	P: PredParam,
 	M: PredStateMisc,
 {
 	inner: PredSubState<'p, 's, T, P, M, CombAnyTrue>,
@@ -484,7 +505,7 @@ where
 impl<'p, 's, T, P, M> PredState<'p, 's, T, P, M>
 where
 	's: 'p,
-	P: PredParam<M::Item>,
+	P: PredParam,
 	M: PredStateMisc,
 {
 	pub(crate) fn new(
@@ -501,7 +522,7 @@ where
 impl<'p, 's, T, P, M> PredState<'p, 's, T, P, M>
 where
 	's: 'p,
-	P: PredParamVec<M::Item>,
+	P: PredParamVec,
 	M: PredStateMisc,
 {
 	pub fn outer_iter(self) -> PredSubStateSplitIter<'p, 's, T, P, M, CombAnyTrue> {
@@ -512,7 +533,7 @@ where
 impl<'p, 's, T, P, M> IntoIterator for PredState<'p, 's, T, P, M>
 where
 	's: 'p,
-	P: PredParam<M::Item>,
+	P: PredParam,
 	M: PredStateMisc,
 	PredSubState<'p, 's, T, P, M, CombAnyTrue>: IntoIterator,
 {
@@ -554,7 +575,7 @@ where
 
 /// A one-way node that either stores an arbitrary amount of data or branches
 /// into sub-nodes.
-pub enum PredNode<'s, T: 's, P: PredParam<M> + 's, M> {
+pub enum PredNode<'s, T: 's, P: PredParam + 's, M> {
 	Blank,
 	Data(Node<PredStateCase<(P::Id, M), T>>),
 	Branches(Box<dyn PredNodeBranches<'s, T, P, M> + 's>),
@@ -563,7 +584,7 @@ pub enum PredNode<'s, T: 's, P: PredParam<M> + 's, M> {
 impl<'s, T, P, M> PredNode<'s, T, P, M>
 where
 	T: 's,
-	P: PredParam<M> + 's,
+	P: PredParam + 's,
 	M: PredId,
 {
 	pub fn init_data(&mut self, cap: usize) -> NodeWriter<PredStateCase<(P::Id, M), T>> {
@@ -581,7 +602,7 @@ where
 	
 	fn init_branches(&mut self, cap: usize) -> NodeWriter<PredNodeBranch<'s, T, P, M>>
 	where
-		P: PredParamVec<M>
+		P: PredParamVec
 	{
 		if let Self::Blank = self {
 			*self = Self::Branches(Box::new(Node::with_capacity(cap)));
@@ -596,7 +617,7 @@ where
 	}
 }
 
-impl<'s, T, P: PredParam<M>, M: PredId> IntoIterator for PredNode<'s, T, P, M> {
+impl<'s, T, P: PredParam, M: PredId> IntoIterator for PredNode<'s, T, P, M> {
 	type Item = PredStateCase<(P::Id, M), T>;
 	type IntoIter = PredNodeIter<'s, T, P, M>;
 	fn into_iter(self) -> Self::IntoIter {
@@ -609,13 +630,13 @@ impl<'s, T, P: PredParam<M>, M: PredId> IntoIterator for PredNode<'s, T, P, M> {
 }
 
 /// Iterator of [`PredNode`]'s items.
-pub enum PredNodeIter<'s, T, P: PredParam<M>, M> {
+pub enum PredNodeIter<'s, T, P: PredParam, M> {
 	Blank,
 	Data(NodeIter<PredStateCase<(P::Id, M), T>>),
 	Branches(Box<dyn PredNodeBranchesIterator<'s, T, P, M> + 's>),
 }
 
-impl<T, P: PredParam<M>, M: PredId> Iterator for PredNodeIter<'_, T, P, M> {
+impl<T, P: PredParam, M: PredId> Iterator for PredNodeIter<'_, T, P, M> {
 	type Item = PredStateCase<(P::Id, M), T>;
 	fn next(&mut self) -> Option<Self::Item> {
 		match self {
@@ -635,8 +656,8 @@ impl<T, P: PredParam<M>, M: PredId> Iterator for PredNodeIter<'_, T, P, M> {
 
 /// Individual branch of a [`PredNodeBranches`] type.
 type PredNodeBranch<'s, T, P, M> = (
-	<<P as PredParamVec<M>>::Head as PredParam<M>>::Id,
-	PredNode<'s, T, <P as PredParamVec<M>>::Tail, M>,
+	<<P as PredParamVec>::Head as PredParam>::Id,
+	PredNode<'s, T, <P as PredParamVec>::Tail, M>,
 );
 
 /// Used to define a trait object for dynamic branching in [`PredNode`], as not
@@ -646,10 +667,10 @@ type PredNodeBranch<'s, T, P, M> = (
 /// `PredParam` and implement empty defaults for scalar types. However, this
 /// would only support a subset of arrays instead of all sizes, which feels
 /// like an unnecessary constraint. Specialization would probably help here.
-pub trait PredNodeBranches<'s, T, P: PredParam<M>, M> {
+pub trait PredNodeBranches<'s, T, P: PredParam, M> {
 	fn as_writer<'n>(&'n mut self) -> NodeWriter<'n, PredNodeBranch<'s, T, P, M>>
 	where
-		P: PredParamVec<M>;
+		P: PredParamVec;
 	
 	fn into_branch_iter(&mut self) -> Box<dyn PredNodeBranchesIterator<'s, T, P, M> + 's>;
 }
@@ -657,12 +678,12 @@ pub trait PredNodeBranches<'s, T, P: PredParam<M>, M> {
 impl<'s, T, P, M> PredNodeBranches<'s, T, P, M> for Node<PredNodeBranch<'s, T, P, M>>
 where
 	T: 's,
-	P: PredParamVec<M> + 's,
+	P: PredParamVec + 's,
 	M: PredId,
 {
 	fn as_writer<'n>(&'n mut self) -> NodeWriter<'n, PredNodeBranch<'s, T, P, M>>
 	where
-		P: PredParamVec<M>
+		P: PredParamVec
 	{
 		NodeWriter::new(self)
 	}
@@ -677,15 +698,15 @@ where
 }
 
 /// Specific type of [`PredNodeBranchesIterator`] trait objects.
-pub struct PredNodeBranchesIter<'s, T, P: PredParamVec<M>, M> {
+pub struct PredNodeBranchesIter<'s, T, P: PredParamVec, M> {
 	node_iter: NodeIter<PredNodeBranch<'s, T, P, M>>,
-	branch_id: Option<<P::Head as PredParam<M>>::Id>,
+	branch_id: Option<<P::Head as PredParam>::Id>,
 	branch_iter: PredNodeIter<'s, T, P::Tail, M>,
 }
 
 impl<'s, T, P, M> Iterator for PredNodeBranchesIter<'s, T, P, M>
 where
-	P: PredParamVec<M>,
+	P: PredParamVec,
 	M: PredId,
 {
 	type Item = PredStateCase<(P::Id, M), T>;
@@ -711,13 +732,13 @@ where
 
 /// Used to define a trait object for dynamic branching in [`PredNodeIter`], as
 /// not all [`PredParam`] types implement [`PredParamVec`].
-pub trait PredNodeBranchesIterator<'s, T, P: PredParam<M>, M>:
+pub trait PredNodeBranchesIterator<'s, T, P: PredParam, M>:
 	Iterator<Item = PredStateCase<(P::Id, M), T>>
 {}
 
 impl<'s, T, P, M> PredNodeBranchesIterator<'s, T, P, M> for PredNodeBranchesIter<'s, T, P, M>
 where
-	P: PredParamVec<M>,
+	P: PredParamVec,
 	M: PredId,
 {}
 
