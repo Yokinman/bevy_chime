@@ -1,5 +1,5 @@
 use std::hash::Hash;
-use std::ops::{Deref, DerefMut};
+use std::ops::{Deref, DerefMut, RangeTo, RangeFrom, RangeFull};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -908,17 +908,40 @@ unsafe impl<D: PredFetchData> SystemParam for PredFetch<'_, D> {
 }
 
 /// ...
+/// 
+/// ## Types of Input
+/// 
+/// [`Into`] ([`In`])
+/// ```text
+/// In(A) -> X where A: Into<X>
+/// ```
+/// 
+/// [`Default`] ([`RangeFull`])
+/// ```text
+/// .. -> X where X: Default
+/// ```
+/// 
+/// Tuples (up to size 12, including unit)
+/// ```text
+/// (A, B, C, D) -> (X, Y, Z, W) 
+/// (A,)..       -> (X,..,..,..) // Latter default
+///     ..(C, D) -> (..,..,Z, W) // Former default
+/// (A,)..(C, D) -> (X,.., Z, W) // Middle default
+/// ```
+/// 
+/// Arrays (any length)
+/// ```text
+/// [A, B, C, D] -> [X, Y, Z, W] 
+/// [A,]..       -> [X,..,..,..] // Latter default
+///     ..[C, D] -> [..,..,Z, W] // Former default
+/// [A,]..[C, D] -> [X,.., Z, W] // Middle default
+/// ```
+/// 
+/// TODO:
+/// - Middle range defaults for tuples.
+/// - Range defaults for arrays. 
 pub trait IntoInput<I> {
 	fn into_input(self) -> I;
-}
-
-impl<T> IntoInput<T> for ()
-where
-	T: Default
-{
-	fn into_input(self) -> T {
-		T::default()
-	}
 }
 
 impl<A, B> IntoInput<B> for In<A>
@@ -928,6 +951,19 @@ where
 	fn into_input(self) -> B {
 		self.0.into()
 	}
+}
+
+impl<T> IntoInput<T> for RangeFull
+where
+	T: Default
+{
+	fn into_input(self) -> T {
+		T::default()
+	}
+}
+
+impl IntoInput<()> for () {
+	fn into_input(self) {}
 }
 
 macro_rules! impl_into_input_for_tuples {
@@ -946,7 +982,39 @@ macro_rules! impl_into_input_for_tuples {
 			}
 		}
 		
+		impl_into_input_for_tuples!{:$b0 $(, $a:$b)*}
 		impl_into_input_for_tuples!{$($a:$b),*}
+	};
+	($(:$bx:ident,)+ $a0:ident : $b0:ident $(, $a:ident : $b:ident)*) => {
+		impl<$($bx,)+ $a0, $b0, $($a, $b,)*> IntoInput<($($bx,)+ $b0, $($b,)*)>
+			for RangeTo<($a0, $($a,)*)>
+		where
+			$($bx: Default,)+
+			$a0: IntoInput<$b0>,
+			$($a: IntoInput<$b>,)*
+		{
+			fn into_input(self) -> ($($bx,)+ $b0, $($b,)*) {
+				#[allow(non_snake_case)]
+				let ($a0, $($a,)*) = self.end;
+				($($bx::default(),)+ $a0.into_input(), $($a.into_input(),)*)
+			}
+		}
+		
+		impl<$($a, $b,)* $a0, $b0, $($bx,)+> IntoInput<($($b,)* $b0, $($bx,)+)>
+			for RangeFrom<($($a,)* $a0,)>
+		where
+			$($a: IntoInput<$b>,)*
+			$a0: IntoInput<$b0>,
+			$($bx: Default,)+
+		{
+			fn into_input(self) -> ($($b,)* $b0, $($bx,)+) {
+				#[allow(non_snake_case)]
+				let ($($a,)* $a0,) = self.start;
+				($($a.into_input(),)* $a0.into_input(), $($bx::default(),)+)
+			}
+		}
+		
+		impl_into_input_for_tuples!{$(:$bx,)+ :$b0 $(, $a:$b)*}
 	};
 }
 
