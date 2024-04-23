@@ -1057,7 +1057,7 @@ where
 /// [`PredStateCase`] for scheduling.
 pub struct PredComb<'p, T, P, M, K>
 where
-	P: PredParam,
+	P: PredParam<M::Item>,
 	M: PredStateMisc,
 	K: CombKind,
 {
@@ -1070,7 +1070,7 @@ where
 
 impl<'p, T, P, M, K> PredComb<'p, T, P, M, K>
 where
-	P: PredParam,
+	P: PredParam<M::Item>,
 	M: PredStateMisc,
 	K: CombKind,
 {
@@ -1087,13 +1087,13 @@ where
 impl<'p, T, P, M, K> Iterator for PredComb<'p, T, P, WithId<M>, K>
 where
 	T: Prediction,
-	P: PredParam,
+	P: PredParam<M>,
 	M: PredId,
 	K: CombKind,
 {
 	type Item = (
 		&'p mut PredStateCase<(P::Id, M), T>,
-		<PredParamItem<'p, P> as PredItem>::Ref,
+		<PredParamItem<'p, P, M> as PredItem>::Ref,
 		M,
 	);
 	fn next(&mut self) -> Option<Self::Item> {
@@ -1168,7 +1168,7 @@ where
 /// Iterator of [`PredSubStateSplit`].
 pub enum PredCombSplit<'p, T, P, M, K>
 where
-	P: PredParam,
+	P: PredParam<M::Item>,
 	M: PredStateMisc,
 	K: CombKind,
 {
@@ -1178,7 +1178,7 @@ where
 
 impl<'p, T, P, M, K> Iterator for PredCombSplit<'p, T, P, M, K>
 where
-	P: PredParam,
+	P: PredParam<M::Item>,
 	M: PredStateMisc,
 	K: CombKind,
 	PredComb<'p, T, P, M, K::Pal>:
