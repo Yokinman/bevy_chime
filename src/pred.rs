@@ -939,10 +939,11 @@ pub trait IntoInput<I> {
 
 impl<A, B> IntoInput<B> for In<A>
 where
-	A: Into<B>
+	A: IntoIterator,
+	B: FromIterator<A::Item>,
 {
 	fn into_input(self) -> B {
-		self.0.into()
+		B::from_iter(self.0)
 	}
 }
 
