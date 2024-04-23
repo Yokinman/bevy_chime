@@ -10,7 +10,7 @@ mod node;
 use comb::*;
 use pred::*;
 
-pub use pred::{PredInput, PredState, PredFetch, WithId};
+pub use pred::{PredState, PredFetch, WithId};
 
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, btree_map, BTreeMap, HashMap};
@@ -30,31 +30,29 @@ use chime::time::InclusiveTimeRanges;
 
 /// Builder entry point for adding chime events to a [`World`].
 pub trait AddChimeEvent {
-	fn add_chime_events<T, P, M, A, F>(
+	fn add_chime_events<T, P, A, F>(
 		&mut self,
-		events: ChimeEventBuilder<T, P, M, A, F>,
+		events: ChimeEventBuilder<T, P, A, F>,
 	) -> &mut Self
 	where
 		T: Prediction,
 		T::TimeRanges: Send + Sync + 'static,
 		P: PredParam + 'static,
-		M: PredStateMisc,
 		A: ReadOnlySystemParam + 'static,
-		F: PredFn<T, P, M, A> + Send + Sync + 'static;
+		F: PredFn<T, P, A> + Send + Sync + 'static;
 }
 
 impl AddChimeEvent for App {
-	fn add_chime_events<T, P, M, A, F>(
+	fn add_chime_events<T, P, A, F>(
 		&mut self,
-		events: ChimeEventBuilder<T, P, M, A, F>,
+		events: ChimeEventBuilder<T, P, A, F>,
 	) -> &mut Self
 	where
 		T: Prediction,
 		T::TimeRanges: Send + Sync + 'static,
 		P: PredParam + 'static,
-		M: PredStateMisc,
 		A: ReadOnlySystemParam + 'static,
-		F: PredFn<T, P, M, A> + Send + Sync + 'static,
+		F: PredFn<T, P, A> + Send + Sync + 'static,
 	{
 		assert!(self.is_plugin_added::<ChimePlugin>());
 		
@@ -63,14 +61,14 @@ impl AddChimeEvent for App {
 			begin_sys,
 			end_sys,
 			outlier_sys,
-			misc_state,
+			input,
 			..
 		} = events;
 		
 		assert!(begin_sys.is_some() || end_sys.is_some() || outlier_sys.is_some());
 		
 		let id = self.world.resource_mut::<ChimeEventMap>()
-			.setup_id::<(P::Id, M::Item), T::TimeRanges>();
+			.setup_id::<P::Id, T::TimeRanges>();
 		
 		let mut state = system::SystemState::<(P::Param, A)>::new(
 			&mut self.world
@@ -84,8 +82,7 @@ impl AddChimeEvent for App {
 				let (state, misc) = state.get(world);
 				pred_sys(
 					PredState::new(
-						P::comb(&state, misc_state.clone()).into_kind(),
-						todo!(),
+						P::comb(&state, input.clone()).into_kind(),
 						&mut node,
 					),
 					misc
@@ -115,35 +112,32 @@ impl AddChimeEvent for App {
 
 /// Specialized function used for predicting and scheduling events, functionally
 /// similar to a read-only [`bevy_ecs::system::SystemParamFunction`].
-pub trait PredFn<T, P, M, A>:
-	Fn(PredState<T, P, M>, SystemParamItem<A>)
+pub trait PredFn<T, P, A>:
+	Fn(PredState<T, P>, SystemParamItem<A>)
 where
 	P: PredParam,
-	M: PredStateMisc,
 	A: ReadOnlySystemParam,
 {}
 
-impl<T, P, M, A, F> PredFn<T, P, M, A> for F
+impl<T, P, A, F> PredFn<T, P, A> for F
 where
 	P: PredParam,
-	M: PredStateMisc,
 	A: ReadOnlySystemParam,
-	F: Fn(PredState<T, P, M>, SystemParamItem<A>),
+	F: Fn(PredState<T, P>, SystemParamItem<A>),
 {}
 
 /// Types that can be converted into a [`PredFn`].
-pub trait IntoPredFn<T, P, M, A>: Sized
+pub trait IntoPredFn<T, P, A>: Sized
 where
 	P: PredParam,
-	M: PredStateMisc,
 	A: ReadOnlySystemParam,
 {
 	// !!! This should probably be split into two traits, with the two separate
 	// methods (`into_events` and `into_events_with_input`).
 	
-	fn into_pred_fn(self) -> impl PredFn<T, P, M, A>;
+	fn into_pred_fn(self) -> impl PredFn<T, P, A>;
 	
-	fn into_events(self) -> ChimeEventBuilder<T, P, M, A, impl PredFn<T, P, M, A>>
+	fn into_events(self) -> ChimeEventBuilder<T, P, A, impl PredFn<T, P, A>>
 	where
 		P::Input: Default
 	{
@@ -151,7 +145,7 @@ where
 	}
 	
 	fn into_events_with_input(self, input: P::Input)
-		-> ChimeEventBuilder<T, P, M, A, impl PredFn<T, P, M, A>>
+		-> ChimeEventBuilder<T, P, A, impl PredFn<T, P, A>>
 	{
 		ChimeEventBuilder::new(self.into_pred_fn(), input)
 	}
@@ -163,14 +157,13 @@ macro_rules! impl_into_pred_fn {
 		$(impl_into_pred_fn!(@all $($rest),*);)?
 	};
 	($($param:ident),*) => {
-		impl<F, T, P, M, $($param: ReadOnlySystemParam),*> IntoPredFn<T, P, M, ($($param,)*)> for F
+		impl<F, T, P, $($param: ReadOnlySystemParam),*> IntoPredFn<T, P, ($($param,)*)> for F
 		where
-			F: Fn(PredState<T, P, M>, $($param),*)
-				+ Fn(PredState<T, P, M>, $(SystemParamItem<$param>),*),
+			F: Fn(PredState<T, P>, $($param),*)
+				+ Fn(PredState<T, P>, $(SystemParamItem<$param>),*),
 			P: PredParam,
-			M: PredStateMisc,
 		{
-			fn into_pred_fn(self) -> impl PredFn<T, P, M, ($($param,)*)> {
+			fn into_pred_fn(self) -> impl PredFn<T, P, ($($param,)*)> {
 				move |state, misc| {
 					let ($($param,)*) = misc;
 					self(state, $($param),*);
@@ -201,27 +194,25 @@ where
 }
 
 /// Builder for inserting a chime event into a [`World`].  
-pub struct ChimeEventBuilder<T, P, M, A, F>
+pub struct ChimeEventBuilder<T, P, A, F>
 where
 	P: PredParam,
-	M: PredStateMisc,
 	A: ReadOnlySystemParam,
-	F: PredFn<T, P, M, A>,
+	F: PredFn<T, P, A>,
 {
 	pred_sys: F,
 	begin_sys: Option<Box<dyn ChimeEventSystem>>,
 	end_sys: Option<Box<dyn ChimeEventSystem>>,
 	outlier_sys: Option<Box<dyn ChimeEventSystem>>,
-	misc_state: P::Input,
-	_param: std::marker::PhantomData<fn(PredState<T, P, M>, SystemParamItem<A>)>,
+	input: P::Input,
+	_param: std::marker::PhantomData<fn(PredState<T, P>, SystemParamItem<A>)>,
 }
 
-impl<U, P, M, A, F> ChimeEventBuilder<U, P, M, A, F>
+impl<U, P, A, F> ChimeEventBuilder<U, P, A, F>
 where
 	P: PredParam,
-	M: PredStateMisc,
 	A: ReadOnlySystemParam,
-	F: PredFn<U, P, M, A>,
+	F: PredFn<U, P, A>,
 {
 	fn new(pred_sys: F, input: P::Input) -> Self {
 		ChimeEventBuilder {
@@ -229,7 +220,7 @@ where
 			begin_sys: None,
 			end_sys: None,
 			outlier_sys: None,
-			misc_state: input,
+			input,
 			_param: std::marker::PhantomData,
 		}
 	}
@@ -442,9 +433,9 @@ impl ChimeEventMap {
 		self.table.len() - 1
 	}
 	
-	fn sched<T, I, M>(
+	fn sched<T, I>(
 		&mut self,
-		input: impl IntoIterator<Item = PredStateCase<(I, M), T>>,
+		input: impl IntoIterator<Item = PredStateCase<I, T>>,
 		pred_time: Duration,
 		event_id: usize,
 		begin_sys: Option<&dyn ChimeEventSystem>,
@@ -454,14 +445,13 @@ impl ChimeEventMap {
 	)
 	where
 		I: PredId,
-		M: PredId,
 		T: Prediction,
 		T::TimeRanges: 'static,
 	{
 		let event_map = self.table.get_mut(event_id)
 			.expect("id must be initialized with ChimeEventMap::setup_id")
 			.as_any_mut()
-			.downcast_mut::<EventMap<(I, M), T::TimeRanges>>()
+			.downcast_mut::<EventMap<I, T::TimeRanges>>()
 			.expect("should always work");
 		
 		for case in input {
@@ -473,8 +463,7 @@ impl ChimeEventMap {
 				
 				 // Initialize Systems:
 				world.insert_resource(PredSystemInput {
-					id: Box::new(case_id.0),
-					misc_id: Box::new(case_id.1),
+					id: Box::new(case_id),
 					time: event.time,
 				});
 				if let Some(sys) = begin_sys {
