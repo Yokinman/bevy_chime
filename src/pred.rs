@@ -912,12 +912,9 @@ unsafe impl<D: PredFetchData> SystemParam for PredFetch<'_, D> {
 /// 
 /// ## Types of Input
 /// 
-/// [`IntoIterator`] ([`In`])
+/// Input ([`In`])
 /// ```text
-/// In<A> -> B
-/// where
-///     A: IntoIterator,
-///     B: FromIterator<A::Item>,
+/// In<T> -> T
 /// ```
 /// 
 /// Tuples (up to size 4, including unit)
@@ -944,13 +941,9 @@ pub trait IntoInput<I> {
 	fn into_input(self) -> I;
 }
 
-impl<A, B> IntoInput<B> for In<A>
-where
-	A: IntoIterator,
-	B: FromIterator<A::Item>,
-{
-	fn into_input(self) -> B {
-		B::from_iter(self.0)
+impl<T> IntoInput<T> for In<T> {
+	fn into_input(self) -> T {
+		self.0
 	}
 }
 
