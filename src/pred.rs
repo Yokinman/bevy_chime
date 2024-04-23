@@ -198,7 +198,7 @@ pub type PredParamItem<'w, P> = <<<P
 	as PredCombinatorCase>::Item;
 
 /// A set of [`PredItem`] values used to predict & schedule events.
-pub trait PredParam {
+pub trait PredParam<I = ()> {
 	/// The equivalent [`bevy_ecs::system::SystemParam`].
 	type Param: ReadOnlySystemParam + 'static;
 	
@@ -212,7 +212,11 @@ pub trait PredParam {
 	fn comb<'w>(param: &'w SystemParamItem<Self::Param>) -> Self::Comb<'w>;
 }
 
-impl<T: Component, F: ArchetypeFilter + 'static> PredParam for Query<'_, '_, &T, F> {
+impl<T, F, I> PredParam<I> for Query<'_, '_, &T, F>
+where
+	T: Component,
+	F: ArchetypeFilter + 'static,
+{
 	type Param = Query<'static, 'static, (Ref<'static, T>, Entity), F>;
 	type Id = Entity;
 	type Comb<'w> = QueryComb<'w, T, F>;
@@ -221,7 +225,10 @@ impl<T: Component, F: ArchetypeFilter + 'static> PredParam for Query<'_, '_, &T,
 	}
 }
 
-impl<R: Resource> PredParam for Res<'_, R> {
+impl<R, I> PredParam<I> for Res<'_, R>
+where
+	R: Resource
+{
 	type Param = Res<'static, R>;
 	type Id = ();
 	type Comb<'w> = ResComb<'w, R>;
@@ -230,7 +237,7 @@ impl<R: Resource> PredParam for Res<'_, R> {
 	}
 }
 
-impl PredParam for () {
+impl<I> PredParam<I> for () {
 	type Param = ();
 	type Id = ();
 	type Comb<'w> = EmptyComb;
@@ -239,7 +246,11 @@ impl PredParam for () {
 	}
 }
 
-impl<A: PredParam, B: PredParam> PredParam for (A, B) {
+impl<A, B, I> PredParam<I> for (A, B)
+where
+	A: PredParam<I>,
+	B: PredParam<I>,
+{
 	type Param = (A::Param, B::Param);
 	type Id = (A::Id, B::Id);
 	type Comb<'w> = PredPairComb<A::Comb<'w>, B::Comb<'w>>;
@@ -248,8 +259,9 @@ impl<A: PredParam, B: PredParam> PredParam for (A, B) {
 	}
 }
 
-impl<P: PredParam, const N: usize> PredParam for [P; N]
+impl<P, const N: usize, I> PredParam<I> for [P; N]
 where
+	P: PredParam<I>,
 	P::Id: Ord,
 {
 	type Param = P::Param;
