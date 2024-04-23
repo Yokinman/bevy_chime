@@ -316,7 +316,7 @@ where
 	I: PredId
 {
 	type Param = ();
-	type Input = Box<[I]>;
+	type Input = Rc<[I]>;
 	type Id = I;
 	type Comb<'w> = PredIdComb<I>;
 	fn comb<'w>(

@@ -1071,11 +1071,11 @@ where
 /// ...
 #[derive(Clone)]
 pub struct PredIdComb<I> {
-	slice: Box<[I]>,
+	slice: Rc<[I]>,
 }
 
 impl<I> PredIdComb<I> {
-	pub(crate) fn new(slice: Box<[I]>) -> Self {
+	pub(crate) fn new(slice: Rc<[I]>) -> Self {
 		Self { slice }
 	}
 }
@@ -1096,7 +1096,7 @@ where
 
 /// ...
 pub struct PredIdCombIter<I> {
-	slice: Box<[I]>,
+	slice: Rc<[I]>,
 	index: usize,
 }
 
