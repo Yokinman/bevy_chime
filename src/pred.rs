@@ -417,31 +417,12 @@ where
 	}
 }
 
-impl<'p, 's, T, P, K> PredSubState<'p, 's, T, P, (), K>
+impl<'p, 's, T, P, M, K> PredSubState<'p, 's, T, P, M, K>
 where
 	's: 'p,
 	T: Prediction + Clone,
-	P: PredParam,
-	K: CombKind,
-{
-	/// Sets all updated cases to the given times.
-	pub fn set(self, pred: T) {
-		let mut iter = self.into_iter();
-		if let Some((first, ..)) = iter.next() {
-			for (case, ..) in iter {
-				case.set(pred.clone());
-			}
-			first.set(pred);
-		}
-	}
-}
-
-impl<'p, 's, T, P, M, K> PredSubState<'p, 's, T, P, WithId<M>, K>
-where
-	's: 'p,
-	T: Prediction + Clone,
-	P: PredParam<M>,
-	M: PredId,
+	P: PredParam<M::Item>,
+	M: PredStateMisc,
 	K: CombKind,
 {
 	/// Sets all updated cases to the given times.

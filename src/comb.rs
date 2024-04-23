@@ -1084,17 +1084,16 @@ where
 	}
 }
 
-impl<'p, T, P, M, K> Iterator for PredComb<'p, T, P, WithId<M>, K>
+impl<'p, T, P, M, K> Iterator for PredComb<'p, T, P, M, K>
 where
 	T: Prediction,
-	P: PredParam<M>,
-	M: PredId,
+	P: PredParam<M::Item>,
+	M: PredStateMisc,
 	K: CombKind,
 {
 	type Item = (
-		&'p mut PredStateCase<(P::Id, M), T>,
-		<PredParamItem<'p, P, M> as PredItem>::Ref,
-		M,
+		&'p mut PredStateCase<(P::Id, M::Item), T>,
+		<PredParamItem<'p, P, M::Item> as PredItem>::Ref,
 	);
 	fn next(&mut self) -> Option<Self::Item> {
 		while let Some(case) = self.curr {
@@ -1103,7 +1102,6 @@ where
 				return Some((
 					self.node.write(PredStateCase::new((id, misc))),
 					item,
-					misc,
 				))
 			}
 			self.curr = self.iter.next();
@@ -1124,40 +1122,6 @@ where
 				max.and_then(|x| x
 					.checked_mul(misc_len)?
 					.checked_add(misc_max?))
-			)
-		} else {
-			(0, Some(0))
-		}
-	}
-}
-
-impl<'p, T, P, K> Iterator for PredComb<'p, T, P, (), K>
-where
-	T: Prediction,
-	P: PredParam,
-	K: CombKind,
-{
-	type Item = (
-		&'p mut PredStateCase<(P::Id, ()), T>,
-		<PredParamItem<'p, P> as PredItem>::Ref,
-	);
-	fn next(&mut self) -> Option<Self::Item> {
-		if let Some(case) = self.curr {
-			let (item, id) = case.into_parts();
-			self.curr = self.iter.next();
-			return Some((
-				self.node.write(PredStateCase::new((id, ()))),
-				item,
-			))
-		}
-		None
-	}
-	fn size_hint(&self) -> (usize, Option<usize>) {
-		if self.curr.is_some() {
-			let (min, max) = self.iter.size_hint();
-			(
-				min + 1,
-				max.map(|x| x + 1)
 			)
 		} else {
 			(0, Some(0))
