@@ -1,6 +1,5 @@
 use std::hash::Hash;
 use std::ops::{Deref, DerefMut, RangeTo, RangeFrom, RangeFull};
-use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use bevy_ecs::change_detection::{DetectChanges, Ref, Res};
@@ -314,11 +313,12 @@ where
 
 impl<I> PredParam for WithId<I>
 where
-	I: PredId
+	I: IntoIterator + Clone,
+	I::Item: PredId,
 {
 	type Param = ();
-	type Input = Rc<[I]>;
-	type Id = I;
+	type Input = I;
+	type Id = I::Item;
 	type Comb<'w> = PredIdComb<I>;
 	fn comb<'w>(
 		_param: &'w SystemParamItem<Self::Param>,

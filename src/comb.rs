@@ -185,11 +185,12 @@ where
 
 impl<I, K> PredCombinator<K> for PredIdComb<I>
 where
-	I: PredId,
+	I: IntoIterator + Clone,
+	I::Item: PredId,
 	K: CombKind,
 {
-	type Id = I;
-	type Case = PredCombCase<WithId<I>, I>;
+	type Id = I::Item;
+	type Case = PredCombCase<WithId<I::Item>, I::Item>;
 	
 	type IntoKind<Kind: CombKind> = PredIdComb<I>;
 	
@@ -1071,51 +1072,46 @@ where
 /// ...
 #[derive(Clone)]
 pub struct PredIdComb<I> {
-	slice: Rc<[I]>,
+	iter: I,
 }
 
 impl<I> PredIdComb<I> {
-	pub(crate) fn new(slice: Rc<[I]>) -> Self {
-		Self { slice }
+	pub(crate) fn new(iter: I) -> Self {
+		Self { iter }
 	}
 }
 
 impl<I> IntoIterator for PredIdComb<I>
 where
-	I: PredId
+	I: IntoIterator,
+	I::Item: PredId,
 {
 	type Item = <Self::IntoIter as Iterator>::Item;
-	type IntoIter = PredIdCombIter<I>;
+	type IntoIter = PredIdCombIter<I::IntoIter>;
 	fn into_iter(self) -> Self::IntoIter {
 		PredIdCombIter {
-			slice: self.slice,
-			index: 0,
+			iter: self.iter.into_iter(),
 		}
 	}
 }
 
 /// ...
 pub struct PredIdCombIter<I> {
-	slice: Rc<[I]>,
-	index: usize,
+	iter: I,
 }
 
 impl<I> Iterator for PredIdCombIter<I>
 where
-	I: PredId
+	I: Iterator,
+	I::Item: PredId,
 {
-	type Item = PredCombCase<WithId<I>, I>;
+	type Item = PredCombCase<WithId<I::Item>, I::Item>;
 	fn next(&mut self) -> Option<Self::Item> {
-		if let Some(id) = self.slice.get(self.index) {
-			self.index += 1;
-			Some(PredCombCase::Same(*id, *id))
-		} else {
-			None
-		}
+		self.iter.next()
+			.map(|id| PredCombCase::Same(id, id))
 	}
 	fn size_hint(&self) -> (usize, Option<usize>) {
-		let len = self.slice.len() - self.index;
-		(len, Some(len))
+		self.iter.size_hint()
 	}
 }
 
