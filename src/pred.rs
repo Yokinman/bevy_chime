@@ -328,6 +328,48 @@ where
 	}
 }
 
+/// ...
+pub trait PredItemRef {
+	fn clone(&self) -> Self;
+}
+
+impl PredItemRef for () {
+	fn clone(&self) -> Self {}
+}
+
+impl<T> PredItemRef for &T {
+	fn clone(&self) -> Self {
+		self
+	}
+}
+
+impl<T: Resource> PredItemRef for Res<'_, T> {
+	fn clone(&self) -> Self {
+		Res::clone(self) // GGGRRAAAAAAHHHHH!!!!!!!!!
+	}
+}
+
+impl<A, B> PredItemRef for (A, B)
+where
+	A: PredItemRef,
+	B: PredItemRef,
+{
+	fn clone(&self) -> Self {
+		let (a, b) = self;
+		(a.clone(), b.clone())
+	}
+}
+
+impl<T, const N: usize> PredItemRef for [T; N]
+where
+	T: PredItemRef
+{
+	fn clone(&self) -> Self {
+		self.each_ref()
+			.map(T::clone)
+	}
+}
+
 /// A case of prediction.
 pub trait PredItem {
 	type Ref: Copy/* + std::ops::Deref<Target=Self::Inner>*/;
