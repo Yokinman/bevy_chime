@@ -389,10 +389,11 @@ pub trait PredCombinatorCase: Clone {
 	type Item: PredItem;
 	type Id: PredId;
 	fn is_diff(&self) -> bool;
-	fn item_ref(&self) -> Self::Item;
+	fn into_item(self) -> Self::Item;
 	fn id(&self) -> Self::Id;
 	fn into_parts(self) -> (Self::Item, Self::Id) {
-		(self.item_ref(), self.id())
+		let id = self.id();
+		(self.into_item(), id)
 	}
 }
 
@@ -402,7 +403,7 @@ impl PredCombinatorCase for () {
 	fn is_diff(&self) -> bool {
 		true
 	}
-	fn item_ref(&self) -> Self::Item {}
+	fn into_item(self) -> Self::Item {}
 	fn id(&self) -> Self::Id {}
 }
 
@@ -419,9 +420,9 @@ where
 			PredCombCase::Same(..) => false,
 		}
 	}
-	fn item_ref(&self) -> Self::Item {
+	fn into_item(self) -> Self::Item {
 		let (PredCombCase::Diff(item, _) | PredCombCase::Same(item, _)) = self;
-		item.clone()
+		item
 	}
 	fn id(&self) -> Self::Id {
 		let (PredCombCase::Diff(_, id) | PredCombCase::Same(_, id)) = self;
@@ -435,8 +436,8 @@ impl<C: PredCombinatorCase, const N: usize> PredCombinatorCase for [C; N] {
 	fn is_diff(&self) -> bool {
 		self.iter().any(C::is_diff)
 	}
-	fn item_ref(&self) -> Self::Item {
-		self.each_ref().map(C::item_ref)
+	fn into_item(self) -> Self::Item {
+		self.map(C::into_item)
 	}
 	fn id(&self) -> Self::Id {
 		self.each_ref().map(C::id)
@@ -453,8 +454,8 @@ where
 	fn is_diff(&self) -> bool {
 		self.0.is_diff() || self.1.is_diff()
 	}
-	fn item_ref(&self) -> Self::Item {
-		(self.0.item_ref(), self.1.item_ref())
+	fn into_item(self) -> Self::Item {
+		(self.0.into_item(), self.1.into_item())
 	}
 	fn id(&self) -> Self::Id {
 		(self.0.id(), self.1.id())
@@ -474,8 +475,8 @@ where
 {
 	fn clone(&self) -> Self {
 		match self {
-			Self::Diff(item_ref, id) => Self::Diff(item_ref.clone(), *id),
-			Self::Same(item_ref, id) => Self::Same(item_ref.clone(), *id),
+			Self::Diff(item, id) => Self::Diff(item.clone(), *id),
+			Self::Same(item, id) => Self::Same(item.clone(), *id),
 		}
 	}
 }

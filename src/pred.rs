@@ -150,7 +150,7 @@ where
 				PredSubComb::Diff(comb) => PredSubStateSplit::Diff(PredSubState::new(comb, node)),
 				PredSubComb::Same(comb) => PredSubStateSplit::Same(PredSubState::new(comb, node)),
 			};
-			Some((sub_state, head.item_ref()))
+			Some((sub_state, head.into_item()))
 		} else {
 			None
 		}
