@@ -372,7 +372,7 @@ where
 
 /// A case of prediction.
 pub trait PredItem {
-	type Ref: Copy/* + std::ops::Deref<Target=Self::Inner>*/;
+	type Ref: PredItemRef;
 	
 	/// Needed because `bevy_ecs::world::Ref` can't be cloned/copied.
 	fn into_ref(item: Self) -> Self::Ref;
