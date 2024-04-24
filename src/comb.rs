@@ -358,7 +358,7 @@ where
 	T: Iterator<Item = (P, I)>,
 	K: CombKind,
 {
-	type Item = PredCombCase<P::Ref, I>;
+	type Item = PredCombCase<P::Item, I>;
 	fn next(&mut self) -> Option<Self::Item> {
 		if K::has_none() {
 			return None
