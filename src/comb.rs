@@ -385,7 +385,7 @@ where
 }
 
 /// Item of a [`PredCombinator`]'s iterator.
-pub trait PredCombinatorCase: Copy + Clone {
+pub trait PredCombinatorCase: Clone {
 	type Item: PredItem;
 	type Id: PredId;
 	fn is_diff(&self) -> bool;
@@ -432,10 +432,10 @@ impl<C: PredCombinatorCase, const N: usize> PredCombinatorCase for [C; N] {
 		self.iter().any(C::is_diff)
 	}
 	fn item_ref(&self) -> <Self::Item as PredItem>::Ref {
-		self.map(|x| x.item_ref())
+		self.each_ref().map(C::item_ref)
 	}
 	fn id(&self) -> Self::Id {
-		self.map(|x| x.id())
+		self.each_ref().map(C::id)
 	}
 }
 
@@ -605,10 +605,11 @@ where
 				a_iter, a_case, b_comb, mut b_iter, a_inv_comb, b_inv_comb
 			} => {
 				if let Some(b_case) = b_iter.next() {
+					let case = Some((a_case.clone(), b_case));
 					*self = Self::Primary {
 						a_iter, a_case, b_comb, b_iter, a_inv_comb, b_inv_comb
 					};
-					return Some((a_case, b_case))
+					return case
 				}
 				*self = Self::primary_next(a_iter, b_comb, a_inv_comb, b_inv_comb);
 				self.next()
@@ -616,8 +617,9 @@ where
 			
 			Self::Secondary { b_iter, b_case, a_comb, mut a_iter } => {
 				if let Some(a_case) = a_iter.next() {
+					let case = Some((a_case, b_case.clone()));
 					*self = Self::Secondary { b_iter, b_case, a_comb, a_iter };
-					return Some((a_case, b_case))
+					return case
 				}
 				*self = Self::secondary_next(b_iter, a_comb);
 				self.next()
@@ -816,7 +818,7 @@ where
 		} {
 			iter.index[N-1] = iter.slice.len();
 		} else if iter.index[N-1] < iter.slice.len() {
-			let (case, _) = iter.slice[iter.index[N-1]];
+			let (case, _) = &iter.slice[iter.index[N-1]];
 			if K::has_state(case.is_diff()) {
 				iter.layer = N-1;
 			} else if N == 1 {
@@ -863,11 +865,11 @@ where
 				[true, true] => index + 1,
 				[false, false] => self.slice.len(),
 				_ => {
-					let (case, next_index) = self.slice[index];
+					let (case, next_index) = &self.slice[index];
 					
 					 // Jump to Next Matching Case:
 					if K::has_state(case.is_diff()) {
-						next_index
+						*next_index
 					}
 					
 					 // Find Next Matching Case:
@@ -934,7 +936,7 @@ where
 		if N == 0 || self.index[N-1] >= self.slice.len() {
 			return None
 		}
-		let case = self.index.map(|i| self.slice[i].0);
+		let case = self.index.map(|i| self.slice[i].0.clone());
 		self.step(0);
 		Some(case)
 	}
@@ -971,10 +973,10 @@ where
 					self.min_same_index
 				};
 				while index < self.slice.len() {
-					let (case, next_index) = self.slice[index];
+					let (case, next_index) = &self.slice[index];
 					index = if K::has_state(case.is_diff()) {
 						remaining -= 1;
-						next_index
+						*next_index
 					} else if index < first_index {
 						first_index
 					} else {
@@ -1048,7 +1050,7 @@ where
 			} else {
 				PredSubComb::Same(self.inner.clone().into_kind())
 			};
-			Some((*case, sub_comb))
+			Some((case.clone(), sub_comb))
 		} else {
 			None
 		}
