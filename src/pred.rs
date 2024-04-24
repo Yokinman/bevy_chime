@@ -566,19 +566,19 @@ where
 /// A scheduled case of prediction, used in [`crate::PredState`].
 pub struct PredStateCase<I, T> {
 	id: I,
-	times: Option<T>,
+	pred: Option<T>,
 }
 
 impl<I: PredId, T> PredStateCase<I, T> {
 	pub fn new(id: I) -> Self {
 		Self {
 			id,
-			times: None,
+			pred: None,
 		}
 	}
 	
 	pub(crate) fn into_parts(self) -> (I, Option<T>) {
-		(self.id, self.times)
+		(self.id, self.pred)
 	}
 }
 
@@ -588,7 +588,7 @@ where
 	T: Prediction,
 {
 	pub fn set(&mut self, pred: T) {
-		self.times = Some(pred);
+		self.pred = Some(pred);
 	}
 }
 
@@ -730,7 +730,7 @@ where
 		if let Some(case) = self.branch_iter.next() {
 			Some(PredStateCase {
 				id: P::join_id(self.branch_id.unwrap(), case.id),
-				times: case.times,
+				pred: case.pred,
 			})
 		} else if let Some((id, node)) = self.node_iter.next() {
 			self.branch_id = Some(id);
