@@ -373,7 +373,7 @@ where
 /// [`PredItem`] with updated state.
 pub trait PredItemRef {
 	type Item: PredItem;
-	fn into_ref(item: Self) -> Self::Item;
+	fn into_item(self) -> Self::Item;
 	
 	/// Whether this item is in need of a prediction update.
 	fn is_updated(item: &Self) -> bool;
@@ -381,8 +381,8 @@ pub trait PredItemRef {
 
 impl<'w, T: 'static> PredItemRef for Ref<'w, T> {
 	type Item = &'w T;
-	fn into_ref(item: Self) -> Self::Item {
-		Ref::into_inner(item)
+	fn into_item(self) -> Self::Item {
+		self.into_inner()
 	}
 	fn is_updated(item: &Self) -> bool {
 		DetectChanges::is_changed(item)
@@ -391,8 +391,8 @@ impl<'w, T: 'static> PredItemRef for Ref<'w, T> {
 
 impl<'w, R: Resource> PredItemRef for Res<'w, R> {
 	type Item = Self;
-	fn into_ref(item: Self) -> Self::Item {
-		item
+	fn into_item(self) -> Self::Item {
+		self
 	}
 	fn is_updated(item: &Self) -> bool {
 		DetectChanges::is_changed(item)
@@ -401,8 +401,8 @@ impl<'w, R: Resource> PredItemRef for Res<'w, R> {
 
 impl PredItemRef for () {
 	type Item = ();
-	fn into_ref(item: Self) -> Self::Item {
-		item
+	fn into_item(self) -> Self::Item {
+		self
 	}
 	fn is_updated(_item: &Self) -> bool {
 		true

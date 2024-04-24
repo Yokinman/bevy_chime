@@ -367,9 +367,9 @@ where
 			let is_updated = P::is_updated(&item);
 			if K::has_state(is_updated) {
 				return Some(if is_updated {
-					PredCombCase::Diff(P::into_ref(item), id)
+					PredCombCase::Diff(item.into_item(), id)
 				} else {
-					PredCombCase::Same(P::into_ref(item), id)
+					PredCombCase::Same(item.into_item(), id)
 				})
 			}
 		}
