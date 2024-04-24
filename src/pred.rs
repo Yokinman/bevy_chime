@@ -328,31 +328,31 @@ where
 	}
 }
 
-/// ...
-pub trait PredItemRef {
+/// Case of prediction.
+pub trait PredItem {
 	fn clone(&self) -> Self;
 }
 
-impl PredItemRef for () {
+impl PredItem for () {
 	fn clone(&self) -> Self {}
 }
 
-impl<T> PredItemRef for &T {
+impl<T> PredItem for &T {
 	fn clone(&self) -> Self {
 		self
 	}
 }
 
-impl<T: Resource> PredItemRef for Res<'_, T> {
+impl<T: Resource> PredItem for Res<'_, T> {
 	fn clone(&self) -> Self {
 		Res::clone(self) // GGGRRAAAAAAHHHHH!!!!!!!!!
 	}
 }
 
-impl<A, B> PredItemRef for (A, B)
+impl<A, B> PredItem for (A, B)
 where
-	A: PredItemRef,
-	B: PredItemRef,
+	A: PredItem,
+	B: PredItem,
 {
 	fn clone(&self) -> Self {
 		let (a, b) = self;
@@ -360,9 +360,9 @@ where
 	}
 }
 
-impl<T, const N: usize> PredItemRef for [T; N]
+impl<T, const N: usize> PredItem for [T; N]
 where
-	T: PredItemRef
+	T: PredItem
 {
 	fn clone(&self) -> Self {
 		self.each_ref()
@@ -370,9 +370,9 @@ where
 	}
 }
 
-/// A case of prediction.
-pub trait PredItem {
-	type Ref: PredItemRef;
+/// [`PredItem`] with updated state.
+pub trait PredItemRef {
+	type Ref: PredItem;
 	
 	/// Needed because `bevy_ecs::world::Ref` can't be cloned/copied.
 	fn into_ref(item: Self) -> Self::Ref;
@@ -381,7 +381,7 @@ pub trait PredItem {
 	fn is_updated(item: &Self) -> bool;
 }
 
-impl<'w, T: 'static> PredItem for Ref<'w, T> {
+impl<'w, T: 'static> PredItemRef for Ref<'w, T> {
 	type Ref = &'w T;
 	fn into_ref(item: Self) -> Self::Ref {
 		Ref::into_inner(item)
@@ -391,7 +391,7 @@ impl<'w, T: 'static> PredItem for Ref<'w, T> {
 	}
 }
 
-impl<'w, R: Resource> PredItem for Res<'w, R> {
+impl<'w, R: Resource> PredItemRef for Res<'w, R> {
 	type Ref = Self;
 	fn into_ref(item: Self) -> Self::Ref {
 		item
@@ -401,7 +401,7 @@ impl<'w, R: Resource> PredItem for Res<'w, R> {
 	}
 }
 
-impl PredItem for () {
+impl PredItemRef for () {
 	type Ref = ();
 	fn into_ref(item: Self) -> Self::Ref {
 		item
@@ -411,10 +411,10 @@ impl PredItem for () {
 	}
 }
 
-impl<A, B> PredItem for (A, B)
+impl<A, B> PredItemRef for (A, B)
 where
-	A: PredItem,
-	B: PredItem,
+	A: PredItemRef,
+	B: PredItemRef,
 {
 	type Ref = (A::Ref, B::Ref);
 	fn into_ref((a, b): Self) -> Self::Ref {
@@ -425,9 +425,9 @@ where
 	}
 }
 
-impl<T, const N: usize> PredItem for [T; N]
+impl<T, const N: usize> PredItemRef for [T; N]
 where
-	T: PredItem
+	T: PredItemRef
 {
 	type Ref = [T::Ref; N];
 	fn into_ref(item: Self) -> Self::Ref {
@@ -442,7 +442,7 @@ where
 #[derive(Copy, Clone)]
 pub struct WithId<I>(pub I);
 
-impl<I> PredItemRef for WithId<I>
+impl<I> PredItem for WithId<I>
 where
 	I: PredId
 {
@@ -451,7 +451,7 @@ where
 	}
 }
 
-impl<I> PredItem for WithId<I>
+impl<I> PredItemRef for WithId<I>
 where
 	I: PredId
 {

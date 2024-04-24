@@ -353,7 +353,7 @@ impl<T, K> CombIter<T, K> {
 
 impl<P, I, T, K> Iterator for CombIter<T, K>
 where
-	P: PredItem,
+	P: PredItemRef,
 	I: PredId,
 	T: Iterator<Item = (P, I)>,
 	K: CombKind,
@@ -386,7 +386,7 @@ where
 
 /// Item of a [`PredCombinator`]'s iterator.
 pub trait PredCombinatorCase: Clone {
-	type Item: PredItemRef;
+	type Item: PredItem;
 	type Id: PredId;
 	fn is_diff(&self) -> bool;
 	fn item_ref(&self) -> Self::Item;
@@ -408,7 +408,7 @@ impl PredCombinatorCase for () {
 
 impl<P, I> PredCombinatorCase for PredCombCase<P, I>
 where
-	P: PredItemRef,
+	P: PredItem,
 	I: PredId,
 {
 	type Item = P;
@@ -469,7 +469,7 @@ pub enum PredCombCase<P, I> {
 
 impl<P, I> Clone for PredCombCase<P, I>
 where
-	P: PredItemRef,
+	P: PredItem,
 	I: PredId,
 {
 	fn clone(&self) -> Self {
