@@ -439,16 +439,16 @@ where
 }
 
 /// ...
-#[derive(Clone)]
+#[derive(Copy, Clone)]
 pub struct WithId<I>(pub I);
 
 impl<I> PredItem for WithId<I>
 where
 	I: PredId
 {
-	type Ref = I;
+	type Ref = Self;
 	fn into_ref(item: Self) -> Self::Ref {
-		item.0
+		item
 	}
 	fn is_updated(_item: &Self) -> bool {
 		false

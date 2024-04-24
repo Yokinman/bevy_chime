@@ -1108,7 +1108,7 @@ where
 	type Item = PredCombCase<WithId<I::Item>, I::Item>;
 	fn next(&mut self) -> Option<Self::Item> {
 		self.iter.next()
-			.map(|id| PredCombCase::Same(id, id))
+			.map(|id| PredCombCase::Same(WithId(id), id))
 	}
 	fn size_hint(&self) -> (usize, Option<usize>) {
 		self.iter.size_hint()
