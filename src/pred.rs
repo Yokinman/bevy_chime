@@ -440,9 +440,7 @@ where
 
 /// ...
 #[derive(Clone)]
-pub struct WithId<I> {
-	inner: I,
-}
+pub struct WithId<I>(pub I);
 
 impl<I> PredItem for WithId<I>
 where
@@ -450,7 +448,7 @@ where
 {
 	type Ref = I;
 	fn into_ref(item: Self) -> Self::Ref {
-		item.inner
+		item.0
 	}
 	fn is_updated(_item: &Self) -> bool {
 		false
