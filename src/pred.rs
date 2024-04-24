@@ -373,8 +373,6 @@ where
 /// [`PredItem`] with updated state.
 pub trait PredItemRef {
 	type Ref: PredItem;
-	
-	/// Needed because `bevy_ecs::world::Ref` can't be cloned/copied.
 	fn into_ref(item: Self) -> Self::Ref;
 	
 	/// Whether this item is in need of a prediction update.
@@ -411,33 +409,6 @@ impl PredItemRef for () {
 	}
 }
 
-impl<A, B> PredItemRef for (A, B)
-where
-	A: PredItemRef,
-	B: PredItemRef,
-{
-	type Ref = (A::Ref, B::Ref);
-	fn into_ref((a, b): Self) -> Self::Ref {
-		(A::into_ref(a), B::into_ref(b))
-	}
-	fn is_updated((a, b): &Self) -> bool {
-		A::is_updated(a) || B::is_updated(b)
-	}
-}
-
-impl<T, const N: usize> PredItemRef for [T; N]
-where
-	T: PredItemRef
-{
-	type Ref = [T::Ref; N];
-	fn into_ref(item: Self) -> Self::Ref {
-		item.map(T::into_ref)
-	}
-	fn is_updated(item: &Self) -> bool {
-		item.iter().any(T::is_updated)
-	}
-}
-
 /// ...
 #[derive(Copy, Clone)]
 pub struct WithId<I>(pub I);
@@ -448,19 +419,6 @@ where
 {
 	fn clone(&self) -> Self {
 		*self
-	}
-}
-
-impl<I> PredItemRef for WithId<I>
-where
-	I: PredId
-{
-	type Ref = Self;
-	fn into_ref(item: Self) -> Self::Ref {
-		item
-	}
-	fn is_updated(_item: &Self) -> bool {
-		false
 	}
 }
 
