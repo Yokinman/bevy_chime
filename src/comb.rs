@@ -126,7 +126,7 @@ where
 	F: ArchetypeFilter + 'static,
 {
 	type Id = Entity;
-	type Case = PredCombCase<Ref<'w, T>, Entity>;
+	type Case = PredCombCase<&'w T, Entity>;
 	
 	type IntoKind<Kind: CombKind> = QueryComb<'w, T, F, Kind>;
 	
@@ -358,7 +358,7 @@ where
 	T: Iterator<Item = (P, I)>,
 	K: CombKind,
 {
-	type Item = PredCombCase<P, I>;
+	type Item = PredCombCase<P::Ref, I>;
 	fn next(&mut self) -> Option<Self::Item> {
 		if K::has_none() {
 			return None
@@ -406,8 +406,12 @@ impl PredCombinatorCase for () {
 	fn id(&self) -> Self::Id {}
 }
 
-impl<P: PredItem, I: PredId> PredCombinatorCase for PredCombCase<P, I> {
-	type Item = P::Ref;
+impl<P, I> PredCombinatorCase for PredCombCase<P, I>
+where
+	P: PredItemRef,
+	I: PredId,
+{
+	type Item = P;
 	type Id = I;
 	fn is_diff(&self) -> bool {
 		match self {
@@ -458,12 +462,16 @@ where
 }
 
 /// An item & ID pair of a `PredParam`, with their updated state.
-pub enum PredCombCase<P: PredItem, I: PredId> {
-	Diff(P::Ref, I),
-	Same(P::Ref, I),
+pub enum PredCombCase<P, I> {
+	Diff(P, I),
+	Same(P, I),
 }
 
-impl<P: PredItem, I: PredId> Clone for PredCombCase<P, I> {
+impl<P, I> Clone for PredCombCase<P, I>
+where
+	P: PredItemRef,
+	I: PredId,
+{
 	fn clone(&self) -> Self {
 		match self {
 			Self::Diff(item_ref, id) => Self::Diff(item_ref.clone(), *id),
