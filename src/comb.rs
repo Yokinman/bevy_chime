@@ -389,12 +389,8 @@ pub trait PredCombinatorCase: Clone {
 	type Item: PredItem;
 	type Id: PredId;
 	fn is_diff(&self) -> bool;
-	fn into_item(self) -> Self::Item;
 	fn id(&self) -> Self::Id;
-	fn into_parts(self) -> (Self::Item, Self::Id) {
-		let id = self.id();
-		(self.into_item(), id)
-	}
+	fn into_parts(self) -> (Self::Item, Self::Id);
 }
 
 impl PredCombinatorCase for () {
@@ -403,8 +399,10 @@ impl PredCombinatorCase for () {
 	fn is_diff(&self) -> bool {
 		true
 	}
-	fn into_item(self) -> Self::Item {}
 	fn id(&self) -> Self::Id {}
+	fn into_parts(self) -> (Self::Item, Self::Id) {
+		((), ())
+	}
 }
 
 impl<P, I> PredCombinatorCase for PredCombCase<P, I>
@@ -420,13 +418,13 @@ where
 			PredCombCase::Same(..) => false,
 		}
 	}
-	fn into_item(self) -> Self::Item {
-		let (PredCombCase::Diff(item, _) | PredCombCase::Same(item, _)) = self;
-		item
-	}
 	fn id(&self) -> Self::Id {
 		let (PredCombCase::Diff(_, id) | PredCombCase::Same(_, id)) = self;
 		*id
+	}
+	fn into_parts(self) -> (Self::Item, Self::Id) {
+		let (PredCombCase::Diff(item, id) | PredCombCase::Same(item, id)) = self;
+		(item, id)
 	}
 }
 
@@ -436,11 +434,20 @@ impl<C: PredCombinatorCase, const N: usize> PredCombinatorCase for [C; N] {
 	fn is_diff(&self) -> bool {
 		self.iter().any(C::is_diff)
 	}
-	fn into_item(self) -> Self::Item {
-		self.map(C::into_item)
-	}
 	fn id(&self) -> Self::Id {
 		self.each_ref().map(C::id)
+	}
+	fn into_parts(self) -> (Self::Item, Self::Id) {
+		let mut ids = [self[0].id(); N];
+		let mut iter = self.into_iter();
+		let items = std::array::from_fn(|i| {
+			let (item, id) = iter.next()
+				.expect("should exist")
+				.into_parts();
+			ids[i] = id;
+			item
+		});
+		(items, ids)
 	}
 }
 
@@ -454,11 +461,15 @@ where
 	fn is_diff(&self) -> bool {
 		self.0.is_diff() || self.1.is_diff()
 	}
-	fn into_item(self) -> Self::Item {
-		(self.0.into_item(), self.1.into_item())
-	}
 	fn id(&self) -> Self::Id {
-		(self.0.id(), self.1.id())
+		let (a, b) = self;
+		(a.id(), b.id())
+	}
+	fn into_parts(self) -> (Self::Item, Self::Id) {
+		let (a, b) = self;
+		let (a_item, a_id) = a.into_parts();
+		let (b_item, b_id) = b.into_parts();
+		((a_item, b_item), (a_id, b_id))
 	}
 }
 

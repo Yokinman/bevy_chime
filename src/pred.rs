@@ -145,12 +145,13 @@ where
 	);
 	fn next(&mut self) -> Option<Self::Item> {
 		if let Some((head, tail)) = self.iter.next() {
-			let node = &mut self.branches.write((head.id(), PredNode::Blank)).1;
+			let (head_item, head_id) = head.into_parts();
+			let node = &mut self.branches.write((head_id, PredNode::Blank)).1;
 			let sub_state = match tail {
 				PredSubComb::Diff(comb) => PredSubStateSplit::Diff(PredSubState::new(comb, node)),
 				PredSubComb::Same(comb) => PredSubStateSplit::Same(PredSubState::new(comb, node)),
 			};
-			Some((sub_state, head.into_item()))
+			Some((sub_state, head_item))
 		} else {
 			None
 		}
