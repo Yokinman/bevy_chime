@@ -82,6 +82,8 @@ pub trait PredCombinator<K: CombKind = CombNone>:
 	type Id: PredId;
 	type Case: PredCombinatorCase<Id=Self::Id>;
 	
+	type Param: PredParam<Id=Self::Id>;
+	
 	type IntoKind<Kind: CombKind>:
 		PredCombinator<Kind, Case=Self::Case, Id=Self::Id>;
 	
@@ -91,6 +93,8 @@ pub trait PredCombinator<K: CombKind = CombNone>:
 impl<K: CombKind> PredCombinator<K> for EmptyComb<K> {
 	type Id = ();
 	type Case = PredCombCase<(), ()>;
+	
+	type Param = ();
 	
 	type IntoKind<Kind: CombKind> = EmptyComb<Kind>;
 	
@@ -108,6 +112,8 @@ where
 {
 	type Id = ();
 	type Case = PredCombCase<Res<'w, R>, ()>;
+	
+	type Param = Res<'w, R>;
 	
 	type IntoKind<Kind: CombKind> = ResComb<'w, R, Kind>;
 	
@@ -128,6 +134,8 @@ where
 	type Id = Entity;
 	type Case = PredCombCase<&'w T, Entity>;
 	
+	type Param = Query<'w, 'w, &'w T, F>;
+	
 	type IntoKind<Kind: CombKind> = QueryComb<'w, T, F, Kind>;
 	
 	fn into_kind<Kind: CombKind>(self) -> Self::IntoKind<Kind> {
@@ -147,6 +155,8 @@ where
 	type Id = (A::Id, B::Id);
 	type Case = (A::Case, B::Case);
 	
+	type Param = (A::Param, B::Param);
+	
 	type IntoKind<Kind: CombKind> = PredPairComb<A, B, Kind>;
 	
 	fn into_kind<Kind: CombKind>(self) -> Self::IntoKind<Kind> {
@@ -162,6 +172,8 @@ where
 {
 	type Id = [C::Id; N];
 	type Case = [C::Case; N];
+	
+	type Param = [C::Param; N];
 	
 	type IntoKind<Kind: CombKind> = PredArrayComb<C, N, Kind>;
 	
@@ -191,6 +203,8 @@ where
 {
 	type Id = I::Item;
 	type Case = PredCombCase<WithId<I::Item>, I::Item>;
+	
+	type Param = WithId<I>;
 	
 	type IntoKind<Kind: CombKind> = PredIdComb<I>;
 	
