@@ -331,7 +331,6 @@ where
 /// A case of prediction.
 pub trait PredItem {
 	type Ref: Copy/* + std::ops::Deref<Target=Self::Inner>*/;
-	type Inner;
 	
 	/// Needed because `bevy_ecs::world::Ref` can't be cloned/copied.
 	fn into_ref(item: Self) -> Self::Ref;
@@ -341,8 +340,7 @@ pub trait PredItem {
 }
 
 impl<'w, T: 'static> PredItem for Ref<'w, T> {
-	type Ref = &'w Self::Inner;
-	type Inner = T;
+	type Ref = &'w T;
 	fn into_ref(item: Self) -> Self::Ref {
 		Ref::into_inner(item)
 	}
@@ -352,8 +350,7 @@ impl<'w, T: 'static> PredItem for Ref<'w, T> {
 }
 
 impl<'w, R: Resource> PredItem for Res<'w, R> {
-	type Ref = &'w Self::Inner;
-	type Inner = R;
+	type Ref = &'w R;
 	fn into_ref(item: Self) -> Self::Ref {
 		Res::into_inner(item)
 	}
@@ -364,7 +361,6 @@ impl<'w, R: Resource> PredItem for Res<'w, R> {
 
 impl PredItem for () {
 	type Ref = ();
-	type Inner = ();
 	fn into_ref(item: Self) -> Self::Ref {
 		item
 	}
@@ -379,7 +375,6 @@ where
 	B: PredItem,
 {
 	type Ref = (A::Ref, B::Ref);
-	type Inner = (A::Inner, B::Inner);
 	fn into_ref((a, b): Self) -> Self::Ref {
 		(A::into_ref(a), B::into_ref(b))
 	}
@@ -393,7 +388,6 @@ where
 	T: PredItem
 {
 	type Ref = [T::Ref; N];
-	type Inner = [T::Inner; N];
 	fn into_ref(item: Self) -> Self::Ref {
 		item.map(T::into_ref)
 	}
@@ -412,7 +406,6 @@ impl<I> PredItem for WithId<I>
 where
 	I: PredId
 {
-	type Inner = I;
 	type Ref = I;
 	fn into_ref(item: Self) -> Self::Ref {
 		item.inner
