@@ -442,6 +442,15 @@ where
 #[derive(Copy, Clone)]
 pub struct WithId<I>(pub I);
 
+impl<I> PredItemRef for WithId<I>
+where
+	I: PredId
+{
+	fn clone(&self) -> Self {
+		*self
+	}
+}
+
 impl<I> PredItem for WithId<I>
 where
 	I: PredId
