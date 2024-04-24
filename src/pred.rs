@@ -392,9 +392,9 @@ impl<'w, T: 'static> PredItem for Ref<'w, T> {
 }
 
 impl<'w, R: Resource> PredItem for Res<'w, R> {
-	type Ref = &'w R;
+	type Ref = Self;
 	fn into_ref(item: Self) -> Self::Ref {
-		Res::into_inner(item)
+		item
 	}
 	fn is_updated(item: &Self) -> bool {
 		DetectChanges::is_changed(item)
