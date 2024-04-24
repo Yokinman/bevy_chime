@@ -417,7 +417,7 @@ impl<P: PredItem, I: PredId> PredCombinatorCase for PredCombCase<P, I> {
 	}
 	fn item_ref(&self) -> <Self::Item as PredItem>::Ref {
 		let (PredCombCase::Diff(item, _) | PredCombCase::Same(item, _)) = self;
-		*item
+		item.clone()
 	}
 	fn id(&self) -> Self::Id {
 		let (PredCombCase::Diff(_, id) | PredCombCase::Same(_, id)) = self;
@@ -463,11 +463,12 @@ pub enum PredCombCase<P: PredItem, I: PredId> {
 	Same(P::Ref, I),
 }
 
-impl<P: PredItem, I: PredId> Copy for PredCombCase<P, I> {}
-
 impl<P: PredItem, I: PredId> Clone for PredCombCase<P, I> {
 	fn clone(&self) -> Self {
-		*self
+		match self {
+			Self::Diff(item_ref, id) => Self::Diff(item_ref.clone(), *id),
+			Self::Same(item_ref, id) => Self::Same(item_ref.clone(), *id),
+		}
 	}
 }
 
