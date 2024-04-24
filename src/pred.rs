@@ -141,7 +141,7 @@ where
 {
 	type Item = (
 		PredSubStateSplit<'p, 's, T, P::Tail, K>,
-		<PredParamItem<'p, P::Head> as PredItem>::Ref,
+		PredParamItem<'p, P::Head>,
 	);
 	fn next(&mut self) -> Option<Self::Item> {
 		if let Some((head, tail)) = self.iter.next() {
@@ -1278,20 +1278,18 @@ mod testing {
 				Comb<'b> = PredArrayComb<QueryComb<'b, Test, ()>, R>
 			>,
 		for<'w, 's, 'a, 'b>
+			<<<<[Query<'w, 's, &'a Test>; R]
+				as PredParamVec>::Tail
+				as PredParam>::Comb<'b>
+				as PredCombinator>::Case
+				as PredCombinatorCase>::Item:
+					IntoIterator,
+		for<'w, 's, 'a, 'b>
 			<<<<<[Query<'w, 's, &'a Test>; R]
 				as PredParamVec>::Tail
 				as PredParam>::Comb<'b>
 				as PredCombinator>::Case
 				as PredCombinatorCase>::Item
-				as PredItem>::Ref:
-					IntoIterator,
-		for<'w, 's, 'a, 'b>
-			<<<<<<[Query<'w, 's, &'a Test>; R]
-				as PredParamVec>::Tail
-				as PredParam>::Comb<'b>
-				as PredCombinator>::Case
-				as PredCombinatorCase>::Item
-				as PredItem>::Ref
 				as IntoIterator>::Item:
 					Deref<Target = Test>,
 		for<'w, 's, 'a> <[Query<'w, 's, &'a Test>; R] as PredParam>::Input:

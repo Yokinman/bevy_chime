@@ -386,12 +386,12 @@ where
 
 /// Item of a [`PredCombinator`]'s iterator.
 pub trait PredCombinatorCase: Clone {
-	type Item: PredItem;
+	type Item: PredItemRef;
 	type Id: PredId;
 	fn is_diff(&self) -> bool;
-	fn item_ref(&self) -> <Self::Item as PredItem>::Ref;
+	fn item_ref(&self) -> Self::Item;
 	fn id(&self) -> Self::Id;
-	fn into_parts(self) -> (<Self::Item as PredItem>::Ref, Self::Id) {
+	fn into_parts(self) -> (Self::Item, Self::Id) {
 		(self.item_ref(), self.id())
 	}
 }
@@ -402,12 +402,12 @@ impl PredCombinatorCase for () {
 	fn is_diff(&self) -> bool {
 		true
 	}
-	fn item_ref(&self) -> <Self::Item as PredItem>::Ref {}
+	fn item_ref(&self) -> Self::Item {}
 	fn id(&self) -> Self::Id {}
 }
 
 impl<P: PredItem, I: PredId> PredCombinatorCase for PredCombCase<P, I> {
-	type Item = P;
+	type Item = P::Ref;
 	type Id = I;
 	fn is_diff(&self) -> bool {
 		match self {
@@ -415,7 +415,7 @@ impl<P: PredItem, I: PredId> PredCombinatorCase for PredCombCase<P, I> {
 			PredCombCase::Same(..) => false,
 		}
 	}
-	fn item_ref(&self) -> <Self::Item as PredItem>::Ref {
+	fn item_ref(&self) -> Self::Item {
 		let (PredCombCase::Diff(item, _) | PredCombCase::Same(item, _)) = self;
 		item.clone()
 	}
@@ -431,7 +431,7 @@ impl<C: PredCombinatorCase, const N: usize> PredCombinatorCase for [C; N] {
 	fn is_diff(&self) -> bool {
 		self.iter().any(C::is_diff)
 	}
-	fn item_ref(&self) -> <Self::Item as PredItem>::Ref {
+	fn item_ref(&self) -> Self::Item {
 		self.each_ref().map(C::item_ref)
 	}
 	fn id(&self) -> Self::Id {
@@ -449,7 +449,7 @@ where
 	fn is_diff(&self) -> bool {
 		self.0.is_diff() || self.1.is_diff()
 	}
-	fn item_ref(&self) -> <Self::Item as PredItem>::Ref {
+	fn item_ref(&self) -> Self::Item {
 		(self.0.item_ref(), self.1.item_ref())
 	}
 	fn id(&self) -> Self::Id {
@@ -1149,7 +1149,7 @@ where
 {
 	type Item = (
 		&'p mut PredStateCase<P::Id, T>,
-		<PredParamItem<'p, P> as PredItem>::Ref,
+		PredParamItem<'p, P>,
 	);
 	fn next(&mut self) -> Option<Self::Item> {
 		while let Some(case) = self.iter.next() {
