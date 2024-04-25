@@ -30,7 +30,7 @@ use crate::pred::*;
 /// - `AnyTrue`: Combinations where at least one is true.
 /// - `AnyFalse`: Combinations where at least one is false.
 /// - `AnyDiff`: Combinations where at least one is different from the rest.
-pub trait CombKind: Copy + Default {
+pub trait CombKind: Copy {
 	type Pal: CombKind;
 	type Inv: CombKind;
 	
@@ -234,7 +234,8 @@ where
 	type IntoKind<Kind: CombKind> = PredArrayComb<C, N, Kind>;
 	
 	fn into_kind<Kind: CombKind>(self, kind: Kind) -> Self::IntoKind<Kind> {
-		if K::Pal::default().states() == Kind::Pal::default().states() {
+		if self.kind.pal().states() == kind.pal().states() {
+			// Reusing `K::Pal` slice.
 			PredArrayComb {
 				comb: self.comb,
 				slice: self.slice,
@@ -579,11 +580,11 @@ where
 	type IntoIter = PredPairCombIter<A, B, K>;
 	fn into_iter(self) -> Self::IntoIter {
 		let Self { a_comb, b_comb, .. } = self;
-		let a_inv_comb = a_comb.clone().into_kind(Default::default());
-		let b_inv_comb = b_comb.clone().into_kind(Default::default());
+		let a_inv_comb = a_comb.clone().into_kind(self.kind.inv());
+		let b_inv_comb = b_comb.clone().into_kind(self.kind.inv().pal().inv());
 		PredPairCombIter::primary_next(
-			a_comb.into_kind(Default::default()).into_iter(),
-			b_comb.into_kind(Default::default()),
+			a_comb.into_kind(self.kind).into_iter(),
+			b_comb.into_kind(self.kind.pal()),
 			a_inv_comb,
 			b_inv_comb,
 		)
@@ -735,7 +736,7 @@ where
 		C::IntoKind<K::Pal>: IntoIterator<IntoIter=A>,
 	{
 		Self {
-			a_iter: comb.a_comb.into_kind(Default::default()).into_iter(),
+			a_iter: comb.a_comb.into_kind(comb.kind.pal()).into_iter(),
 			b_comb: comb.b_comb,
 			kind: comb.kind,
 		}
@@ -753,9 +754,9 @@ where
 	fn next(&mut self) -> Option<Self::Item> {
 		if let Some(case) = self.a_iter.next() {
 			let sub_comb = if case.is_diff() {
-				PredSubComb::Diff(self.b_comb.clone().into_kind(Default::default()))
+				PredSubComb::Diff(self.b_comb.clone().into_kind(self.kind.pal()))
 			} else {
-				PredSubComb::Same(self.b_comb.clone().into_kind(Default::default()))
+				PredSubComb::Same(self.b_comb.clone().into_kind(self.kind.inv().pal().inv()))
 			};
 			Some((case, sub_comb))
 		} else {
@@ -808,7 +809,7 @@ where
 	K: CombKind,
 {
 	pub fn new(comb: C, kind: K) -> Self {
-		let mut vec = comb.clone().into_kind::<K::Pal>(Default::default()).into_iter()
+		let mut vec = comb.clone().into_kind::<K::Pal>(kind.pal()).into_iter()
 			.map(|x| (x, usize::MAX))
 			.collect::<Vec<_>>();
 		
@@ -1068,7 +1069,6 @@ where
 impl<C, const N: usize, K> PredArrayCombSplit<C, N, K>
 where
 	C: PredCombinator,
-	K: Default,
 {
 	pub fn new<const M: usize>(comb: PredArrayComb<C, M, K>) -> Self {
 		Self {
@@ -1080,7 +1080,7 @@ where
 				min_same_index: comb.min_same_index,
 				max_diff_index: comb.max_diff_index,
 				max_same_index: comb.max_same_index,
-				kind: K::default(),
+				kind: comb.kind,
 			}
 		}
 	}
@@ -1110,9 +1110,9 @@ where
 		if let Some((case, _)) = self.inner.slice.get(self.inner.index) {
 			self.inner.index += 1;
 			let sub_comb = if case.is_diff() {
-				PredSubComb::Diff(self.inner.clone().into_kind(Default::default()))
+				PredSubComb::Diff(self.inner.clone().into_kind(self.inner.kind.pal()))
 			} else {
-				PredSubComb::Same(self.inner.clone().into_kind(Default::default()))
+				PredSubComb::Same(self.inner.clone().into_kind(self.inner.kind.inv().pal().inv()))
 			};
 			Some((case.clone(), sub_comb))
 		} else {
