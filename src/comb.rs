@@ -1,4 +1,3 @@
-use std::marker::PhantomData;
 use std::rc::Rc;
 use bevy_ecs::change_detection::{Ref, Res};
 use bevy_ecs::component::Component;
@@ -225,7 +224,7 @@ where
 	type Item = <Self::IntoIter as Iterator>::Item;
 	type IntoIter = CombIter<std::iter::Once<((), ())>, K>;
 	fn into_iter(self) -> Self::IntoIter {
-		CombIter::new(std::iter::once(((), ())))
+		CombIter::new(std::iter::once(((), ())), self.kind)
 	}
 }
 
@@ -272,7 +271,7 @@ where
 	type Item = <Self::IntoIter as Iterator>::Item;
 	type IntoIter = CombIter<std::iter::Once<(Res<'w, T>, ())>, K>;
 	fn into_iter(self) -> Self::IntoIter {
-		CombIter::new(std::iter::once((self.inner, ())))
+		CombIter::new(std::iter::once((self.inner, ())), self.kind)
 	}
 }
 
@@ -327,22 +326,19 @@ where
 	type Item = <Self::IntoIter as Iterator>::Item;
 	type IntoIter = CombIter<QueryIter<'w, 'w, (Ref<'static, T>, Entity), F>, K>;
 	fn into_iter(self) -> Self::IntoIter {
-		CombIter::new(self.inner.iter_inner())
+		CombIter::new(self.inner.iter_inner(), self.kind)
 	}
 }
 
 /// `Iterator` of `ResComb`'s `IntoIterator` implementation.
 pub struct CombIter<T, K> {
 	iter: T,
-	kind: PhantomData<K>,
+	kind: K,
 }
 
 impl<T, K> CombIter<T, K> {
-	pub fn new(iter: T) -> Self {
-		Self {
-			iter,
-			kind: PhantomData,
-		}
+	pub fn new(iter: T, kind: K) -> Self {
+		Self { iter, kind }
 	}
 }
 
