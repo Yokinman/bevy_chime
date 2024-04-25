@@ -37,7 +37,7 @@ pub trait CombKind: Copy + Default {
 	fn has_state(state: bool) -> bool;
 	
 	#[inline]
-	fn has_all() -> bool {
+	fn has_all(self) -> bool {
 		Self::has_state(true) && Self::has_state(false)
 	}
 	
@@ -913,7 +913,7 @@ where
 				self.layer = 0;
 				
 				 // Jump to End:
-				if !K::has_all()
+				if !self.kind.has_all()
 					&& self.slice[self.index[i + 1]].1 >= self.slice.len()
 				{
 					self.index[i + 1] = self.slice.len();
@@ -966,7 +966,7 @@ where
 			}
 			let mut remaining = self.slice.len() - index;
 			let mut num = falling_factorial(remaining, i + 1);
-			if i >= self.layer && !K::has_all() {
+			if i >= self.layer && !self.kind.has_all() {
 				let first_index = if K::has_state(true) {
 					self.min_diff_index
 				} else {
