@@ -180,7 +180,7 @@ where
 				min_same_index: self.min_same_index,
 				max_diff_index: self.max_diff_index,
 				max_same_index: self.max_same_index,
-				kind: PhantomData,
+				kind: Kind::default(),
 			}
 		} else {
 			PredArrayComb::new(self.comb)
@@ -733,12 +733,13 @@ where
 	min_same_index: usize,
 	max_diff_index: usize,
 	max_same_index: usize,
-	kind: PhantomData<K>,
+	kind: K,
 }
 
 impl<C, const N: usize, K> Clone for PredArrayComb<C, N, K>
 where
 	C: PredCombinator,
+	K: Clone,
 {
 	fn clone(&self) -> Self {
 		Self {
@@ -749,7 +750,7 @@ where
 			min_same_index: self.min_same_index,
 			max_diff_index: self.max_diff_index,
 			max_same_index: self.max_same_index,
-			kind: PhantomData,
+			kind: self.kind.clone(),
 		}
 	}
 }
@@ -799,7 +800,7 @@ where
 			min_same_index,
 			max_diff_index,
 			max_same_index,
-			kind: PhantomData,
+			kind: K::default(),
 		}
 	}
 }
@@ -1021,6 +1022,7 @@ where
 impl<C, const N: usize, K> PredArrayCombSplit<C, N, K>
 where
 	C: PredCombinator,
+	K: Default,
 {
 	pub fn new<const M: usize>(comb: PredArrayComb<C, M, K>) -> Self {
 		Self {
@@ -1032,7 +1034,7 @@ where
 				min_same_index: comb.min_same_index,
 				max_diff_index: comb.max_diff_index,
 				max_same_index: comb.max_same_index,
-				kind: PhantomData,
+				kind: K::default(),
 			}
 		}
 	}
