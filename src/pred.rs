@@ -14,7 +14,7 @@ use chime::pred::Prediction;
 use crate::node::*;
 use crate::comb::*;
 
-/// For [`IntoInput`].
+/// For input to [`crate::AddChimeEvent::add_chime_events`].
 #[derive(Copy, Clone, Default)]
 pub struct In<T>(pub T);
 
