@@ -167,7 +167,7 @@ where
 	type IntoKind<Kind: CombKind> = QueryComb<'w, T, F, Kind>;
 	
 	fn into_kind<Kind: CombKind>(self, kind: Kind) -> Self::IntoKind<Kind> {
-		QueryComb::new(self.inner)
+		QueryComb::new(self.inner, kind)
 	}
 }
 
@@ -325,14 +325,13 @@ where
 
 impl<'w, T, F, K> QueryComb<'w, T, F, K>
 where
-	K: CombKind,
 	T: Component,
 	F: ArchetypeFilter + 'static,
 {
-	pub fn new(inner: &'w Query<'w, 'w, (Ref<'static, T>, Entity), F>) -> Self {
+	pub(crate) fn new(inner: &'w Query<'w, 'w, (Ref<'static, T>, Entity), F>, kind: K) -> Self {
 		Self {
 			inner,
-			kind: K::default(),
+			kind,
 		}
 	}
 }

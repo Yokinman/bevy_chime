@@ -233,7 +233,7 @@ where
 		param: &'w SystemParamItem<Self::Param>,
 		_input: Self::Input,
 	) -> Self::Comb<'w> {
-		QueryComb::new(param)
+		QueryComb::new(param, CombNone)
 	}
 }
 
