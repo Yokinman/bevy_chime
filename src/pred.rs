@@ -266,6 +266,22 @@ impl PredParam for () {
 	}
 }
 
+impl<A> PredParam for (A,)
+where
+	A: PredParam,
+{
+	type Param = A::Param;
+	type Id = A::Id;
+	type Input = A::Input;
+	type Comb<'w> = A::Comb<'w>;
+	fn comb<'w>(
+		param: &'w SystemParamItem<Self::Param>,
+		input: Self::Input,
+	) -> Self::Comb<'w> {
+		A::comb(param, input)
+	}
+}
+
 impl<A, B> PredParam for (A, B)
 where
 	A: PredParam,
