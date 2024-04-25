@@ -84,7 +84,7 @@ impl AddChimeEvent for App {
 				let (state, misc) = state.get(world);
 				pred_sys(
 					PredState::new(
-						P::comb(&state, input.clone().into_input()).into_kind(),
+						P::comb(&state, input.clone().into_input()).into_kind(CombAnyTrue),
 						&mut node,
 					),
 					misc

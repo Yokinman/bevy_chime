@@ -120,7 +120,7 @@ pub trait PredCombinator<K: CombKind = CombNone>:
 	type IntoKind<Kind: CombKind>:
 		PredCombinator<Kind, Case=Self::Case, Id=Self::Id>;
 	
-	fn into_kind<Kind: CombKind>(self) -> Self::IntoKind<Kind>;
+	fn into_kind<Kind: CombKind>(self, kind: Kind) -> Self::IntoKind<Kind>;
 }
 
 impl<K: CombKind> PredCombinator<K> for EmptyComb<K> {
@@ -131,7 +131,7 @@ impl<K: CombKind> PredCombinator<K> for EmptyComb<K> {
 	
 	type IntoKind<Kind: CombKind> = EmptyComb<Kind>;
 	
-	fn into_kind<Kind: CombKind>(self) -> Self::IntoKind<Kind> {
+	fn into_kind<Kind: CombKind>(self, kind: Kind) -> Self::IntoKind<Kind> {
 		EmptyComb::default()
 	}
 }
@@ -148,7 +148,7 @@ where
 	
 	type IntoKind<Kind: CombKind> = ResComb<'w, R, Kind>;
 	
-	fn into_kind<Kind: CombKind>(self) -> Self::IntoKind<Kind> {
+	fn into_kind<Kind: CombKind>(self, kind: Kind) -> Self::IntoKind<Kind> {
 		ResComb::new(Res::clone(&self.inner))
 	}
 }
@@ -166,7 +166,7 @@ where
 	
 	type IntoKind<Kind: CombKind> = QueryComb<'w, T, F, Kind>;
 	
-	fn into_kind<Kind: CombKind>(self) -> Self::IntoKind<Kind> {
+	fn into_kind<Kind: CombKind>(self, kind: Kind) -> Self::IntoKind<Kind> {
 		QueryComb::new(self.inner)
 	}
 }
@@ -184,7 +184,7 @@ where
 	
 	type IntoKind<Kind: CombKind> = PredPairComb<A, B, Kind>;
 	
-	fn into_kind<Kind: CombKind>(self) -> Self::IntoKind<Kind> {
+	fn into_kind<Kind: CombKind>(self, kind: Kind) -> Self::IntoKind<Kind> {
 		PredPairComb::new(self.a_comb, self.b_comb)
 	}
 }
@@ -202,7 +202,7 @@ where
 	
 	type IntoKind<Kind: CombKind> = PredArrayComb<C, N, Kind>;
 	
-	fn into_kind<Kind: CombKind>(self) -> Self::IntoKind<Kind> {
+	fn into_kind<Kind: CombKind>(self, kind: Kind) -> Self::IntoKind<Kind> {
 		if K::Pal::default().states() == Kind::Pal::default().states() {
 			PredArrayComb {
 				comb: self.comb,
@@ -212,7 +212,7 @@ where
 				min_same_index: self.min_same_index,
 				max_diff_index: self.max_diff_index,
 				max_same_index: self.max_same_index,
-				kind: Kind::default(),
+				kind,
 			}
 		} else {
 			PredArrayComb::new(self.comb)
@@ -233,7 +233,7 @@ where
 	
 	type IntoKind<Kind: CombKind> = PredIdComb<I>;
 	
-	fn into_kind<Kind: CombKind>(self) -> Self::IntoKind<Kind> {
+	fn into_kind<Kind: CombKind>(self, _kind: Kind) -> Self::IntoKind<Kind> {
 		self
 	}
 }
@@ -549,11 +549,11 @@ where
 	type IntoIter = PredPairCombIter<A, B, K>;
 	fn into_iter(self) -> Self::IntoIter {
 		let Self { a_comb, b_comb, .. } = self;
-		let a_inv_comb = a_comb.clone().into_kind();
-		let b_inv_comb = b_comb.clone().into_kind();
+		let a_inv_comb = a_comb.clone().into_kind(Default::default());
+		let b_inv_comb = b_comb.clone().into_kind(Default::default());
 		PredPairCombIter::primary_next(
-			a_comb.into_kind().into_iter(),
-			b_comb.into_kind(),
+			a_comb.into_kind(Default::default()).into_iter(),
+			b_comb.into_kind(Default::default()),
 			a_inv_comb,
 			b_inv_comb,
 		)
@@ -705,7 +705,7 @@ where
 		C::IntoKind<K::Pal>: IntoIterator<IntoIter=A>,
 	{
 		Self {
-			a_iter: comb.a_comb.into_kind().into_iter(),
+			a_iter: comb.a_comb.into_kind(Default::default()).into_iter(),
 			b_comb: comb.b_comb,
 			kind: comb.kind,
 		}
@@ -723,9 +723,9 @@ where
 	fn next(&mut self) -> Option<Self::Item> {
 		if let Some(case) = self.a_iter.next() {
 			let sub_comb = if case.is_diff() {
-				PredSubComb::Diff(self.b_comb.clone().into_kind())
+				PredSubComb::Diff(self.b_comb.clone().into_kind(Default::default()))
 			} else {
-				PredSubComb::Same(self.b_comb.clone().into_kind())
+				PredSubComb::Same(self.b_comb.clone().into_kind(Default::default()))
 			};
 			Some((case, sub_comb))
 		} else {
@@ -778,7 +778,7 @@ where
 	C::Id: Ord,
 {
 	pub fn new(comb: C) -> Self {
-		let mut vec = comb.clone().into_kind::<K::Pal>().into_iter()
+		let mut vec = comb.clone().into_kind::<K::Pal>(Default::default()).into_iter()
 			.map(|x| (x, usize::MAX))
 			.collect::<Vec<_>>();
 		
@@ -1080,9 +1080,9 @@ where
 		if let Some((case, _)) = self.inner.slice.get(self.inner.index) {
 			self.inner.index += 1;
 			let sub_comb = if case.is_diff() {
-				PredSubComb::Diff(self.inner.clone().into_kind())
+				PredSubComb::Diff(self.inner.clone().into_kind(Default::default()))
 			} else {
-				PredSubComb::Same(self.inner.clone().into_kind())
+				PredSubComb::Same(self.inner.clone().into_kind(Default::default()))
 			};
 			Some((case.clone(), sub_comb))
 		} else {
