@@ -75,6 +75,39 @@ def_comb_kind!(CombAll,      CombAll,      CombNone,     _ => true);
 def_comb_kind!(CombAllFalse, CombAllFalse, CombAnyTrue,  x => !x);
 def_comb_kind!(CombAnyTrue,  CombAll,      CombAllFalse, x => x);
 
+/// ...
+#[derive(Copy, Clone)]
+pub enum CombEither<A, B> {
+	A(A),
+	B(B),
+}
+
+impl<A, B> Default for CombEither<A, B>
+where
+	A: Default
+{
+	fn default() -> Self {
+		Self::A(A::default())
+	}
+}
+
+impl<A, B> CombKind for CombEither<A, B>
+where
+	A: CombKind,
+	B: CombKind,
+{
+	type Pal = CombEither<A::Pal, B::Pal>;
+	type Inv = CombEither<A::Inv, B::Inv>;
+	
+	#[inline]
+	fn has_state(self, state: bool) -> bool {
+		match self {
+			Self::A(a) => a.has_state(state),
+			Self::B(b) => b.has_state(state),
+		}
+	}
+}
+
 /// Combinator type produced by `PredParam::comb`.
 pub trait PredCombinator<K: CombKind = CombNone>:
 	Clone + IntoIterator<Item=Self::Case>
