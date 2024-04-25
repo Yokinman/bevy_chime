@@ -135,10 +135,7 @@ where
 	type IntoKind<Kind: CombKind> = QueryComb<'w, T, F, Kind>;
 	
 	fn into_kind<Kind: CombKind>(self) -> Self::IntoKind<Kind> {
-		QueryComb {
-			inner: self.inner,
-			kind: PhantomData,
-		}
+		QueryComb::new(self.inner)
 	}
 }
 
@@ -286,7 +283,7 @@ where
 	F: ArchetypeFilter + 'static,
 {
 	inner: &'w Query<'w, 'w, (Ref<'static, T>, Entity), F>,
-	kind: PhantomData<K>,
+	kind: K,
 }
 
 impl<'w, T, F, K> QueryComb<'w, T, F, K>
@@ -298,7 +295,7 @@ where
 	pub fn new(inner: &'w Query<'w, 'w, (Ref<'static, T>, Entity), F>) -> Self {
 		Self {
 			inner,
-			kind: PhantomData,
+			kind: K::default(),
 		}
 	}
 }
@@ -307,12 +304,14 @@ impl<T, F, K> Copy for QueryComb<'_, T, F, K>
 where
 	T: Component,
 	F: ArchetypeFilter + 'static,
+	K: Copy,
 {}
 
 impl<T, F, K> Clone for QueryComb<'_, T, F, K>
 where
 	T: Component,
 	F: ArchetypeFilter + 'static,
+	K: Copy,
 {
 	fn clone(&self) -> Self {
 		*self
