@@ -114,6 +114,39 @@ impl AddChimeEvent for App {
 
 /// Specialized function used for predicting and scheduling events, functionally
 /// similar to a read-only [`bevy_ecs::system::SystemParamFunction`].
+/// 
+/// # !!! Potential automatic case-by-case syntax
+/// 
+/// ```text
+/// add_chime_events/*::<Outer<(Query<&A>,), (WithId<Range<usize>>,)>>*/(
+///     (|a: Fetch<&A>| /*-> impl PredCaseFn -> impl Prediction*/ {
+///         let poly = a.pos.poly();
+///         |index: WithId<usize>| {
+///             poly.when_index_eq(*index, &10.)
+///         }
+///     }).into_events_with_input(Outer(.., In(0..2)))
+/// )
+/// ``` 
+/// 
+/// - How to infer the type of combinator to be used?
+/// 
+///   - *A.* Each `PredItem` type is generally specific to a `PredCombinator`,
+///     but certain types could be inferred through input. e.g.
+///     - `Fetch<D, F>` -> `Query<D, F>`.
+///     - `WithId<T>` -> `WithId<impl IntoIterator<Item = T>>`.
+/// 
+/// - How to support outer iteration for combinations - `(A, B, ..)`?
+/// 
+///   - *A.* Any `PredItemFn` type can return a `PredItemFn` type instead of
+///     a `Prediction` type, which gets automatically combinated by the caller.
+/// 
+///   - *B.* Alternatively, the returned value could be a `ChimeEventBuilder`,
+///     meaning the inner closure would require an `into_events*` method call.
+///     This might make input more intuitive or versatile.
+/// 
+/// - How to support outer iteration for permutations - `[T; N]`?
+/// 
+///   - *A.* ??? 
 pub trait PredFn<T, P, A>:
 	Fn(PredState<T, P>, SystemParamItem<A>)
 where
