@@ -31,7 +31,7 @@ use crate::pred::*;
 /// - `AnyTrue`: Combinations where at least one is true.
 /// - `AnyFalse`: Combinations where at least one is false.
 /// - `AnyDiff`: Combinations where at least one is different from the rest.
-pub trait CombKind {
+pub trait CombKind: Copy + Default {
 	type Pal: CombKind;
 	type Inv: CombKind;
 	
@@ -56,6 +56,7 @@ pub trait CombKind {
 macro_rules! def_comb_kind {
 	($name:ident, $pal:ty, $inv:ty, $state:pat => $has_state:expr) => {
 		/// See [`CombKind`].
+		#[derive(Copy, Clone, Default)]
 		pub struct $name;
 		
 		impl CombKind for $name {
