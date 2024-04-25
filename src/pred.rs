@@ -335,6 +335,15 @@ pub struct Fetch<D, F> {
 	_filter: std::marker::PhantomData<F>,
 }
 
+impl<D, F> Fetch<D, F> {
+	fn new(inner: D) -> Self {
+		Self {
+			inner,
+			_filter: std::marker::PhantomData,
+		}
+	}
+}
+
 impl<D, F> Deref for Fetch<D, F> {
 	type Target = D;
 	fn deref(&self) -> &Self::Target {
@@ -362,10 +371,7 @@ where
 	D: Copy
 {
 	fn clone(&self) -> Self {
-		Fetch {
-			inner: self.inner,
-			_filter: std::marker::PhantomData,
-		}
+		Fetch::new(self.inner)
 	}
 }
 
