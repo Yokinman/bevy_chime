@@ -36,6 +36,10 @@ pub trait CombKind: Copy + Default {
 	
 	fn has_state(self, state: bool) -> bool;
 	
+	fn pal(self) -> Self::Pal;
+	
+	fn inv(self) -> Self::Inv;
+	
 	#[inline]
 	fn has_all(self) -> bool {
 		self.has_state(true) && self.has_state(false)
@@ -53,7 +57,7 @@ pub trait CombKind: Copy + Default {
 }
 
 macro_rules! def_comb_kind {
-	($name:ident, $pal:ty, $inv:ty, $state:pat => $has_state:expr) => {
+	($name:ident, $pal:ident, $inv:ident, $state:pat => $has_state:expr) => {
 		/// See [`CombKind`].
 		#[derive(Copy, Clone, Default)]
 		pub struct $name;
@@ -61,9 +65,20 @@ macro_rules! def_comb_kind {
 		impl CombKind for $name {
 			type Pal = $pal;
 			type Inv = $inv;
+			
 			#[inline]
 			fn has_state(self, $state: bool) -> bool {
 				$has_state
+			}
+			
+			#[inline]
+			fn pal(self) -> Self::Pal {
+				$pal
+			}
+			
+			#[inline]
+			fn inv(self) -> Self::Inv {
+				$inv
 			}
 		}
 	};
@@ -104,6 +119,22 @@ where
 		match self {
 			Self::A(a) => a.has_state(state),
 			Self::B(b) => b.has_state(state),
+		}
+	}
+	
+	#[inline]
+	fn pal(self) -> Self::Pal {
+		match self {
+			Self::A(a) => CombEither::A(a.pal()),
+			Self::B(b) => CombEither::B(b.pal()),
+		}
+	}
+	
+	#[inline]
+	fn inv(self) -> Self::Inv {
+		match self {
+			Self::A(a) => CombEither::A(a.inv()),
+			Self::B(b) => CombEither::B(b.inv()),
 		}
 	}
 }
