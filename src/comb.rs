@@ -117,10 +117,7 @@ where
 	type IntoKind<Kind: CombKind> = ResComb<'w, R, Kind>;
 	
 	fn into_kind<Kind: CombKind>(self) -> Self::IntoKind<Kind> {
-		ResComb {
-			inner: Res::clone(&self.inner),
-			kind: PhantomData,
-		}
+		ResComb::new(Res::clone(&self.inner))
 	}
 }
 
@@ -241,7 +238,7 @@ where
 	T: Resource,
 {
 	inner: Res<'w, T>,
-	kind: PhantomData<K>,
+	kind: K,
 }
 
 impl<'w, T, K> ResComb<'w, T, K>
@@ -252,7 +249,7 @@ where
 	pub fn new(inner: Res<'w, T>) -> Self {
 		Self {
 			inner,
-			kind: PhantomData,
+			kind: K::default(),
 		}
 	}
 }
@@ -260,11 +257,12 @@ where
 impl<T, K> Clone for ResComb<'_, T, K>
 where
 	T: Resource,
+	K: Clone,
 {
 	fn clone(&self) -> Self {
 		Self {
 			inner: Res::clone(&self.inner),
-			kind: PhantomData,
+			kind: self.kind.clone(),
 		}
 	}
 }
