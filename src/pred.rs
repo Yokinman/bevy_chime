@@ -357,6 +357,18 @@ impl<T> PredItem for &T {
 	}
 }
 
+impl<D, F> PredItem for Fetch<D, F>
+where
+	D: Copy
+{
+	fn clone(&self) -> Self {
+		Fetch {
+			inner: self.inner,
+			_filter: std::marker::PhantomData,
+		}
+	}
+}
+
 impl<T: Resource> PredItem for Res<'_, T> {
 	fn clone(&self) -> Self {
 		Res::clone(self) // GGGRRAAAAAAHHHHH!!!!!!!!!
