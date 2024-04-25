@@ -59,7 +59,7 @@ pub trait CombKind: Copy {
 macro_rules! def_comb_kind {
 	($name:ident, $pal:ident, $inv:ident, $state:pat => $has_state:expr) => {
 		/// See [`CombKind`].
-		#[derive(Copy, Clone, Default)]
+		#[derive(Copy, Clone)]
 		pub struct $name;
 		
 		impl CombKind for $name {
@@ -95,15 +95,6 @@ def_comb_kind!(CombAnyTrue,  CombAll,      CombAllFalse, x => x);
 pub enum CombEither<A, B> {
 	A(A),
 	B(B),
-}
-
-impl<A, B> Default for CombEither<A, B>
-where
-	A: Default
-{
-	fn default() -> Self {
-		Self::A(A::default())
-	}
 }
 
 impl<A, B> CombKind for CombEither<A, B>
