@@ -807,7 +807,7 @@ where
 			min_diff_index: self.min_diff_index,
 			min_same_index: self.min_same_index,
 			layer: 0,
-			kind: PhantomData,
+			kind: self.kind,
 		};
 		if N == 0 {
 			return iter
@@ -850,7 +850,7 @@ where
 	min_diff_index: usize,
 	min_same_index: usize,
 	layer: usize,
-	kind: PhantomData<K>,
+	kind: K,
 }
 
 impl<C, const N: usize, K> PredArrayCombIter<C, N, K>
