@@ -488,46 +488,33 @@ where
 }
 
 /// Combinator for `PredParam` tuple implementation.
+#[derive(Clone)]
 pub struct PredPairComb<A, B, K = CombNone> {
 	a_comb: A,
 	b_comb: B,
-	kind: PhantomData<K>,
-}
-
-impl<A, B, K> Clone for PredPairComb<A, B, K>
-where
-	A: Clone,
-	B: Clone,
-{
-	fn clone(&self) -> Self {
-		Self {
-			a_comb: self.a_comb.clone(),
-			b_comb: self.b_comb.clone(),
-			kind: PhantomData,
-		}
-	}
+	kind: K,
 }
 
 impl<A, B, K> PredPairComb<A, B, K>
 where
-	K: CombKind,
 	A: PredCombinator,
 	B: PredCombinator,
+	K: CombKind,
 {
 	pub fn new(a_comb: A, b_comb: B) -> Self {
 		Self {
 			a_comb,
 			b_comb,
-			kind: PhantomData
+			kind: K::default(),
 		}
 	}
 }
 
 impl<A, B, K> IntoIterator for PredPairComb<A, B, K>
 where
-	K: CombKind,
 	A: PredCombinator,
 	B: PredCombinator,
+	K: CombKind,
 {
 	type Item = <Self::IntoIter as Iterator>::Item;
 	type IntoIter = PredPairCombIter<A, B, K>;
@@ -547,9 +534,9 @@ where
 /// Iterator for 2-tuple [`PredParam`] types.
 pub enum PredPairCombIter<A, B, K>
 where
-	K: CombKind,
 	A: PredCombinator,
 	B: PredCombinator,
+	K: CombKind,
 {
 	Empty,
 	Primary {
@@ -570,9 +557,9 @@ where
 
 impl<A, B, K> PredPairCombIter<A, B, K>
 where
-	K: CombKind,
 	A: PredCombinator,
 	B: PredCombinator,
+	K: CombKind,
 {
 	fn primary_next(
 		mut a_iter: <A::IntoKind<K> as IntoIterator>::IntoIter,
@@ -607,9 +594,9 @@ where
 
 impl<A, B, K> Iterator for PredPairCombIter<A, B, K>
 where
-	K: CombKind,
 	A: PredCombinator,
 	B: PredCombinator,
+	K: CombKind,
 {
 	type Item = <PredPairComb<A, B, K> as PredCombinator<K>>::Case;
 	fn next(&mut self) -> Option<Self::Item> {
