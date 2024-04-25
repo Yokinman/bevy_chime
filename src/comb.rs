@@ -1186,14 +1186,13 @@ where
 		PredParamItem<'p, P>,
 	);
 	fn next(&mut self) -> Option<Self::Item> {
-		while let Some(case) = self.iter.next() {
+		self.iter.next().map(|case| {
 			let (item, id) = case.into_parts();
-			return Some((
+			(
 				self.node.write(PredStateCase::new(id)),
 				item,
-			))
-		}
-		None
+			)
+		})
 	}
 	fn size_hint(&self) -> (usize, Option<usize>) {
 		self.iter.size_hint()
