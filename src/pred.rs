@@ -249,7 +249,7 @@ where
 		param: &'w SystemParamItem<Self::Param>,
 		_input: Self::Input,
 	) -> Self::Comb<'w> {
-		ResComb::new(Res::clone(param))
+		ResComb::new(Res::clone(param), CombNone)
 	}
 }
 
