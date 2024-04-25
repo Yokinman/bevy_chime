@@ -34,21 +34,21 @@ pub trait CombKind: Copy + Default {
 	type Pal: CombKind;
 	type Inv: CombKind;
 	
-	fn has_state(state: bool) -> bool;
+	fn has_state(self, state: bool) -> bool;
 	
 	#[inline]
 	fn has_all(self) -> bool {
-		Self::has_state(true) && Self::has_state(false)
+		self.has_state(true) && self.has_state(false)
 	}
 	
 	#[inline]
 	fn has_none(self) -> bool {
-		!(Self::has_state(true) || Self::has_state(false))
+		!(self.has_state(true) || self.has_state(false))
 	}
 	
 	#[inline]
 	fn states(self) -> [bool; 2] {
-		[Self::has_state(true), Self::has_state(false)]
+		[self.has_state(true), self.has_state(false)]
 	}
 }
 
@@ -62,7 +62,7 @@ macro_rules! def_comb_kind {
 			type Pal = $pal;
 			type Inv = $inv;
 			#[inline]
-			fn has_state($state: bool) -> bool {
+			fn has_state(self, $state: bool) -> bool {
 				$has_state
 			}
 		}
@@ -356,7 +356,7 @@ where
 		}
 		for (item, id) in self.iter.by_ref() {
 			let is_updated = P::is_updated(&item);
-			if K::has_state(is_updated) {
+			if self.kind.has_state(is_updated) {
 				return Some(if is_updated {
 					PredCombCase::Diff(item.into_item(), id)
 				} else {
@@ -819,7 +819,7 @@ where
 			iter.index[N-1] = iter.slice.len();
 		} else if iter.index[N-1] < iter.slice.len() {
 			let (case, _) = &iter.slice[iter.index[N-1]];
-			if K::has_state(case.is_diff()) {
+			if self.kind.has_state(case.is_diff()) {
 				iter.layer = N-1;
 			} else if N == 1 {
 				iter.step_index(N-1);
@@ -868,13 +868,13 @@ where
 					let (case, next_index) = &self.slice[index];
 					
 					 // Jump to Next Matching Case:
-					if K::has_state(case.is_diff()) {
+					if self.kind.has_state(case.is_diff()) {
 						*next_index
 					}
 					
 					 // Find Next Matching Case:
 					else {
-						let first_index = if K::has_state(true) {
+						let first_index = if self.kind.has_state(true) {
 							self.min_diff_index
 						} else {
 							self.min_same_index
@@ -884,7 +884,7 @@ where
 						} else {
 							let mut index = index + 1;
 							while let Some((case, _)) = self.slice.get(index) {
-								if K::has_state(case.is_diff()) {
+								if self.kind.has_state(case.is_diff()) {
 									break
 								}
 								index += 1;
@@ -896,7 +896,7 @@ where
 			},
 			std::cmp::Ordering::Less => {
 				if let Some((case, _)) = self.slice.get(index + 1) {
-					if K::has_state(case.is_diff()) {
+					if self.kind.has_state(case.is_diff()) {
 						self.layer = i;
 					}
 				}
@@ -967,14 +967,14 @@ where
 			let mut remaining = self.slice.len() - index;
 			let mut num = falling_factorial(remaining, i + 1);
 			if i >= self.layer && !self.kind.has_all() {
-				let first_index = if K::has_state(true) {
+				let first_index = if self.kind.has_state(true) {
 					self.min_diff_index
 				} else {
 					self.min_same_index
 				};
 				while index < self.slice.len() {
 					let (case, next_index) = &self.slice[index];
-					index = if K::has_state(case.is_diff()) {
+					index = if self.kind.has_state(case.is_diff()) {
 						remaining -= 1;
 						*next_index
 					} else if index < first_index {
