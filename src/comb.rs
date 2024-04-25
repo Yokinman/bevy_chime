@@ -42,7 +42,7 @@ pub trait CombKind: Copy + Default {
 	}
 	
 	#[inline]
-	fn has_none() -> bool {
+	fn has_none(self) -> bool {
 		!(Self::has_state(true) || Self::has_state(false))
 	}
 	
@@ -351,7 +351,7 @@ where
 {
 	type Item = PredCombCase<P::Item, I>;
 	fn next(&mut self) -> Option<Self::Item> {
-		if K::has_none() {
+		if self.kind.has_none() {
 			return None
 		}
 		for (item, id) in self.iter.by_ref() {
@@ -945,7 +945,7 @@ where
 		
 		if N == 0
 			|| self.index[N-1] >= self.slice.len()
-			|| K::has_none()
+			|| self.kind.has_none()
 		{
 			return (0, Some(0))
 		}
