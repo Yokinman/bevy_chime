@@ -295,7 +295,7 @@ where
 		(a, b): &'w SystemParamItem<Self::Param>,
 		(a_in, b_in): Self::Input,
 	) -> Self::Comb<'w> {
-		PredPairComb::new(A::comb(a, a_in), B::comb(b, b_in))
+		PredPairComb::new(A::comb(a, a_in), B::comb(b, b_in), CombNone)
 	}
 }
 

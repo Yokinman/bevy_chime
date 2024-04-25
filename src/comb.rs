@@ -185,7 +185,7 @@ where
 	type IntoKind<Kind: CombKind> = PredPairComb<A, B, Kind>;
 	
 	fn into_kind<Kind: CombKind>(self, kind: Kind) -> Self::IntoKind<Kind> {
-		PredPairComb::new(self.a_comb, self.b_comb)
+		PredPairComb::new(self.a_comb, self.b_comb, kind)
 	}
 }
 
@@ -528,17 +528,12 @@ pub struct PredPairComb<A, B, K = CombNone> {
 	kind: K,
 }
 
-impl<A, B, K> PredPairComb<A, B, K>
-where
-	A: PredCombinator,
-	B: PredCombinator,
-	K: CombKind,
-{
-	pub fn new(a_comb: A, b_comb: B) -> Self {
+impl<A, B, K> PredPairComb<A, B, K> {
+	pub(crate) fn new(a_comb: A, b_comb: B, kind: K) -> Self {
 		Self {
 			a_comb,
 			b_comb,
-			kind: K::default(),
+			kind,
 		}
 	}
 }
