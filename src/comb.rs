@@ -47,7 +47,7 @@ pub trait CombKind: Copy + Default {
 	}
 	
 	#[inline]
-	fn states() -> [bool; 2] {
+	fn states(self) -> [bool; 2] {
 		[Self::has_state(true), Self::has_state(false)]
 	}
 }
@@ -170,7 +170,7 @@ where
 	type IntoKind<Kind: CombKind> = PredArrayComb<C, N, Kind>;
 	
 	fn into_kind<Kind: CombKind>(self) -> Self::IntoKind<Kind> {
-		if K::Pal::states() == Kind::Pal::states() {
+		if K::Pal::default().states() == Kind::Pal::default().states() {
 			PredArrayComb {
 				comb: self.comb,
 				slice: self.slice,
@@ -367,7 +367,7 @@ where
 		None
 	}
 	fn size_hint(&self) -> (usize, Option<usize>) {
-		match K::states() {
+		match self.kind.states() {
 			[false, false] => (0, Some(0)),
 			[true, true] => self.iter.size_hint(),
 			_ => (0, self.iter.size_hint().1)
@@ -810,7 +810,7 @@ where
 		}
 		
 		 // Initialize Main Index:
-		if match K::states() {
+		if match iter.kind.states() {
 			[true, true] => false,
 			[false, false] => true,
 			[true, false] => iter.min_diff_index >= iter.slice.len(),
@@ -861,7 +861,7 @@ where
 			return true
 		}
 		self.index[i] = match self.layer.cmp(&i) {
-			std::cmp::Ordering::Equal => match K::states() {
+			std::cmp::Ordering::Equal => match self.kind.states() {
 				[true, true] => index + 1,
 				[false, false] => self.slice.len(),
 				_ => {
@@ -1032,7 +1032,7 @@ where
 	type Item = (C::Case, PredSubComb<PredArrayComb<C, N>, K>);
 	fn next(&mut self) -> Option<Self::Item> {
 		if let Some(mut max_index) = self.inner.slice.len().checked_sub(N) {
-			max_index = max_index.min(match K::states() {
+			max_index = max_index.min(match self.inner.kind.states() {
 				[true, true] => self.inner.slice.len(),
 				[false, false] => 0,
 				[true, false] => self.inner.max_diff_index,
@@ -1058,7 +1058,7 @@ where
 	}
 	fn size_hint(&self) -> (usize, Option<usize>) {
 		if let Some(mut max_index) = self.inner.slice.len().checked_sub(N) {
-			max_index = max_index.min(match K::states() {
+			max_index = max_index.min(match self.inner.kind.states() {
 				[true, true] => self.inner.slice.len(),
 				[false, false] => 0,
 				[true, false] => self.inner.max_diff_index,
