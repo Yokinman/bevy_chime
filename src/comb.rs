@@ -663,7 +663,7 @@ where
 pub struct PredPairCombSplit<A, B, K> {
 	a_iter: A,
 	b_comb: B,
-	kind: PhantomData<K>,
+	kind: K,
 }
 
 impl<A, B, K> PredPairCombSplit<A, B, K>
@@ -678,17 +678,17 @@ where
 		Self {
 			a_iter: comb.a_comb.into_kind().into_iter(),
 			b_comb: comb.b_comb,
-			kind: PhantomData,
+			kind: comb.kind,
 		}
 	}
 }
 
 impl<A, B, K> Iterator for PredPairCombSplit<A, B, K>
 where
-	K: CombKind,
 	A: Iterator,
 	A::Item: PredCombinatorCase,
 	B: PredCombinator,
+	K: CombKind,
 {
 	type Item = (A::Item, PredSubComb<B, K>);
 	fn next(&mut self) -> Option<Self::Item> {
