@@ -215,7 +215,7 @@ where
 				kind,
 			}
 		} else {
-			PredArrayComb::new(self.comb)
+			PredArrayComb::new(self.comb, kind)
 		}
 	}
 }
@@ -772,11 +772,11 @@ where
 
 impl<C, const N: usize, K> PredArrayComb<C, N, K>
 where
-	K: CombKind,
 	C: PredCombinator,
 	C::Id: Ord,
+	K: CombKind,
 {
-	pub fn new(comb: C) -> Self {
+	pub fn new(comb: C, kind: K) -> Self {
 		let mut vec = comb.clone().into_kind::<K::Pal>(Default::default()).into_iter()
 			.map(|x| (x, usize::MAX))
 			.collect::<Vec<_>>();
@@ -815,7 +815,7 @@ where
 			min_same_index,
 			max_diff_index,
 			max_same_index,
-			kind: K::default(),
+			kind,
 		}
 	}
 }

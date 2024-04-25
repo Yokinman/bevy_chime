@@ -312,7 +312,7 @@ where
 		param: &'w SystemParamItem<Self::Param>,
 		input: Self::Input,
 	) -> Self::Comb<'w> {
-		PredArrayComb::new(P::comb(param, input[0].clone())) // !!! Fix input
+		PredArrayComb::new(P::comb(param, input[0].clone()), CombNone) // !!! Fix input
 	}
 }
 
