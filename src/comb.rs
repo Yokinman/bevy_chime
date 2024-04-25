@@ -132,7 +132,7 @@ impl<K: CombKind> PredCombinator<K> for EmptyComb<K> {
 	type IntoKind<Kind: CombKind> = EmptyComb<Kind>;
 	
 	fn into_kind<Kind: CombKind>(self, kind: Kind) -> Self::IntoKind<Kind> {
-		EmptyComb::default()
+		EmptyComb::new(kind)
 	}
 }
 
@@ -245,9 +245,15 @@ pub enum PredSubComb<C: PredCombinator, K: CombKind> {
 }
 
 /// Combinator for `PredParam` `()` implementation.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct EmptyComb<K = CombNone> {
 	kind: K,
+}
+
+impl<K> EmptyComb<K> {
+	pub(crate) fn new(kind: K) -> Self {
+		Self { kind }
+	}
 }
 
 impl<K> IntoIterator for EmptyComb<K>

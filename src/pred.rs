@@ -262,7 +262,7 @@ impl PredParam for () {
 		_param: &'w SystemParamItem<Self::Param>,
 		_input: Self::Input,
 	) -> Self::Comb<'w> {
-		EmptyComb::default()
+		EmptyComb::new(CombNone)
 	}
 }
 
