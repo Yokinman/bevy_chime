@@ -41,8 +41,11 @@ pub trait PredParamVec: PredParam {
 	type Tail: PredParam;
 	
 	type Split<'p, K: CombKind>: Iterator<Item = (
-		<<Self::Head as PredParam>::Comb<'p> as IntoIterator>::Item,
-		PredSubComb<<Self::Tail as PredParam>::Comb<'p>, K>,
+		<<Self::Head as PredParam>::Comb<'p> as PredCombinator>::Case,
+		<<Self::Tail as PredParam>::Comb<'p> as PredCombinator>::IntoKind<CombEither<
+			K::Pal,
+			<<K::Inv as CombKind>::Pal as CombKind>::Inv,
+		>>,
 	)>;
 	
 	fn split<K: CombKind>(
@@ -140,17 +143,17 @@ where
 	K: CombKind,
 {
 	type Item = (
-		PredSubStateSplit<'p, 's, T, P::Tail, K>,
+		PredSubState<'p, 's, T, P::Tail, CombEither<
+			K::Pal,
+			<<K::Inv as CombKind>::Pal as CombKind>::Inv,
+		>>,
 		PredParamItem<'p, P::Head>,
 	);
 	fn next(&mut self) -> Option<Self::Item> {
 		if let Some((head, tail)) = self.iter.next() {
 			let (head_item, head_id) = head.into_parts();
 			let node = &mut self.branches.write((head_id, PredNode::Blank)).1;
-			let sub_state = match tail {
-				PredSubComb::Diff(comb) => PredSubStateSplit::Diff(PredSubState::new(comb, node)),
-				PredSubComb::Same(comb) => PredSubStateSplit::Same(PredSubState::new(comb, node)),
-			};
+			let sub_state = PredSubState::new(tail, node);
 			Some((sub_state, head_item))
 		} else {
 			None
@@ -158,38 +161,6 @@ where
 	}
 	fn size_hint(&self) -> (usize, Option<usize>) {
 		self.iter.size_hint()
-	}
-}
-
-/// Nested state of each [`PredSubState::outer_iter`].
-pub enum PredSubStateSplit<'p, 's, T, P, K>
-where
-	's: 'p,
-	P: PredParam,
-	K: CombKind,
-{
-	Diff(PredSubState<'p, 's, T, P, K::Pal>),
-	Same(PredSubState<'p, 's, T, P, <<K::Inv as CombKind>::Pal as CombKind>::Inv>),
-}
-
-impl<'p, 's, T, P, K> IntoIterator for PredSubStateSplit<'p, 's, T, P, K>
-where
-	's: 'p,
-	P: PredParam,
-	K: CombKind,
-	PredCombSplit<'p, T, P, K>: Iterator,
-	PredSubState<'p, 's, T, P, <K as CombKind>::Pal>:
-		IntoIterator<IntoIter = PredComb<'p, T, P, K::Pal>>,
-	PredSubState<'p, 's, T, P, <<K::Inv as CombKind>::Pal as CombKind>::Inv>:
-		IntoIterator<IntoIter = PredComb<'p, T, P, <<K::Inv as CombKind>::Pal as CombKind>::Inv>>,
-{
-	type Item = <Self::IntoIter as Iterator>::Item;
-	type IntoIter = PredCombSplit<'p, T, P, K>;
-	fn into_iter(self) -> Self::IntoIter {
-		match self {
-			Self::Diff(state) => PredCombSplit::Diff(state.into_iter()),
-			Self::Same(state) => PredCombSplit::Same(state.into_iter()),
-		}
 	}
 }
 

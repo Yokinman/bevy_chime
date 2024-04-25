@@ -261,12 +261,6 @@ where
 	}
 }
 
-/// Combinator for each [`PredParamVec::Split`] case.
-pub enum PredSubComb<C: PredCombinator, K: CombKind> {
-	Diff(C::IntoKind<K::Pal>),
-	Same(C::IntoKind<<<K::Inv as CombKind>::Pal as CombKind>::Inv>),
-}
-
 /// Combinator for `PredParam` `()` implementation.
 #[derive(Clone)]
 pub struct EmptyComb<K = CombNone> {
@@ -741,14 +735,18 @@ where
 	B: PredCombinator,
 	K: CombKind,
 {
-	type Item = (A::Item, PredSubComb<B, K>);
+	type Item = (A::Item, B::IntoKind<CombEither<
+		K::Pal,
+		<<K::Inv as CombKind>::Pal as CombKind>::Inv,
+	>>);
 	fn next(&mut self) -> Option<Self::Item> {
 		if let Some(case) = self.a_iter.next() {
-			let sub_comb = if case.is_diff() {
-				PredSubComb::Diff(self.b_comb.clone().into_kind(self.kind.pal()))
+			let kind = if case.is_diff() {
+				CombEither::A(self.kind.pal())
 			} else {
-				PredSubComb::Same(self.b_comb.clone().into_kind(self.kind.inv().pal().inv()))
+				CombEither::B(self.kind.inv().pal().inv())
 			};
+			let sub_comb = self.b_comb.clone().into_kind(kind);
 			Some((case, sub_comb))
 		} else {
 			None
@@ -1083,7 +1081,10 @@ where
 	C: PredCombinator,
 	C::Id: Ord,
 {
-	type Item = (C::Case, PredSubComb<PredArrayComb<C, N>, K>);
+	type Item = (C::Case, PredArrayComb<C, N, CombEither<
+		K::Pal,
+		<<K::Inv as CombKind>::Pal as CombKind>::Inv,
+	>>);
 	fn next(&mut self) -> Option<Self::Item> {
 		if let Some(mut max_index) = self.inner.slice.len().checked_sub(N) {
 			max_index = max_index.min(match self.inner.kind.states() {
@@ -1100,11 +1101,12 @@ where
 		};
 		if let Some((case, _)) = self.inner.slice.get(self.inner.index) {
 			self.inner.index += 1;
-			let sub_comb = if case.is_diff() {
-				PredSubComb::Diff(self.inner.clone().into_kind(self.inner.kind.pal()))
+			let kind = if case.is_diff() {
+				CombEither::A(self.inner.kind.pal())
 			} else {
-				PredSubComb::Same(self.inner.clone().into_kind(self.inner.kind.inv().pal().inv()))
+				CombEither::B(self.inner.kind.inv().pal().inv())
 			};
+			let sub_comb = self.inner.clone().into_kind(kind);
 			Some((case.clone(), sub_comb))
 		} else {
 			None
@@ -1216,39 +1218,5 @@ where
 	}
 	fn size_hint(&self) -> (usize, Option<usize>) {
 		self.iter.size_hint()
-	}
-}
-
-/// Iterator of [`PredSubStateSplit`].
-pub enum PredCombSplit<'p, T, P, K>
-where
-	P: PredParam,
-	K: CombKind,
-{
-	Diff(PredComb<'p, T, P, K::Pal>),
-	Same(PredComb<'p, T, P, <<K::Inv as CombKind>::Pal as CombKind>::Inv>),
-}
-
-impl<'p, T, P, K> Iterator for PredCombSplit<'p, T, P, K>
-where
-	P: PredParam,
-	K: CombKind,
-	PredComb<'p, T, P, K::Pal>:
-		Iterator,
-	PredComb<'p, T, P, <<K::Inv as CombKind>::Pal as CombKind>::Inv>:
-		Iterator<Item = <PredComb<'p, T, P, K::Pal> as Iterator>::Item>,
-{
-	type Item = <PredComb<'p, T, P, K::Pal> as Iterator>::Item;
-	fn next(&mut self) -> Option<Self::Item> {
-		match self {
-			Self::Diff(iter) => iter.next(),
-			Self::Same(iter) => iter.next(),
-		}
-	}
-	fn size_hint(&self) -> (usize, Option<usize>) {
-		match self {
-			Self::Diff(iter) => iter.size_hint(),
-			Self::Same(iter) => iter.size_hint(),
-		}
 	}
 }
