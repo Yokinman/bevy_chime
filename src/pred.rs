@@ -329,6 +329,19 @@ where
 	}
 }
 
+/// ...
+pub struct Fetch<D, F> {
+	inner: D,
+	_filter: std::marker::PhantomData<F>,
+}
+
+impl<D, F> Deref for Fetch<D, F> {
+	type Target = D;
+	fn deref(&self) -> &Self::Target {
+		&self.inner
+	}
+}
+
 /// Case of prediction.
 pub trait PredItem {
 	fn clone(&self) -> Self;
