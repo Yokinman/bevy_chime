@@ -345,7 +345,8 @@ where
 	}
 }
 
-/// ...
+/// Unused - may replace the output of `QueryComb` if the concept of
+/// case-by-case prediction closures is implemented.
 pub struct Fetch<D, F> {
 	inner: D,
 	_filter: std::marker::PhantomData<F>,
