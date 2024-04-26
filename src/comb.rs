@@ -891,8 +891,6 @@ where
 			.map(|x| (x, usize::MAX))
 			.collect::<Vec<_>>();
 		
-		vec.sort_unstable_by_key(|(x, _)| x.id());
-		
 		 // Setup Jump Indices:
 		let mut index = vec.len();
 		let mut min_diff_index = index;
