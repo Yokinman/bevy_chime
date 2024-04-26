@@ -404,12 +404,59 @@ where
 	F: ArchetypeFilter + 'static,
 {
 	type Item = <Self::IntoIter as Iterator>::Item;
-	type IntoIter = CombIter<QueryIter<'w, 'w, (Ref<'static, T>, Entity), F>, K>;
+	type IntoIter = QueryCombIter<'w, T, F, K>;
 	fn into_iter(self) -> Self::IntoIter {
 		match self {
-			Self::Normal { inner, kind } => {
-				CombIter::new(inner.iter_inner(), kind)
+			Self::Normal { inner, kind } => QueryCombIter::Normal {
+				iter: CombIter::new(inner.iter_inner(), kind),
 			},
+			Self::Cached { slice, kind } => QueryCombIter::Cached {
+				slice,
+				index: 0,
+				kind,
+			},
+		}
+	}
+}
+
+/// ...
+pub enum QueryCombIter<'w, T, F, K>
+where
+	T: Component,
+	F: ArchetypeFilter,
+{
+	Normal { 
+		iter: CombIter<QueryIter<'w, 'w, (Ref<'static, T>, Entity), F>, K>,
+	},
+	Cached {
+		slice: Rc<[(&'w T, usize)]>,
+		index: usize,
+		kind: K,
+	},
+}
+
+impl<'w, T, F, K> Iterator for QueryCombIter<'w, T, F, K>
+where
+	T: Component,
+	F: ArchetypeFilter,
+	K: CombKind,
+{
+	type Item = PredCombCase<&'w T, Entity>;
+	fn next(&mut self) -> Option<Self::Item> {
+		match self {
+			Self::Normal { iter } => iter.next(),
+			Self::Cached { .. } => todo!(),
+		}
+	}
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		match self {
+			Self::Normal { iter } => iter.size_hint(),
+			Self::Cached { .. } => todo!(),
+		}
+	}
+	fn nth(&mut self, n: usize) -> Option<Self::Item> {
+		match self {
+			Self::Normal { iter } => iter.nth(n),
 			Self::Cached { .. } => todo!(),
 		}
 	}
