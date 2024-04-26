@@ -89,7 +89,7 @@ def_comb_kind!(CombAll,      CombAll,      CombNone,     _ => true);
 def_comb_kind!(CombAllFalse, CombAllFalse, CombAnyTrue,  x => !x);
 def_comb_kind!(CombAnyTrue,  CombAll,      CombAllFalse, x => x);
 
-/// ...
+/// A branching [`CombKind`], for combinators that split into two paths.
 #[derive(Copy, Clone)]
 pub enum CombBranch<A, B> {
 	A(A),
