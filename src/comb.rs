@@ -551,14 +551,19 @@ where
 	}
 }
 
-impl<C: PredCombinatorCase, const N: usize> PredCombinatorCase for [C; N] {
+impl<C: PredCombinatorCase, const N: usize> PredCombinatorCase for [C; N]
+where
+	C::Id: Ord
+{
 	type Item = [C::Item; N];
 	type Id = [C::Id; N];
 	fn is_diff(&self) -> bool {
 		self.iter().any(C::is_diff)
 	}
 	fn id(&self) -> Self::Id {
-		self.each_ref().map(C::id)
+		let mut ids = self.each_ref().map(C::id);
+		ids.sort_unstable();
+		ids
 	}
 	fn into_parts(self) -> (Self::Item, Self::Id) {
 		let mut ids = [self[0].id(); N];
@@ -570,6 +575,7 @@ impl<C: PredCombinatorCase, const N: usize> PredCombinatorCase for [C; N] {
 			ids[i] = id;
 			item
 		});
+		ids.sort_unstable();
 		(items, ids)
 	}
 }
