@@ -16,20 +16,19 @@ use crate::pred::*;
 ///  All      | All      | None     | All
 ///  AllTrue  | AllTrue  | AnyFalse | None
 ///  AllFalse | AllFalse | AnyTrue  | None
-///  AllSame  | AllSame  | AnyDiff  | AnyDiff
 ///  AnyTrue  | All      | AllFalse | AnyTrue
 ///  AnyFalse | All      | AllTrue  | AnyFalse
-///  AnyDiff  | AllSame  | AllSame  | AnyDiff
 /// ```
 /// 
 /// - `None`: No combinations.
 /// - `All`: All possible combinations.
 /// - `AllTrue`: Combinations where all are true.
 /// - `AllFalse`: Combinations where all are false.
-/// - `AllSame`: Combinations where all are the same as each other.
 /// - `AnyTrue`: Combinations where at least one is true.
 /// - `AnyFalse`: Combinations where at least one is false.
-/// - `AnyDiff`: Combinations where at least one is different from the rest.
+/// 
+/// `Pal` is like a helper combinator kind. I'm not really sure how to describe
+/// it. It generally defines a combination superset. A coincidental utility? 
 pub trait CombKind: Copy {
 	type Pal: CombKind;
 	type Inv: CombKind;
