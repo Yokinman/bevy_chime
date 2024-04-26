@@ -200,7 +200,7 @@ where
 				QueryComb::new(inner, new_kind)
 			},
 			QueryComb::Cached { slice, kind } => {
-				if kind.pal().states() == new_kind.pal().states() {
+				if kind.states() == new_kind.states() {
 					QueryComb::Cached {
 						slice,
 						kind: new_kind,
@@ -361,7 +361,7 @@ where
 		kind: K,
 	},
 	Cached {
-		slice: Rc<[(&'w T, usize)]>,
+		slice: Rc<[PredCombCase<&'w T, Entity>]>,
 		kind: K,
 	},
 }
@@ -410,10 +410,9 @@ where
 			Self::Normal { inner, kind } => QueryCombIter::Normal {
 				iter: CombIter::new(inner.iter_inner(), kind),
 			},
-			Self::Cached { slice, kind } => QueryCombIter::Cached {
+			Self::Cached { slice, .. } => QueryCombIter::Cached {
 				slice,
 				index: 0,
-				kind,
 			},
 		}
 	}
@@ -429,9 +428,8 @@ where
 		iter: CombIter<QueryIter<'w, 'w, (Ref<'static, T>, Entity), F>, K>,
 	},
 	Cached {
-		slice: Rc<[(&'w T, usize)]>,
+		slice: Rc<[PredCombCase<&'w T, Entity>]>,
 		index: usize,
-		kind: K,
 	},
 }
 
@@ -445,19 +443,32 @@ where
 	fn next(&mut self) -> Option<Self::Item> {
 		match self {
 			Self::Normal { iter } => iter.next(),
-			Self::Cached { .. } => todo!(),
+			Self::Cached { slice, index } => {
+				if let Some(case) = slice.get(*index) {
+					*index += 1;
+					Some(case.clone())
+				} else {
+					None
+				}
+			},
 		}
 	}
 	fn size_hint(&self) -> (usize, Option<usize>) {
 		match self {
 			Self::Normal { iter } => iter.size_hint(),
-			Self::Cached { .. } => todo!(),
+			Self::Cached { slice, index } => {
+				let len = slice.len() - index;
+				(len, Some(len))
+			},
 		}
 	}
 	fn nth(&mut self, n: usize) -> Option<Self::Item> {
 		match self {
 			Self::Normal { iter } => iter.nth(n),
-			Self::Cached { .. } => todo!(),
+			Self::Cached { index, .. } => {
+				*index += n;
+				self.next()
+			},
 		}
 	}
 }
