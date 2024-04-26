@@ -194,8 +194,22 @@ where
 	
 	type IntoKind<Kind: CombKind> = QueryComb<'w, T, F, Kind>;
 	
-	fn into_kind<Kind: CombKind>(self, kind: Kind) -> Self::IntoKind<Kind> {
-		QueryComb::new(self.inner, kind)
+	fn into_kind<Kind: CombKind>(self, new_kind: Kind) -> Self::IntoKind<Kind> {
+		match self {
+			QueryComb::Normal { inner, .. } => {
+				QueryComb::new(inner, new_kind)
+			},
+			QueryComb::Cached { slice, kind } => {
+				if kind.pal().states() == new_kind.pal().states() {
+					QueryComb::Cached {
+						slice,
+						kind: new_kind,
+					}
+				} else {
+					unimplemented!("I don't think this happens, prove me wrong")
+				}
+			},
+		}
 	}
 }
 
@@ -337,13 +351,19 @@ where
 }
 
 /// Combinator for `PredParam` `Query` implementation.
-pub struct QueryComb<'w, T, F, K = CombNone>
+pub enum QueryComb<'w, T, F, K = CombNone>
 where
 	T: Component,
 	F: ArchetypeFilter + 'static,
 {
-	inner: &'w Query<'w, 'w, (Ref<'static, T>, Entity), F>,
-	kind: K,
+	Normal {
+		inner: &'w Query<'w, 'w, (Ref<'static, T>, Entity), F>,
+		kind: K,
+	},
+	Cached {
+		slice: Rc<[(&'w T, usize)]>,
+		kind: K,
+	},
 }
 
 impl<'w, T, F, K> QueryComb<'w, T, F, K>
@@ -352,28 +372,28 @@ where
 	F: ArchetypeFilter + 'static,
 {
 	pub(crate) fn new(inner: &'w Query<'w, 'w, (Ref<'static, T>, Entity), F>, kind: K) -> Self {
-		Self {
-			inner,
-			kind,
-		}
+		// !!! If `kind` isn't All or None, cache using `PredArrayComb::new` logic.
+		Self::Normal { inner, kind }
 	}
 }
-
-impl<T, F, K> Copy for QueryComb<'_, T, F, K>
-where
-	T: Component,
-	F: ArchetypeFilter + 'static,
-	K: Copy,
-{}
 
 impl<T, F, K> Clone for QueryComb<'_, T, F, K>
 where
 	T: Component,
 	F: ArchetypeFilter + 'static,
-	K: Copy,
+	K: Clone,
 {
 	fn clone(&self) -> Self {
-		*self
+		match self {
+			Self::Normal { inner, kind } => Self::Normal {
+				inner: Clone::clone(inner),
+				kind: kind.clone(),
+			},
+			Self::Cached { slice, kind } => Self::Cached {
+				slice: Rc::clone(&slice),
+				kind: kind.clone(),
+			},
+		}
 	}
 }
 
@@ -386,7 +406,12 @@ where
 	type Item = <Self::IntoIter as Iterator>::Item;
 	type IntoIter = CombIter<QueryIter<'w, 'w, (Ref<'static, T>, Entity), F>, K>;
 	fn into_iter(self) -> Self::IntoIter {
-		CombIter::new(self.inner.iter_inner(), self.kind)
+		match self {
+			Self::Normal { inner, kind } => {
+				CombIter::new(inner.iter_inner(), kind)
+			},
+			Self::Cached { .. } => todo!(),
+		}
 	}
 }
 
