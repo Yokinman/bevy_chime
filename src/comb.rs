@@ -741,6 +741,11 @@ where
 	>>);
 	fn next(&mut self) -> Option<Self::Item> {
 		if let Some(case) = self.a_iter.next() {
+			// !!! Currently the main branch iterates over all A and if a case
+			// is updated it iterates over all B, else it iterates over only the
+			// updated B. To find the updated B cases it searches through *all*
+			// B cases. I want to cache the updated B items in the latter case,
+			// but not all B items in the former case.
 			let kind = if case.is_diff() {
 				CombBranch::A(self.kind.pal())
 			} else {
