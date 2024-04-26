@@ -1132,7 +1132,7 @@ mod testing {
 						+ B*update_vec.len()
 						- update_vec.len()*b_update_vec.len();
 					if A > 1 && B > 1 {
-						assert_eq!(iter.size_hint(), (B, Some(A*B)));
+						assert_eq!(iter.size_hint(), (B, Some(count)));
 					}
 					let mut n = 0;
 					for (_, (a, b)) in iter {

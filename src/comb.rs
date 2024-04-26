@@ -772,12 +772,9 @@ where
 					let b_max = b_comb.clone().into_iter().size_hint().1?;
 					let a_inv_max = a_inv_comb.clone().into_iter().size_hint().1?;
 					let b_inv_max = b_inv_comb.clone().into_iter().size_hint().1?;
-					std::cmp::max(
-						// This may be inaccurate if a new `CombKind` is added.
-						// It should work for `K=CombNone|All|AnyTrue|AllFalse`.
-						min.checked_add(a_max.checked_mul(b_max)?),
-						a_inv_max.checked_mul(b_inv_max)
-					)
+					min
+						.checked_add(a_max.checked_mul(b_max)?)?
+						.checked_add(a_inv_max.checked_mul(b_inv_max)?)
 				});
 				(min, max)
 			},
