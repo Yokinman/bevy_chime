@@ -26,29 +26,36 @@ use crate::pred::*;
 /// - `AllFalse`: Combinations where all are false.
 /// - `AnyTrue`: Combinations where at least one is true.
 /// - `AnyFalse`: Combinations where at least one is false.
-/// 
-/// `Pal` is like a helper combinator kind. I'm not really sure how to describe
-/// it. It generally defines a combination superset. A coincidental utility? 
 pub trait CombKind: Copy {
+	/// This is like a helper kind. I'm not really sure how to describe it. It
+	/// generally defines a combination superset. A coincidental utility? 
 	type Pal: CombKind;
+	
+	/// The inverse of this kind, filter-wise. Not overlapping; complementary.
 	type Inv: CombKind;
 	
+	/// Filters some state.
 	fn has_state(self, state: bool) -> bool;
 	
+	/// Conversion from `Self` to [`Self::Pal`].
 	fn pal(self) -> Self::Pal;
 	
+	/// Conversion from `Self` to [`Self::Inv`].
 	fn inv(self) -> Self::Inv;
 	
+	/// If [`Self::has_state`] always filters to `true`.
 	#[inline]
 	fn has_all(self) -> bool {
 		self.has_state(true) && self.has_state(false)
 	}
 	
+	/// If [`Self::has_state`] always filters to `false`.
 	#[inline]
 	fn has_none(self) -> bool {
 		!(self.has_state(true) || self.has_state(false))
 	}
 	
+	/// All outputs of [`Self::has_state`].
 	#[inline]
 	fn states(self) -> [bool; 2] {
 		[self.has_state(true), self.has_state(false)]
@@ -89,7 +96,7 @@ def_comb_kind!(CombAll,      CombAll,      CombNone,     _ => true);
 def_comb_kind!(CombAllFalse, CombAllFalse, CombAnyTrue,  x => !x);
 def_comb_kind!(CombAnyTrue,  CombAll,      CombAllFalse, x => x);
 
-/// A branching [`CombKind`], for combinators that split into two paths.
+/// A branching [`CombKind`] for combinators that split into two paths.
 #[derive(Copy, Clone)]
 pub enum CombBranch<A, B> {
 	A(A),
