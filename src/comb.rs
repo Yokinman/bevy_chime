@@ -370,10 +370,18 @@ impl<'w, T, F, K> QueryComb<'w, T, F, K>
 where
 	T: Component,
 	F: ArchetypeFilter + 'static,
+	K: CombKind,
 {
 	pub(crate) fn new(inner: &'w Query<'w, 'w, (Ref<'static, T>, Entity), F>, kind: K) -> Self {
-		// !!! If `kind` isn't All or None, cache using `PredArrayComb::new` logic.
-		Self::Normal { inner, kind }
+		let comb = Self::Normal { inner, kind };
+		if kind.has_state(true) == kind.has_state(false) {
+			comb
+		} else {
+			Self::Cached {
+				slice: comb.into_iter().collect(),
+				kind,
+			}
+		}
 	}
 }
 
