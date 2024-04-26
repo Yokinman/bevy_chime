@@ -92,18 +92,18 @@ def_comb_kind!(CombAnyTrue,  CombAll,      CombAllFalse, x => x);
 
 /// ...
 #[derive(Copy, Clone)]
-pub enum CombEither<A, B> {
+pub enum CombBranch<A, B> {
 	A(A),
 	B(B),
 }
 
-impl<A, B> CombKind for CombEither<A, B>
+impl<A, B> CombKind for CombBranch<A, B>
 where
 	A: CombKind,
 	B: CombKind,
 {
-	type Pal = CombEither<A::Pal, B::Pal>;
-	type Inv = CombEither<A::Inv, B::Inv>;
+	type Pal = CombBranch<A::Pal, B::Pal>;
+	type Inv = CombBranch<A::Inv, B::Inv>;
 	
 	#[inline]
 	fn has_state(self, state: bool) -> bool {
@@ -116,16 +116,16 @@ where
 	#[inline]
 	fn pal(self) -> Self::Pal {
 		match self {
-			Self::A(a) => CombEither::A(a.pal()),
-			Self::B(b) => CombEither::B(b.pal()),
+			Self::A(a) => CombBranch::A(a.pal()),
+			Self::B(b) => CombBranch::B(b.pal()),
 		}
 	}
 	
 	#[inline]
 	fn inv(self) -> Self::Inv {
 		match self {
-			Self::A(a) => CombEither::A(a.inv()),
-			Self::B(b) => CombEither::B(b.inv()),
+			Self::A(a) => CombBranch::A(a.inv()),
+			Self::B(b) => CombBranch::B(b.inv()),
 		}
 	}
 }
@@ -735,16 +735,16 @@ where
 	B: PredCombinator,
 	K: CombKind,
 {
-	type Item = (A::Item, B::IntoKind<CombEither<
+	type Item = (A::Item, B::IntoKind<CombBranch<
 		K::Pal,
 		<<K::Inv as CombKind>::Pal as CombKind>::Inv,
 	>>);
 	fn next(&mut self) -> Option<Self::Item> {
 		if let Some(case) = self.a_iter.next() {
 			let kind = if case.is_diff() {
-				CombEither::A(self.kind.pal())
+				CombBranch::A(self.kind.pal())
 			} else {
-				CombEither::B(self.kind.inv().pal().inv())
+				CombBranch::B(self.kind.inv().pal().inv())
 			};
 			let sub_comb = self.b_comb.clone().into_kind(kind);
 			Some((case, sub_comb))
@@ -1081,7 +1081,7 @@ where
 	C: PredCombinator,
 	C::Id: Ord,
 {
-	type Item = (C::Case, PredArrayComb<C, N, CombEither<
+	type Item = (C::Case, PredArrayComb<C, N, CombBranch<
 		K::Pal,
 		<<K::Inv as CombKind>::Pal as CombKind>::Inv,
 	>>);
@@ -1102,9 +1102,9 @@ where
 		if let Some((case, _)) = self.inner.slice.get(self.inner.index) {
 			self.inner.index += 1;
 			let kind = if case.is_diff() {
-				CombEither::A(self.inner.kind.pal())
+				CombBranch::A(self.inner.kind.pal())
 			} else {
-				CombEither::B(self.inner.kind.inv().pal().inv())
+				CombBranch::B(self.inner.kind.inv().pal().inv())
 			};
 			let sub_comb = self.inner.clone().into_kind(kind);
 			Some((case.clone(), sub_comb))

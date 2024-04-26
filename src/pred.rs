@@ -42,7 +42,7 @@ pub trait PredParamVec: PredParam {
 	
 	type Split<'p, K: CombKind>: Iterator<Item = (
 		<<Self::Head as PredParam>::Comb<'p> as PredCombinator>::Case,
-		<<Self::Tail as PredParam>::Comb<'p> as PredCombinator>::IntoKind<CombEither<
+		<<Self::Tail as PredParam>::Comb<'p> as PredCombinator>::IntoKind<CombBranch<
 			K::Pal,
 			<<K::Inv as CombKind>::Pal as CombKind>::Inv,
 		>>,
@@ -143,7 +143,7 @@ where
 	K: CombKind,
 {
 	type Item = (
-		PredSubState<'p, 's, T, P::Tail, CombEither<
+		PredSubState<'p, 's, T, P::Tail, CombBranch<
 			K::Pal,
 			<<K::Inv as CombKind>::Pal as CombKind>::Inv,
 		>>,
