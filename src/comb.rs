@@ -248,6 +248,8 @@ where
 		if self.kind.pal().states() == kind.pal().states() {
 			// Reusing `K::Pal` slice.
 			PredArrayComb {
+				a_comb: self.comb.clone().into_kind(CombBranch::A(kind.pal())),
+				b_comb: self.comb.clone().into_kind(CombBranch::B(kind)),
 				comb: self.comb,
 				slice: self.slice,
 				index: self.index,
@@ -854,6 +856,8 @@ where
 	C: PredCombinator,
 	K: CombKind,
 {
+	a_comb: C::IntoKind<CombBranch<K::Pal, K>>,
+	b_comb: C::IntoKind<CombBranch<K::Pal, K>>,
 	comb: C,
 	slice: Rc<[(C::Case, usize)]>,
 	index: usize,
@@ -871,6 +875,8 @@ where
 {
 	fn clone(&self) -> Self {
 		Self {
+			a_comb: self.a_comb.clone(),
+			b_comb: self.b_comb.clone(),
 			comb: self.comb.clone(),
 			slice: Rc::clone(&self.slice),
 			index: self.index,
@@ -919,6 +925,8 @@ where
 		}
 		
 		Self {
+			a_comb: comb.clone().into_kind(CombBranch::A(kind.pal())),
+			b_comb: comb.clone().into_kind(CombBranch::B(kind)),
 			comb,
 			slice: vec.into(),
 			index: 0,
@@ -940,8 +948,8 @@ where
 	type Item = <Self::IntoIter as Iterator>::Item;
 	type IntoIter = PredArrayCombIter<C, N, K>;
 	fn into_iter(self) -> Self::IntoIter {
-		let a_comb = self.comb.clone().into_kind(CombBranch::A(self.kind.pal()));
-		let b_comb = self.comb.clone().into_kind(CombBranch::B(self.kind));
+		let a_comb = self.a_comb;
+		let b_comb = self.b_comb;
 		
 		let mut layer = 0;
 		let iters = std::array::from_fn(|i| {
@@ -1177,6 +1185,8 @@ where
 	pub fn new<const M: usize>(comb: PredArrayComb<C, M, K>) -> Self {
 		Self {
 			inner: PredArrayComb {
+				a_comb: comb.a_comb,
+				b_comb: comb.b_comb,
 				comb: comb.comb,
 				slice: comb.slice,
 				index: comb.index,
