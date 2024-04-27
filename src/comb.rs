@@ -932,14 +932,30 @@ where
 
 impl<C, const N: usize, K> IntoIterator for PredArrayComb<C, N, K>
 where
-	K: CombKind,
 	C: PredCombinator,
 	C::Id: Ord,
+	K: CombKind,
 {
 	type Item = <Self::IntoIter as Iterator>::Item;
 	type IntoIter = PredArrayCombIter<C, N, K>;
 	fn into_iter(self) -> Self::IntoIter {
+		let a_comb = self.comb.clone().into_kind(CombBranch::A(self.kind.pal()));
+		let b_comb = self.comb.clone().into_kind(CombBranch::B(self.kind));
+		
+		let mut layer = 0;
+		let iters = std::array::from_fn(|i| {
+			let iter = if layer == i {
+				a_comb.clone().into_iter()
+			} else {
+				b_comb.clone().into_iter()
+			};
+			(iter, 0)
+		});
+		
 		let mut iter = PredArrayCombIter {
+			a_comb,
+			b_comb,
+			iters,
 			slice: self.slice,
 			index: [self.index; N],
 			min_diff_index: self.min_diff_index,
@@ -982,7 +998,14 @@ where
 pub struct PredArrayCombIter<C, const N: usize, K>
 where
 	C: PredCombinator,
+	K: CombKind,
 {
+	a_comb: C::IntoKind<CombBranch<K::Pal, K>>,
+	b_comb: C::IntoKind<CombBranch<K::Pal, K>>,
+	iters: [(
+		<C::IntoKind<CombBranch<K::Pal, K>> as IntoIterator>::IntoIter,
+		usize,
+	); N],
 	slice: Rc<[(C::Case, usize)]>,
 	index: [usize; N],
 	min_diff_index: usize,
