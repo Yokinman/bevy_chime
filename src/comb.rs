@@ -250,6 +250,8 @@ where
 			PredArrayComb {
 				a_comb: self.comb.clone().into_kind(CombBranch::A(kind.pal())),
 				b_comb: self.comb.clone().into_kind(CombBranch::B(kind)),
+				a_index: self.a_index,
+				b_index: self.b_index,
 				comb: self.comb,
 				slice: self.slice,
 				index: self.index,
@@ -858,6 +860,8 @@ where
 {
 	a_comb: C::IntoKind<CombBranch<K::Pal, K>>,
 	b_comb: C::IntoKind<CombBranch<K::Pal, K>>,
+	a_index: usize,
+	b_index: usize,
 	comb: C,
 	slice: Rc<[(C::Case, usize)]>,
 	index: usize,
@@ -877,6 +881,8 @@ where
 		Self {
 			a_comb: self.a_comb.clone(),
 			b_comb: self.b_comb.clone(),
+			a_index: self.a_index,
+			b_index: self.b_index,
 			comb: self.comb.clone(),
 			slice: Rc::clone(&self.slice),
 			index: self.index,
@@ -927,6 +933,8 @@ where
 		Self {
 			a_comb: comb.clone().into_kind(CombBranch::A(kind.pal())),
 			b_comb: comb.clone().into_kind(CombBranch::B(kind)),
+			a_index: 0,
+			b_index: 0,
 			comb,
 			slice: vec.into(),
 			index: 0,
@@ -951,14 +959,28 @@ where
 		let a_comb = self.a_comb;
 		let b_comb = self.b_comb;
 		
-		let mut layer = 0;
+		let mut layer = N-1;
 		let iters = std::array::from_fn(|i| {
-			let iter = if layer == i {
-				a_comb.clone().into_iter()
+			if i == layer {
+				let mut iter = b_comb.clone().into_iter();
+				if let Some(case) = iter.nth(self.b_index) {
+					println!("> {:?} @", (i, case.clone().into_parts().1, N));
+					(iter, Some(case), i)
+				} else {
+					(iter, None, i)
+				}
 			} else {
-				b_comb.clone().into_iter()
-			};
-			(iter, 0)
+				let mut iter = a_comb.clone().into_iter();
+				if let Some(case) = iter.nth(self.a_index + i) {
+					println!("> {:?}", (i, case.clone().into_parts().1, N));
+					if i < layer && self.kind.has_state(case.is_diff()) {
+						layer = i;
+					}
+					(iter, Some(case), i)
+				} else {
+					(iter, None, i)
+				}
+			}
 		});
 		
 		let mut iter = PredArrayCombIter {
@@ -999,6 +1021,8 @@ where
 			iter.step(N-i - 1);
 		}
 		
+		debug_assert_eq!(N-1 - layer, iter.layer);
+		
 		iter
 	}
 }
@@ -1013,6 +1037,7 @@ where
 	b_comb: C::IntoKind<CombBranch<K::Pal, K>>,
 	iters: [(
 		<C::IntoKind<CombBranch<K::Pal, K>> as IntoIterator>::IntoIter,
+		Option<C::Case>,
 		usize,
 	); N],
 	slice: Rc<[(C::Case, usize)]>,
@@ -1187,6 +1212,8 @@ where
 			inner: PredArrayComb {
 				a_comb: comb.a_comb,
 				b_comb: comb.b_comb,
+				a_index: comb.a_index,
+				b_index: comb.b_index,
 				comb: comb.comb,
 				slice: comb.slice,
 				index: comb.index,
