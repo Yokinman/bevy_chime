@@ -852,6 +852,7 @@ where
 pub struct PredArrayComb<C, const N: usize, K = CombNone>
 where
 	C: PredCombinator,
+	K: CombKind,
 {
 	comb: C,
 	slice: Rc<[(C::Case, usize)]>,
@@ -866,7 +867,7 @@ where
 impl<C, const N: usize, K> Clone for PredArrayComb<C, N, K>
 where
 	C: PredCombinator,
-	K: Clone,
+	K: CombKind,
 {
 	fn clone(&self) -> Self {
 		Self {
@@ -1163,6 +1164,7 @@ where
 pub struct PredArrayCombSplit<C, const N: usize, K>
 where
 	C: PredCombinator,
+	K: CombKind,
 {
 	inner: PredArrayComb<C, N, K>,
 }
@@ -1170,6 +1172,7 @@ where
 impl<C, const N: usize, K> PredArrayCombSplit<C, N, K>
 where
 	C: PredCombinator,
+	K: CombKind,
 {
 	pub fn new<const M: usize>(comb: PredArrayComb<C, M, K>) -> Self {
 		Self {
