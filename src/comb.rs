@@ -378,6 +378,8 @@ where
 		if kind.has_state(true) == kind.has_state(false) {
 			comb
 		} else {
+			// !!! Test whether this is faster for static/non-updated queries
+			// in general. Most of the time it probably isn't.
 			Self::Cached {
 				slice: comb.into_iter().collect(),
 				kind,
