@@ -612,17 +612,19 @@ where
 pub trait PredBranch {
 	type Param: PredParam;
 	type Branch: PredBranch;
+	type Case<T>: PredNodeCase;
 }
 
 /// ...
 struct Single<T>(T);
 
-impl<T> PredBranch for Single<T>
+impl<A> PredBranch for Single<A>
 where
-	T: PredParam
+	A: PredParam
 {
-	type Param = T;
+	type Param = A;
 	type Branch = Single<()>;
+	type Case<T> = PredStateCase<A::Id, T>;
 }
 
 /// ...
@@ -635,7 +637,19 @@ where
 {
 	type Param = A;
 	type Branch = B;
+	type Case<T> = (A::Id, B::Case<T>);
 }
+
+/// ...
+pub trait PredNodeCase {}
+
+impl<I, T> PredNodeCase for PredStateCase<I, T> {}
+
+impl<I, T> PredNodeCase for (I, T)
+where
+	I: PredId,
+	T: PredNodeCase,
+{}
 
 /// A one-way node that either stores an arbitrary amount of data or branches
 /// into sub-nodes.
