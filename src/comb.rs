@@ -401,7 +401,7 @@ where
 				kind: kind.clone(),
 			},
 			Self::Cached { slice, kind } => Self::Cached {
-				slice: Rc::clone(&slice),
+				slice: Rc::clone(slice),
 				kind: kind.clone(),
 			},
 		}
@@ -875,7 +875,7 @@ where
 			a_index: self.a_index,
 			b_index: self.b_index,
 			comb: self.comb.clone(),
-			kind: self.kind.clone(),
+			kind: self.kind,
 		}
 	}
 }
