@@ -917,21 +917,11 @@ where
 		let b_comb = self.b_comb;
 		let mut a_index = self.a_index;
 		let mut b_index = self.b_index;
+		let mut layer = N;
 		let kind = self.kind;
 		
-		if N == 0 {
-			return PredArrayCombIter {
-				a_comb,
-				b_comb,
-				iters: None,
-				layer: 0,
-				kind,
-			}
-		}
-		
-		let mut layer = N-1;
 		let iters = std::array::from_fn(|i| {
-			if i == N-1 && layer == i {
+			if i == N-1 && layer == N {
 				let mut iter = b_comb.clone().into_iter();
 				if let Some(case) = iter.nth(b_index) {
 					a_index += 1;
@@ -945,10 +935,8 @@ where
 				if let Some(case) = iter.nth(a_index) {
 					a_index += 1;
 					if kind.has_state(case.is_diff()) {
-						if layer > i { 
-							layer = i;
-						}
 						b_index += 1;
+						self.layer = self.layer.min(i + 1);
 					}
 					Some((iter, case, [a_index, b_index]))
 				} else {
@@ -957,10 +945,10 @@ where
 			}
 		});
 		
-		let iters = if iters.iter().any(Option::is_none) {
-			None
-		} else {
+		let iters = if iters.iter().all(Option::is_some) {
 			Some(iters.map(Option::unwrap))
+		} else {
+			None
 		};
 		
 		PredArrayCombIter { a_comb, b_comb, iters, layer, kind }
@@ -997,10 +985,8 @@ where
 				if i != N-1 {
 					*a_index += 1;
 					if self.kind.has_state(next_case.is_diff()) {
-						if self.layer > i {
-							self.layer = i;
-						}
 						*b_index += 1;
+						self.layer = self.layer.min(i + 1);
 					}
 				}
 				*case = next_case;
@@ -1014,8 +1000,8 @@ where
 			}
 			
 			 // Step Sub-Layer:
-			if self.layer >= i - 1 {
-		        self.layer = N-1;
+			if self.layer >= i {
+		        self.layer = N;
 			}
 			self.step(i - 1);
 			
@@ -1026,7 +1012,7 @@ where
 				*a_index = sub_a_index;
 				*b_index = sub_b_index;
 				
-				if i == N-1 && self.layer == i {
+				if i == N-1 && self.layer == N {
 					*iter = self.b_comb.clone().into_iter();
 					if *b_index != 0 && iter.nth(*b_index - 1).is_none() {
 						self.iters = None;
@@ -1082,7 +1068,7 @@ where
 					}
 					let mut remaining = a_remaining - a_index;
 					let mut num = falling_factorial(remaining, N - i);
-					if i <= self.layer {
+					if i < self.layer {
 						remaining -= b_remaining - b_index;
 						num -= falling_factorial(remaining, N - i);
 					}
