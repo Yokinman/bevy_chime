@@ -1110,26 +1110,35 @@ where
 			((1+n-r)..=n).product()
 		}
 		
-		let mut tot = 0;
-		let mut div = 1;
-		for i in (0..N).rev() {
-			let (.., [mut a_index, mut b_index]) = self.iters[i];
-			if i == N-1 {
-				a_index -= 1;
-				b_index -= 1;
+		let tot = |a_remaining, b_remaining| {
+			let mut tot = 0;
+			let mut div = 1;
+			for i in (0..N).rev() {
+				let (.., [mut a_index, mut b_index]) = self.iters[i];
+				if i == N-1 {
+					a_index -= 1;
+					b_index -= 1;
+				}
+				let mut remaining = a_remaining - a_index;
+				let mut num = falling_factorial(remaining, N - i);
+				if i <= self.layer {
+					remaining -= b_remaining - b_index;
+					num -= falling_factorial(remaining, N - i);
+				}
+				div *= N - i;
+				tot += num / div;
+				// https://www.desmos.com/calculator/l6jawvulhk
 			}
-			let mut remaining = self.a_comb.clone().into_iter().size_hint().0 - a_index;
-			let mut num = falling_factorial(remaining, N - i);
-			if i <= self.layer {
-				remaining -= self.b_comb.clone().into_iter().size_hint().0 - b_index;
-				num -= falling_factorial(remaining, N - i);
-			}
-			div *= N - i;
-			tot += num / div;
-			// https://www.desmos.com/calculator/l6jawvulhk
-		}
+			tot
+		};
 		
-		(tot, Some(tot))
+		let (a_min, a_max) = self.a_comb.clone().into_iter().size_hint();
+		let (b_min, b_max) = self.b_comb.clone().into_iter().size_hint();
+		
+		(
+			tot(a_min, b_min),
+			a_max.and_then(|x| Some(tot(x, b_max?)))
+		)
 	}
 }
 
