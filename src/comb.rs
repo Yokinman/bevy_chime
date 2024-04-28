@@ -919,6 +919,16 @@ where
 		let mut b_index = self.b_index;
 		let kind = self.kind;
 		
+		if N == 0 {
+			return PredArrayCombIter {
+				a_comb,
+				b_comb,
+				iters: None,
+				layer: 0,
+				kind,
+			}
+		}
+		
 		let mut layer = N-1;
 		let iters = std::array::from_fn(|i| {
 			if i == N-1 && layer == i {
@@ -926,9 +936,9 @@ where
 				if let Some(case) = iter.nth(b_index) {
 					a_index += 1;
 					b_index += 1;
-					(iter, Some(case), [a_index, b_index])
+					Some((iter, case, [a_index, b_index]))
 				} else {
-					(iter, None, [a_index, b_index])
+					None
 				}
 			} else {
 				let mut iter = a_comb.clone().into_iter();
@@ -940,12 +950,18 @@ where
 						}
 						b_index += 1;
 					}
-					(iter, Some(case), [a_index, b_index])
+					Some((iter, case, [a_index, b_index]))
 				} else {
-					(iter, None, [a_index, b_index])
+					None
 				}
 			}
 		});
+		
+		let iters = if iters.iter().any(Option::is_none) {
+			None
+		} else {
+			Some(iters.map(Option::unwrap))
+		};
 		
 		PredArrayCombIter { a_comb, b_comb, iters, layer, kind }
 	}
@@ -959,11 +975,11 @@ where
 {
 	a_comb: C::IntoKind<CombBranch<K::Pal, K>>,
 	b_comb: C::IntoKind<CombBranch<K::Pal, K>>,
-	iters: [(
+	iters: Option<[(
 		<C::IntoKind<CombBranch<K::Pal, K>> as IntoIterator>::IntoIter,
-		Option<C::Case>,
+		C::Case,
 		[usize; 2],
-	); N],
+	); N]>,
 	layer: usize,
 	kind: K,
 }
@@ -975,49 +991,51 @@ where
 	K: CombKind,
 {
 	fn step(&mut self, i: usize) {
-		let (iter, case, [a_index, b_index]) = &mut self.iters[i];
-		if let Some(next_case) = iter.next() {
-			if i != N-1 {
-				*a_index += 1;
-				if self.kind.has_state(next_case.is_diff()) {
-					if self.layer > i {
-						self.layer = i;
+		if let Some(iters) = &mut self.iters {
+			let (iter, case, [a_index, b_index]) = &mut iters[i];
+			if let Some(next_case) = iter.next() {
+				if i != N-1 {
+					*a_index += 1;
+					if self.kind.has_state(next_case.is_diff()) {
+						if self.layer > i {
+							self.layer = i;
+						}
+						*b_index += 1;
 					}
-					*b_index += 1;
 				}
-			}
-			*case = Some(next_case);
-		} else if i != 0 {
-			if self.layer >= i - 1 {
-		        self.layer = N-1;
-			}
-			self.step(i - 1);
-			
-			 // :
-			let (.., [sub_a_index, sub_b_index]) = self.iters[i - 1];
-			let (iter, case, [a_index, b_index]) = &mut self.iters[i];
-			*a_index = sub_a_index;
-			*b_index = sub_b_index;
-			
-			if i == N-1 && self.layer == i {
-				*iter = self.b_comb.clone().into_iter();
-				if *b_index != 0 && iter.nth(*b_index - 1).is_none() {
-					*case = None;
-					return
+				*case = next_case;
+			} else if i != 0 {
+				if self.layer >= i - 1 {
+			        self.layer = N-1;
+				}
+				self.step(i - 1);
+				
+				 // :
+				if let Some(iters) = &mut self.iters {
+					let (.., [sub_a_index, sub_b_index]) = iters[i - 1];
+					let (iter, _, [a_index, b_index]) = &mut iters[i];
+					*a_index = sub_a_index;
+					*b_index = sub_b_index;
+					
+					if i == N-1 && self.layer == i {
+						*iter = self.b_comb.clone().into_iter();
+						if *b_index != 0 && iter.nth(*b_index - 1).is_none() {
+							self.iters = None;
+							return
+						}
+					} else {
+						*iter = self.a_comb.clone().into_iter();
+						if *a_index != 0 && iter.nth(*a_index - 1).is_none() {
+							self.iters = None;
+							return
+						}
+					}
+					
+					self.step(i);
 				}
 			} else {
-				*iter = self.a_comb.clone().into_iter();
-				if *a_index != 0 && iter.nth(*a_index - 1).is_none() {
-					*case = None;
-					return
-				}
+				self.iters = None;
 			}
-			
-			self.step(i);
-		} else {
-			*case = None;
-			*a_index += 1;
-			*b_index += 1;
 		}
 	}
 }
@@ -1030,18 +1048,15 @@ where
 {
 	type Item = <PredArrayComb<C, N, K> as PredCombinator<K>>::Case;
 	fn next(&mut self) -> Option<Self::Item> {
-		if N == 0 || self.iters[N-1].1.is_none() {
-			return None
+		if let Some(iters) = &self.iters {
+			let case = std::array::from_fn(|i| iters[i].1.clone());
+			self.step(N-1);
+			Some(case)
+		} else {
+			None
 		}
-		let case = std::array::from_fn(|i| self.iters[i].1.clone().unwrap());
-		self.step(N-1);
-		Some(case)
 	}
 	fn size_hint(&self) -> (usize, Option<usize>) {
-		if N == 0 || self.iters[N-1].1.is_none() {
-			return (0, Some(0))
-		}
-		
 		fn falling_factorial(n: usize, r: usize) -> usize {
 			if n < r {
 				return 0
@@ -1049,35 +1064,39 @@ where
 			((1+n-r)..=n).product()
 		}
 		
-		let tot = |a_remaining, b_remaining| {
-			let mut tot = 0;
-			let mut div = 1;
-			for i in (0..N).rev() {
-				let (.., [mut a_index, mut b_index]) = self.iters[i];
-				if i == N-1 {
-					a_index -= 1;
-					b_index -= 1;
+		if let Some(iters) = &self.iters {
+			let tot = |a_remaining, b_remaining| {
+				let mut tot = 0;
+				let mut div = 1;
+				for i in (0..N).rev() {
+					let (.., [mut a_index, mut b_index]) = iters[i];
+					if i == N-1 {
+						a_index -= 1;
+						b_index -= 1;
+					}
+					let mut remaining = a_remaining - a_index;
+					let mut num = falling_factorial(remaining, N - i);
+					if i <= self.layer {
+						remaining -= b_remaining - b_index;
+						num -= falling_factorial(remaining, N - i);
+					}
+					div *= N - i;
+					tot += num / div;
+					// https://www.desmos.com/calculator/l6jawvulhk
 				}
-				let mut remaining = a_remaining - a_index;
-				let mut num = falling_factorial(remaining, N - i);
-				if i <= self.layer {
-					remaining -= b_remaining - b_index;
-					num -= falling_factorial(remaining, N - i);
-				}
-				div *= N - i;
-				tot += num / div;
-				// https://www.desmos.com/calculator/l6jawvulhk
-			}
-			tot
-		};
-		
-		let (a_min, a_max) = self.a_comb.clone().into_iter().size_hint();
-		let (b_min, b_max) = self.b_comb.clone().into_iter().size_hint();
-		
-		(
-			tot(a_min, b_min),
-			a_max.and_then(|x| Some(tot(x, b_max?)))
-		)
+				tot
+			};
+			
+			let (a_min, a_max) = self.a_comb.clone().into_iter().size_hint();
+			let (b_min, b_max) = self.b_comb.clone().into_iter().size_hint();
+			
+			(
+				tot(a_min, b_min),
+				a_max.and_then(|x| Some(tot(x, b_max?)))
+			)
+		} else {
+			(0, Some(0))
+		}
 	}
 }
 
