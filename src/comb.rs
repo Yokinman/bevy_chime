@@ -256,12 +256,6 @@ where
 				a_index: self.a_index,
 				b_index: self.b_index,
 				comb: self.comb,
-				slice: self.slice,
-				index: self.index,
-				min_diff_index: self.min_diff_index,
-				min_same_index: self.min_same_index,
-				max_diff_index: self.max_diff_index,
-				max_same_index: self.max_same_index,
 				kind,
 			}
 		} else {
@@ -872,12 +866,6 @@ where
 	a_index: usize,
 	b_index: usize,
 	comb: C,
-	slice: Rc<[(C::Case, usize)]>,
-	index: usize,
-	min_diff_index: usize,
-	min_same_index: usize,
-	max_diff_index: usize,
-	max_same_index: usize,
 	kind: K,
 }
 
@@ -893,12 +881,6 @@ where
 			a_index: self.a_index,
 			b_index: self.b_index,
 			comb: self.comb.clone(),
-			slice: Rc::clone(&self.slice),
-			index: self.index,
-			min_diff_index: self.min_diff_index,
-			min_same_index: self.min_same_index,
-			max_diff_index: self.max_diff_index,
-			max_same_index: self.max_same_index,
 			kind: self.kind.clone(),
 		}
 	}
@@ -911,46 +893,12 @@ where
 	K: CombKind,
 {
 	pub fn new(comb: C, kind: K) -> Self {
-		let mut vec = comb.clone().into_kind::<K::Pal>(kind.pal()).into_iter()
-			.map(|x| (x, usize::MAX))
-			.collect::<Vec<_>>();
-		
-		 // Setup Jump Indices:
-		let mut index = vec.len();
-		let mut min_diff_index = index;
-		let mut min_same_index = index;
-		let mut max_diff_index = 0;
-		let mut max_same_index = 0;
-		while index != 0 {
-			index -= 1;
-			let (case, next_alt_index) = &mut vec[index];
-			if case.is_diff() {
-				*next_alt_index = min_diff_index;
-				min_diff_index = index;
-				if max_diff_index == 0 {
-					max_diff_index = index + 1;
-				}
-			} else {
-				*next_alt_index = min_same_index;
-				min_same_index = index;
-				if max_same_index == 0 {
-					max_same_index = index + 1;
-				}
-			}
-		}
-		
 		Self {
 			a_comb: comb.clone().into_kind(CombBranch::A(kind.pal())),
 			b_comb: comb.clone().into_kind(CombBranch::B(kind)),
 			a_index: 0,
 			b_index: 0,
 			comb,
-			slice: vec.into(),
-			index: 0,
-			min_diff_index,
-			min_same_index,
-			max_diff_index,
-			max_same_index,
 			kind,
 		}
 	}
@@ -969,6 +917,7 @@ where
 		let b_comb = self.b_comb;
 		let mut a_index = self.a_index;
 		let mut b_index = self.b_index;
+		let kind = self.kind;
 		
 		let mut layer = N-1;
 		let iters = std::array::from_fn(|i| {
@@ -985,7 +934,7 @@ where
 				let mut iter = a_comb.clone().into_iter();
 				if let Some(case) = iter.nth(a_index) {
 					a_index += 1;
-					if self.kind.has_state(case.is_diff()) {
+					if kind.has_state(case.is_diff()) {
 						if layer > i { 
 							layer = i;
 						}
@@ -998,22 +947,7 @@ where
 			}
 		});
 		
-		let mut iter = PredArrayCombIter {
-			a_comb,
-			b_comb,
-			iters,
-			slice: self.slice,
-			index: [self.index; N],
-			min_diff_index: self.min_diff_index,
-			min_same_index: self.min_same_index,
-			layer,
-			kind: self.kind,
-		};
-		if N == 0 {
-			return iter
-		}
-		
-		iter
+		PredArrayCombIter { a_comb, b_comb, iters, layer, kind }
 	}
 }
 
@@ -1030,10 +964,6 @@ where
 		Option<C::Case>,
 		[usize; 2],
 	); N],
-	slice: Rc<[(C::Case, usize)]>,
-	index: [usize; N],
-	min_diff_index: usize,
-	min_same_index: usize,
 	layer: usize,
 	kind: K,
 }
@@ -1187,12 +1117,6 @@ where
 				a_index: comb.a_index,
 				b_index: comb.b_index,
 				comb: comb.comb,
-				slice: comb.slice,
-				index: comb.index,
-				min_diff_index: comb.min_diff_index,
-				min_same_index: comb.min_same_index,
-				max_diff_index: comb.max_diff_index,
-				max_same_index: comb.max_same_index,
 				kind: comb.kind,
 			}
 		}
