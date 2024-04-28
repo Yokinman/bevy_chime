@@ -958,27 +958,33 @@ where
 	fn into_iter(self) -> Self::IntoIter {
 		let a_comb = self.a_comb;
 		let b_comb = self.b_comb;
+		let mut a_index = self.a_index;
+		let mut b_index = self.b_index;
 		
 		let mut layer = N-1;
 		let iters = std::array::from_fn(|i| {
-			if i == layer {
+			if i == N-1 && layer == i {
 				let mut iter = b_comb.clone().into_iter();
-				if let Some(case) = iter.nth(self.b_index) {
-					println!("> {:?} @", (i, case.clone().into_parts().1, N));
-					(iter, Some(case), i)
+				if let Some(case) = iter.nth(b_index) {
+					a_index += 1;
+					b_index += 1;
+					(iter, Some(case), [a_index, b_index])
 				} else {
-					(iter, None, i)
+					(iter, None, [a_index, b_index])
 				}
 			} else {
 				let mut iter = a_comb.clone().into_iter();
-				if let Some(case) = iter.nth(self.a_index + i) {
-					println!("> {:?}", (i, case.clone().into_parts().1, N));
-					if i < layer && self.kind.has_state(case.is_diff()) {
-						layer = i;
+				if let Some(case) = iter.nth(a_index) {
+					a_index += 1;
+					if self.kind.has_state(case.is_diff()) {
+						if layer > i { 
+							layer = i;
+						}
+						b_index += 1;
 					}
-					(iter, Some(case), i)
+					(iter, Some(case), [a_index, b_index])
 				} else {
-					(iter, None, i)
+					(iter, None, [a_index, b_index])
 				}
 			}
 		});
@@ -991,37 +997,12 @@ where
 			index: [self.index; N],
 			min_diff_index: self.min_diff_index,
 			min_same_index: self.min_same_index,
-			layer: 0,
+			layer,
 			kind: self.kind,
 		};
 		if N == 0 {
 			return iter
 		}
-		
-		 // Initialize Main Index:
-		if match iter.kind.states() {
-			[true, true] => false,
-			[false, false] => true,
-			[true, false] => iter.min_diff_index >= iter.slice.len(),
-			[false, true] => iter.min_same_index >= iter.slice.len(),
-		} {
-			iter.index[N-1] = iter.slice.len();
-		} else if iter.index[N-1] < iter.slice.len() {
-			let (case, _) = &iter.slice[iter.index[N-1]];
-			if self.kind.has_state(case.is_diff()) {
-				iter.layer = N-1;
-			} else if N == 1 {
-				iter.step_index(N-1);
-			}
-		}
-		
-		 // Initialize Sub-indices:
-		for i in 1..N {
-			iter.index[N-i - 1] = iter.index[N-i];
-			iter.step(N-i - 1);
-		}
-		
-		debug_assert_eq!(N-1 - layer, iter.layer);
 		
 		iter
 	}
@@ -1038,7 +1019,7 @@ where
 	iters: [(
 		<C::IntoKind<CombBranch<K::Pal, K>> as IntoIterator>::IntoIter,
 		Option<C::Case>,
-		usize,
+		[usize; 2],
 	); N],
 	slice: Rc<[(C::Case, usize)]>,
 	index: [usize; N],
@@ -1054,72 +1035,50 @@ where
 	C::Id: Ord,
 	K: CombKind,
 {
-	fn step_index(&mut self, i: usize) -> bool {
-		let index = self.index[i];
-		if index >= self.slice.len() {
-			return true
-		}
-		self.index[i] = match self.layer.cmp(&i) {
-			std::cmp::Ordering::Equal => match self.kind.states() {
-				[true, true] => index + 1,
-				[false, false] => self.slice.len(),
-				_ => {
-					let (case, next_index) = &self.slice[index];
-					
-					 // Jump to Next Matching Case:
-					if self.kind.has_state(case.is_diff()) {
-						*next_index
-					}
-					
-					 // Find Next Matching Case:
-					else {
-						let first_index = if self.kind.has_state(true) {
-							self.min_diff_index
-						} else {
-							self.min_same_index
-						};
-						if index < first_index {
-							first_index
-						} else {
-							let mut index = index + 1;
-							while let Some((case, _)) = self.slice.get(index) {
-								if self.kind.has_state(case.is_diff()) {
-									break
-								}
-								index += 1;
-							}
-							index
-						}
-					}
-				}
-			},
-			std::cmp::Ordering::Less => {
-				if let Some((case, _)) = self.slice.get(index + 1) {
-					if self.kind.has_state(case.is_diff()) {
+	fn step(&mut self, i: usize) {
+		let (iter, case, [a_index, b_index]) = &mut self.iters[i];
+		if let Some(next_case) = iter.next() {
+			if i != N-1 {
+				*a_index += 1;
+				if self.kind.has_state(next_case.is_diff()) {
+					if self.layer > i {
 						self.layer = i;
 					}
-				}
-				index + 1
-			},
-			_ => index + 1
-		};
-		self.index[i] >= self.slice.len()
-	}
-	
-	fn step(&mut self, i: usize) {
-		while self.step_index(i) && self.index[N-1] < self.slice.len() {
-			if i + 1 >= self.layer {
-				self.layer = 0;
-				
-				 // Jump to End:
-				if !self.kind.has_all()
-					&& self.slice[self.index[i + 1]].1 >= self.slice.len()
-				{
-					self.index[i + 1] = self.slice.len();
+					*b_index += 1;
 				}
 			}
-			self.step(i + 1);
-			self.index[i] = self.index[i + 1];
+			*case = Some(next_case);
+		} else if i != 0 {
+			if self.layer >= i - 1 {
+		        self.layer = N-1;
+			}
+			self.step(i - 1);
+			
+			 // :
+			let (.., [sub_a_index, sub_b_index]) = self.iters[i - 1];
+			let (iter, case, [a_index, b_index]) = &mut self.iters[i];
+			*a_index = sub_a_index;
+			*b_index = sub_b_index;
+			
+			if i == N-1 && self.layer == i {
+				*iter = self.b_comb.clone().into_iter();
+				if *b_index != 0 && iter.nth(*b_index - 1).is_none() {
+					*case = None;
+					return
+				}
+			} else {
+				*iter = self.a_comb.clone().into_iter();
+				if *a_index != 0 && iter.nth(*a_index - 1).is_none() {
+					*case = None;
+					return
+				}
+			}
+			
+			self.step(i);
+		} else {
+			*case = None;
+			*a_index += 1;
+			*b_index += 1;
 		}
 	}
 }
@@ -1132,20 +1091,15 @@ where
 {
 	type Item = <PredArrayComb<C, N, K> as PredCombinator<K>>::Case;
 	fn next(&mut self) -> Option<Self::Item> {
-		if N == 0 || self.index[N-1] >= self.slice.len() {
+		if N == 0 || self.iters[N-1].1.is_none() {
 			return None
 		}
-		let case = self.index.map(|i| self.slice[i].0.clone());
-		self.step(0);
+		let case = std::array::from_fn(|i| self.iters[i].1.clone().unwrap());
+		self.step(N-1);
 		Some(case)
 	}
 	fn size_hint(&self) -> (usize, Option<usize>) {
-		// Currently always produces an exact size.
-		
-		if N == 0
-			|| self.index[N-1] >= self.slice.len()
-			|| self.kind.has_none()
-		{
+		if N == 0 || self.iters[N-1].1.is_none() {
 			return (0, Some(0))
 		}
 		
@@ -1158,33 +1112,19 @@ where
 		
 		let mut tot = 0;
 		let mut div = 1;
-		for i in 0..N {
-			let mut index = self.index[i];
-			if i != 0 {
-				index += 1;
+		for i in (0..N).rev() {
+			let (.., [mut a_index, mut b_index]) = self.iters[i];
+			if i == N-1 {
+				a_index -= 1;
+				b_index -= 1;
 			}
-			let mut remaining = self.slice.len() - index;
-			let mut num = falling_factorial(remaining, i + 1);
-			if i >= self.layer && !self.kind.has_all() {
-				let first_index = if self.kind.has_state(true) {
-					self.min_diff_index
-				} else {
-					self.min_same_index
-				};
-				while index < self.slice.len() {
-					let (case, next_index) = &self.slice[index];
-					index = if self.kind.has_state(case.is_diff()) {
-						remaining -= 1;
-						*next_index
-					} else if index < first_index {
-						first_index
-					} else {
-						index + 1
-					};
-				}
-				num -= falling_factorial(remaining, i + 1);
+			let mut remaining = self.a_comb.clone().into_iter().size_hint().0 - a_index;
+			let mut num = falling_factorial(remaining, N - i);
+			if i <= self.layer {
+				remaining -= self.b_comb.clone().into_iter().size_hint().0 - b_index;
+				num -= falling_factorial(remaining, N - i);
 			}
-			div *= i + 1;
+			div *= N - i;
 			tot += num / div;
 			// https://www.desmos.com/calculator/l6jawvulhk
 		}
