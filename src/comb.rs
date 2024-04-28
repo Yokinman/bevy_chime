@@ -486,6 +486,12 @@ where
 			},
 		}
 	}
+	fn count(self) -> usize where Self: Sized {
+		match self {
+			Self::Normal { iter } => iter.count(),
+			Self::Cached { slice, index } => slice.len() - index,
+		}
+	}
 }
 
 /// `Iterator` of `ResComb`'s `IntoIterator` implementation.
