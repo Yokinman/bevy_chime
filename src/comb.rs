@@ -26,6 +26,9 @@ use crate::pred::*;
 /// - `AllFalse`: Combinations where all are false.
 /// - `AnyTrue`: Combinations where at least one is true.
 /// - `AnyFalse`: Combinations where at least one is false.
+/// 
+/// ??? Potentially rewrite to define separate associated types for `True` and
+/// `False`. Could support kinds like `AllSame` + `AnyDiff` if ever needed.
 pub trait CombKind: Copy {
 	/// This is like a helper kind. I'm not really sure how to describe it. It
 	/// generally defines a combination superset. A coincidental utility? 
