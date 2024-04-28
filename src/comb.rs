@@ -1004,37 +1004,43 @@ where
 					}
 				}
 				*case = next_case;
-			} else if i != 0 {
-				if self.layer >= i - 1 {
-			        self.layer = N-1;
-				}
-				self.step(i - 1);
-				
-				 // :
-				if let Some(iters) = &mut self.iters {
-					let (.., [sub_a_index, sub_b_index]) = iters[i - 1];
-					let (iter, _, [a_index, b_index]) = &mut iters[i];
-					*a_index = sub_a_index;
-					*b_index = sub_b_index;
-					
-					if i == N-1 && self.layer == i {
-						*iter = self.b_comb.clone().into_iter();
-						if *b_index != 0 && iter.nth(*b_index - 1).is_none() {
-							self.iters = None;
-							return
-						}
-					} else {
-						*iter = self.a_comb.clone().into_iter();
-						if *a_index != 0 && iter.nth(*a_index - 1).is_none() {
-							self.iters = None;
-							return
-						}
-					}
-					
-					self.step(i);
-				}
-			} else {
+				return
+			}
+			
+			 // Bottom Layer Exhausted - Finished:
+			if i == 0 {
 				self.iters = None;
+				return
+			}
+			
+			 // Step Sub-Layer:
+			if self.layer >= i - 1 {
+		        self.layer = N-1;
+			}
+			self.step(i - 1);
+			
+			 // Reset Current Layer:
+			if let Some(iters) = &mut self.iters {
+				let (.., [sub_a_index, sub_b_index]) = iters[i - 1];
+				let (iter, _, [a_index, b_index]) = &mut iters[i];
+				*a_index = sub_a_index;
+				*b_index = sub_b_index;
+				
+				if i == N-1 && self.layer == i {
+					*iter = self.b_comb.clone().into_iter();
+					if *b_index != 0 && iter.nth(*b_index - 1).is_none() {
+						self.iters = None;
+						return
+					}
+				} else {
+					*iter = self.a_comb.clone().into_iter();
+					if *a_index != 0 && iter.nth(*a_index - 1).is_none() {
+						self.iters = None;
+						return
+					}
+				}
+				
+				self.step(i);
 			}
 		}
 	}
