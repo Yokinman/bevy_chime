@@ -828,16 +828,13 @@ where
 	B: PredCombinator,
 	K: CombKind,
 {
-	type Item = (A::Item, B::IntoKind<CombBranch<
-		K::Pal,
-		<<K::Inv as CombKind>::Pal as CombKind>::Inv,
-	>>);
+	type Item = (A::Item, B::IntoKind<CombBranch<K::Pal, K>>);
 	fn next(&mut self) -> Option<Self::Item> {
 		if let Some(case) = self.a_iter.next() {
 			let kind = if case.is_diff() {
 				CombBranch::A(self.kind.pal())
 			} else {
-				CombBranch::B(self.kind.inv().pal().inv())
+				CombBranch::B(self.kind)
 			};
 			let sub_comb = self.b_comb.clone().into_kind(kind);
 			Some((case, sub_comb))
@@ -1135,10 +1132,7 @@ where
 	C: PredCombinator,
 	C::Id: Ord,
 {
-	type Item = (C::Case, PredArrayComb<C, N, CombBranch<
-		K::Pal,
-		<<K::Inv as CombKind>::Pal as CombKind>::Inv,
-	>>);
+	type Item = (C::Case, PredArrayComb<C, N, CombBranch<K::Pal, K>>);
 	fn next(&mut self) -> Option<Self::Item> {
 		if self.inner.a_index >= self.a_count
 			|| self.inner.b_index >= self.b_count
@@ -1154,7 +1148,7 @@ where
 				comb.b_index = comb.a_index;
 				comb
 			} else {
-				let kind = CombBranch::B(self.inner.kind.inv().pal().inv());
+				let kind = CombBranch::B(self.inner.kind);
 				self.inner.clone().into_kind(kind)
 			};
 			Some((case, sub_comb))

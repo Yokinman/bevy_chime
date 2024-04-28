@@ -44,7 +44,7 @@ pub trait PredParamVec: PredParam {
 		<<Self::Head as PredParam>::Comb<'p> as PredCombinator>::Case,
 		<<Self::Tail as PredParam>::Comb<'p> as PredCombinator>::IntoKind<CombBranch<
 			K::Pal,
-			<<K::Inv as CombKind>::Pal as CombKind>::Inv,
+			K,
 		>>,
 	)>;
 	
@@ -143,10 +143,7 @@ where
 	K: CombKind,
 {
 	type Item = (
-		PredSubState<'p, 's, T, P::Tail, CombBranch<
-			K::Pal,
-			<<K::Inv as CombKind>::Pal as CombKind>::Inv,
-		>>,
+		PredSubState<'p, 's, T, P::Tail, CombBranch<K::Pal, K>>,
 		PredParamItem<'p, P::Head>,
 	);
 	fn next(&mut self) -> Option<Self::Item> {
