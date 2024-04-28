@@ -608,6 +608,35 @@ where
 	}
 }
 
+/// ...
+pub trait PredBranch {
+	type Param: PredParam;
+	type Branch: PredBranch;
+}
+
+/// ...
+struct Single<T>(T);
+
+impl<T> PredBranch for Single<T>
+where
+	T: PredParam
+{
+	type Param = T;
+	type Branch = Single<()>;
+}
+
+/// ...
+struct Nested<A, B>(A, B);
+
+impl<A, B> PredBranch for Nested<A, B>
+where
+	A: PredParam,
+	B: PredBranch,
+{
+	type Param = A;
+	type Branch = B;
+}
+
 /// A one-way node that either stores an arbitrary amount of data or branches
 /// into sub-nodes.
 pub enum PredNode<'s, T: 's, P: PredParam + 's> {
