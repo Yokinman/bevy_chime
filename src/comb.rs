@@ -1151,6 +1151,9 @@ where
 	C: PredCombinator,
 	K: CombKind,
 {
+	iter: <C::IntoKind<CombBranch<K::Pal, K>> as IntoIterator>::IntoIter,
+	a_count: usize,
+	b_count: usize,
 	inner: PredArrayComb<C, N, K>,
 }
 
@@ -1160,10 +1163,21 @@ where
 	K: CombKind,
 {
 	pub fn new<const M: usize>(comb: PredArrayComb<C, M, K>) -> Self {
+		let a_comb = comb.a_comb;
+		let b_comb = comb.b_comb;
+		let a_count = a_comb.clone().into_iter().count().saturating_sub(N);
+		let b_count = b_comb.clone().into_iter().count();
 		Self {
+			iter: if M > 1 {
+				a_comb.clone().into_iter()
+			} else {
+				b_comb.clone().into_iter()
+			},
+			a_count,
+			b_count,
 			inner: PredArrayComb {
-				a_comb: comb.a_comb,
-				b_comb: comb.b_comb,
+				a_comb,
+				b_comb,
 				a_index: comb.a_index,
 				b_index: comb.b_index,
 				comb: comb.comb,
@@ -1190,45 +1204,38 @@ where
 		<<K::Inv as CombKind>::Pal as CombKind>::Inv,
 	>>);
 	fn next(&mut self) -> Option<Self::Item> {
-		if let Some(mut max_index) = self.inner.slice.len().checked_sub(N) {
-			max_index = max_index.min(match self.inner.kind.states() {
-				[true, true] => self.inner.slice.len(),
-				[false, false] => 0,
-				[true, false] => self.inner.max_diff_index,
-				[false, true] => self.inner.max_same_index,
-			});
-			if self.inner.index >= max_index {
-				return None
-			}
-		} else {
+		if self.inner.a_index >= self.a_count
+			|| self.inner.b_index >= self.b_count
+		{
 			return None
-		};
-		if let Some((case, _)) = self.inner.slice.get(self.inner.index) {
-			self.inner.index += 1;
-			let kind = if case.is_diff() {
-				CombBranch::A(self.inner.kind.pal())
+		}
+		if let Some(case) = self.iter.next() {
+			self.inner.a_index += 1;
+			let sub_comb = if self.inner.kind.has_state(case.is_diff()) {
+				self.inner.b_index += 1;
+				let kind = CombBranch::A(self.inner.kind.pal());
+				let mut comb = self.inner.clone().into_kind(kind);
+				comb.b_index = comb.a_index;
+				comb
 			} else {
-				CombBranch::B(self.inner.kind.inv().pal().inv())
+				let kind = CombBranch::B(self.inner.kind.inv().pal().inv());
+				self.inner.clone().into_kind(kind)
 			};
-			let sub_comb = self.inner.clone().into_kind(kind);
-			Some((case.clone(), sub_comb))
+			Some((case, sub_comb))
 		} else {
 			None
 		}
 	}
 	fn size_hint(&self) -> (usize, Option<usize>) {
-		if let Some(mut max_index) = self.inner.slice.len().checked_sub(N) {
-			max_index = max_index.min(match self.inner.kind.states() {
-				[true, true] => self.inner.slice.len(),
-				[false, false] => 0,
-				[true, false] => self.inner.max_diff_index,
-				[false, true] => self.inner.max_same_index,
-			});
-			let num = max_index - self.inner.index;
-			(num, Some(num))
-		} else {
-			(0, Some(0))
+		if self.inner.a_index >= self.a_count
+			|| self.inner.b_index >= self.b_count
+		{
+			return (0, Some(0))
 		}
+		(
+			(self.b_count - self.inner.b_index).saturating_sub(N),
+			Some(self.a_count - self.inner.a_index),
+		)
 	}
 }
 

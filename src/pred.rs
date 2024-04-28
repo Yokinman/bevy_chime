@@ -1375,7 +1375,10 @@ mod testing {
 						.min(N.checked_sub(R))
 						.map(|x| x + 1)
 						.unwrap_or(0);
-					assert_eq!(iter.size_hint(), (count, Some(count)));
+					assert_eq!(iter.size_hint(), (
+						(update_vec.len() + 1).saturating_sub(R),
+						Some(count)
+					));
 					let mut n = 0;
 					for ((state, a), b) in iter.zip(&query) {
 						// This assumes `iter` and `Query` will always return
