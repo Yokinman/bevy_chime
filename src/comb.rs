@@ -931,7 +931,7 @@ where
 					a_index += 1;
 					if kind.has_state(case.is_diff()) {
 						b_index += 1;
-						self.layer = self.layer.min(i + 1);
+						layer = layer.min(i + 1);
 					}
 					Some((iter, case, [a_index, b_index]))
 				} else {
