@@ -585,8 +585,8 @@ pub struct PredStateCase<I, T> {
 	pred: Option<T>,
 }
 
-impl<I: PredId, T> PredStateCase<I, T> {
-	pub fn new(id: I) -> Self {
+impl<I, T> PredStateCase<I, T> {
+	pub(crate) fn new(id: I) -> Self {
 		Self {
 			id,
 			pred: None,
