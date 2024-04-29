@@ -613,6 +613,7 @@ pub trait PredBranch {
 	type Param: PredParam;
 	type Branch: PredBranch;
 	type Case<T>: PredNodeCase<Id = <Self::Param as PredParam>::Id>;
+	type AllParams: PredParam;
 }
 
 /// ...
@@ -625,6 +626,7 @@ where
 	type Param = A;
 	type Branch = Single<()>;
 	type Case<T> = PredStateCase<A::Id, T>;
+	type AllParams = A;
 }
 
 /// ...
@@ -638,6 +640,7 @@ where
 	type Param = A;
 	type Branch = B;
 	type Case<T> = (A::Id, Node<B::Case<T>>);
+	type AllParams = (A, B::AllParams);
 }
 
 /// ...
