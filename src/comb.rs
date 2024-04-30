@@ -5,7 +5,7 @@ use bevy_ecs::entity::Entity;
 use bevy_ecs::query::{ArchetypeFilter, QueryIter};
 use bevy_ecs::system::{Query, Resource};
 use chime::pred::Prediction;
-use crate::node::NodeWriter;
+use crate::node::{Node, NodeWriter};
 use crate::pred::*;
 
 /// Unit types that filter what `PredParam::comb` iterates over.
@@ -1257,6 +1257,81 @@ where
 				self.node.write(PredStateCase::new(id)),
 				item,
 			)
+		})
+	}
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		self.iter.size_hint()
+	}
+}
+
+/// ...
+pub struct PredComb2<'p, T, P, K>
+where
+	T: 'p,
+	P: PredBranch,
+	K: CombKind,
+{
+	iter: <<<P::Param as PredParam>::Comb<'p>
+		as PredCombinator>::IntoKind<K>
+		as IntoIterator>::IntoIter,
+	node: NodeWriter<'p, P::Case<T>>,
+}
+
+impl<'p, T, P, K> PredComb2<'p, T, P, K>
+where
+	P: PredBranch,
+	K: CombKind,
+{
+	pub fn new(state: PredSubState2<'p, T, P, K>) -> Self {
+		let iter = state.comb.into_kind(state.kind).into_iter();
+		// state.node.reserve(4 * iter.size_hint().0.max(1));
+		let node = NodeWriter::new(state.node);
+		Self {
+			iter,
+			node,
+		}
+	}
+}
+
+impl<'p, T, P, K> Iterator for PredComb2<'p, T, Single<P>, K>
+where
+	T: Prediction + 'p,
+	P: PredParam,
+	K: CombKind,
+{
+	type Item = (
+		&'p mut PredStateCase<P::Id, T>,
+		PredParamItem<'p, P>,
+	);
+	fn next(&mut self) -> Option<Self::Item> {
+		self.iter.next().map(|case| {
+			let (item, id) = case.into_parts();
+			let case = self.node.write(PredStateCase::new(id));
+			(case, item)
+		})
+	}
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		self.iter.size_hint()
+	}
+}
+
+impl<'p, T, A, B, K> Iterator for PredComb2<'p, T, Nested<A, B>, K>
+where
+	T: 'p,
+	A: PredParam,
+	B: PredBranch,
+	K: CombKind,
+{
+	type Item = (
+		PredSubState2<'p, T, B, CombBranch<K::Pal, K>>,
+		PredParamItem<'p, A>,
+	);
+	fn next(&mut self) -> Option<Self::Item> {
+		self.iter.next().map(|case| {
+			let (item, id) = case.into_parts();
+			let (_, node) = self.node.write((id, Node::default()));
+			let sub_state = PredSubState2::new(todo!(), node, todo!());
+			(sub_state, item)
 		})
 	}
 	fn size_hint(&self) -> (usize, Option<usize>) {

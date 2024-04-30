@@ -456,6 +456,32 @@ impl PredStateMisc for () {
 	}
 }
 
+/// ...
+pub struct PredSubState2<'p, T, P, K>
+where
+	T: 'p,
+	P: PredBranch + ?Sized,
+{
+	pub(crate) comb: <P::Param as PredParam>::Comb<'p>,
+	// pub(crate) sub_comb: <<P::Branch as PredBranch>::AllParams as PredParam>::Comb<'p>,
+	pub(crate) node: &'p mut Node<P::Case<T>>,
+	pub(crate) kind: K,
+}
+
+impl<'p, T, P, K> PredSubState2<'p, T, P, K>
+where
+	P: PredBranch
+{
+	pub(crate) fn new(
+		comb: <P::Param as PredParam>::Comb<'p>,
+		// sub_comb: <<P::Branch as PredBranch>::AllParams as PredParam>::Comb<'p>,
+		node: &'p mut Node<P::Case<T>>,
+		kind: K,
+	) -> Self {
+		Self { comb, /*sub_comb,*/ node, kind }
+	}
+}
+
 /// Collects predictions from "when" systems for later compilation. More general
 /// form of [`PredState`] for stepping through combinators layer-wise.
 pub struct PredSubState<'p, 's, T, P, K>
