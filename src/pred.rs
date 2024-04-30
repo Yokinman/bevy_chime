@@ -617,7 +617,7 @@ pub trait PredBranch {
 }
 
 /// ...
-struct Single<T>(T);
+pub struct Single<T>(T);
 
 impl<A> PredBranch for Single<A>
 where
@@ -630,7 +630,7 @@ where
 }
 
 /// ...
-struct Nested<A, B>(A, B);
+pub struct Nested<A, B>(A, B);
 
 impl<A, B> PredBranch for Nested<A, B>
 where
