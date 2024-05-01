@@ -1284,13 +1284,11 @@ where
 	K: CombKind,
 {
 	pub fn new(state: PredSubState2<'p, T, P, K>) -> Self {
-		let iter = state.comb.into_kind(state.kind).into_iter();
+		let (comb, sub_comb) = P::combs(state.comb);
+		let iter = comb.into_iter();
 		// state.node.reserve(4 * iter.size_hint().0.max(1));
 		let node = NodeWriter::new(state.node);
-		Self {
-			iter,
-			node,
-		}
+		Self { iter, sub_comb, node }
 	}
 }
 

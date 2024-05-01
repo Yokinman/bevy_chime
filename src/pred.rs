@@ -483,14 +483,15 @@ where
 impl<'p, T, P, K> IntoIterator for PredSubState2<'p, T, P, K>
 where
 	T: Prediction + 'p,
-	P: PredBranch,
+	P: PredBranch<Comb<'p, T, K> = PredComb2<'p, T, P, K>>,
 	P::Branch: 'p,
 	K: CombKind,
+	P::Comb<'p, T, K>: Iterator,
 {
 	type Item = <Self::IntoIter as IntoIterator>::Item;
 	type IntoIter = P::Comb<'p, T, K>;
 	fn into_iter(self) -> Self::IntoIter {
-		P::new_comb(self)
+		PredComb2::new(self)
 	}
 }
 
@@ -671,17 +672,18 @@ pub trait PredBranch {
 		K: CombKind,
 		Self::Branch: 'p;
 	
-	fn new_comb<'p, T, K>(state: PredSubState2<'p, T, Self, K>) -> Self::Comb<'p, T, K>
-	where
-		T: Prediction + 'p,
-		K: CombKind,
-		Self::Branch: 'p;
-	
 	fn comb_split<'w, K: CombKind>(
 		params: &'w SystemParamItem<<Self::AllParams as PredParam>::Param>,
 		input: Self::Input,
 		kind: K,
 	) -> Self::CombSplit<'w, K>;
+	
+	fn combs<K>(comb: Self::CombSplit<'_, K>) -> (
+		<<Self::Param as PredParam>::Comb<'_> as PredCombinator>::IntoKind<K>,
+		Self::SubComb<'_, K>,
+	)
+	where
+		K: CombKind;
 }
 
 /// ...
@@ -712,21 +714,22 @@ where
 		K: CombKind,
 		Self::Branch: 'p;
 	
-	fn new_comb<'p, T, K>(state: PredSubState2<'p, T, Self, K>) -> Self::Comb<'p, T, K>
-	where
-		T: Prediction + 'p,
-		K: CombKind,
-		Self::Branch: 'p,
-	{
-		todo!()
-	}
-	
 	fn comb_split<'w, K: CombKind>(
 		params: &'w SystemParamItem<<Self::AllParams as PredParam>::Param>,
 		Single(input): Self::Input,
 		kind: K,
 	) -> Self::CombSplit<'w, K> {
 		A::comb(params, input).into_kind(kind)
+	}
+	
+	fn combs<K>(comb: Self::CombSplit<'_, K>) -> (
+		<<Self::Param as PredParam>::Comb<'_> as PredCombinator>::IntoKind<K>,
+		Self::SubComb<'_, K>,
+	)
+	where
+		K: CombKind
+	{
+		(comb, ())
 	}
 }
 
@@ -762,15 +765,6 @@ where
 		K: CombKind,
 		Self::Branch: 'p;
 	
-	fn new_comb<'p, T, K>(state: PredSubState2<'p, T, Self, K>) -> Self::Comb<'p, T, K>
-	where
-		T: Prediction + 'p,
-		K: CombKind,
-		Self::Branch: 'p,
-	{
-		todo!()
-	}
-	
 	fn comb_split<'w, K: CombKind>(
 		(a, b): &'w SystemParamItem<<Self::AllParams as PredParam>::Param>,
 		Nested(a_input, b_input): Self::Input,
@@ -783,6 +777,16 @@ where
 				B::comb_split(b, b_input, CombBranch::B(kind)),
 			]
 		)
+	}
+	
+	fn combs<K>(comb: Self::CombSplit<'_, K>) -> (
+		<<Self::Param as PredParam>::Comb<'_> as PredCombinator>::IntoKind<K>,
+		Self::SubComb<'_, K>,
+	)
+	where
+		K: CombKind
+	{
+		comb
 	}
 }
 
