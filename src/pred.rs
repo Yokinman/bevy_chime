@@ -461,24 +461,36 @@ pub struct PredSubState2<'p, T, P, K>
 where
 	T: 'p,
 	P: PredBranch + ?Sized,
+	K: CombKind,
 {
-	pub(crate) comb: <P::Param as PredParam>::Comb<'p>,
-	// pub(crate) sub_comb: <<P::Branch as PredBranch>::AllParams as PredParam>::Comb<'p>,
+	pub(crate) comb: P::CombSplit<'p, K>,
 	pub(crate) node: &'p mut Node<P::Case<T>>,
-	pub(crate) kind: K,
 }
 
 impl<'p, T, P, K> PredSubState2<'p, T, P, K>
 where
-	P: PredBranch
+	P: PredBranch,
+	K: CombKind,
 {
 	pub(crate) fn new(
-		comb: <P::Param as PredParam>::Comb<'p>,
-		// sub_comb: <<P::Branch as PredBranch>::AllParams as PredParam>::Comb<'p>,
+		comb: P::CombSplit<'p, K>,
 		node: &'p mut Node<P::Case<T>>,
-		kind: K,
 	) -> Self {
-		Self { comb, /*sub_comb,*/ node, kind }
+		Self { comb, node }
+	}
+}
+
+impl<'p, T, P, K> IntoIterator for PredSubState2<'p, T, P, K>
+where
+	T: Prediction + 'p,
+	P: PredBranch,
+	P::Branch: 'p,
+	K: CombKind,
+{
+	type Item = <Self::IntoIter as IntoIterator>::Item;
+	type IntoIter = P::Comb<'p, T, K>;
+	fn into_iter(self) -> Self::IntoIter {
+		P::new_comb(self)
 	}
 }
 
@@ -640,6 +652,34 @@ pub trait PredBranch {
 	type Branch: PredBranch;
 	type Case<T>: PredNodeCase<Id = <Self::Param as PredParam>::Id>;
 	type AllParams: PredParam;
+	type SubComb<'w, K: CombKind>;
+	type CombSplit<'w, K: CombKind>: Clone;
+	
+	type Item<'p, T, K>
+	where
+		T: Prediction + 'p,
+		K: CombKind,
+		Self::Branch: 'p;
+	
+	type Comb<'p, T, K>: Iterator<Item = (
+		Self::Item<'p, T, K>,
+		PredParamItem<'p, Self::Param>,
+	)>
+	where
+		T: Prediction + 'p,
+		K: CombKind,
+		Self::Branch: 'p;
+	
+	fn new_comb<'p, T, K>(state: PredSubState2<'p, T, Self, K>) -> Self::Comb<'p, T, K>
+	where
+		T: Prediction + 'p,
+		K: CombKind,
+		Self::Branch: 'p;
+	
+	fn comb_split<'w, K: CombKind>(
+		params: &'w SystemParamItem<<Self::AllParams as PredParam>::Param>,
+		kind: K,
+	) -> Self::CombSplit<'w, K>;
 }
 
 /// ...
@@ -653,6 +693,36 @@ where
 	type Branch = Single<()>;
 	type Case<T> = PredStateCase<A::Id, T>;
 	type AllParams = A;
+	type SubComb<'w, K: CombKind> = ();
+	type CombSplit<'w, K: CombKind> = <A::Comb<'w> as PredCombinator>::IntoKind<K>;
+	
+	type Item<'p, T, K> = &'p mut Self::Case<T>
+	where
+		T: Prediction + 'p,
+		K: CombKind,
+		Self::Branch: 'p;
+	
+	type Comb<'p, T, K> = PredComb2<'p, T, Self, K>
+	where
+		T: Prediction + 'p,
+		K: CombKind,
+		Self::Branch: 'p;
+	
+	fn new_comb<'p, T, K>(state: PredSubState2<'p, T, Self, K>) -> Self::Comb<'p, T, K>
+	where
+		T: Prediction + 'p,
+		K: CombKind,
+		Self::Branch: 'p,
+	{
+		todo!()
+	}
+	
+	fn comb_split<'w, K: CombKind>(
+		params: &'w SystemParamItem<<Self::AllParams as PredParam>::Param>,
+		kind: K,
+	) -> Self::CombSplit<'w, K> {
+		A::comb(params, todo!()).into_kind(kind)
+	}
 }
 
 /// ...
@@ -667,6 +737,45 @@ where
 	type Branch = B;
 	type Case<T> = (A::Id, Node<B::Case<T>>);
 	type AllParams = (A, B::AllParams);
+	type SubComb<'w, K: CombKind> = [B::CombSplit<'w, CombBranch<K::Pal, K>>; 2];
+	type CombSplit<'w, K: CombKind> = (
+		<<Self::Param as PredParam>::Comb<'w> as PredCombinator>::IntoKind<K>,
+		Self::SubComb<'w, K>,
+	);
+	
+	type Item<'p, T, K> = PredSubState2<'p, T, B, CombBranch<K::Pal, K>>
+	where
+		T: Prediction + 'p,
+		K: CombKind,
+		Self::Branch: 'p;
+	
+	type Comb<'p, T, K> = PredComb2<'p, T, Self, K>
+	where
+		T: Prediction + 'p,
+		K: CombKind,
+		Self::Branch: 'p;
+	
+	fn new_comb<'p, T, K>(state: PredSubState2<'p, T, Self, K>) -> Self::Comb<'p, T, K>
+	where
+		T: Prediction + 'p,
+		K: CombKind,
+		Self::Branch: 'p,
+	{
+		todo!()
+	}
+	
+	fn comb_split<'w, K: CombKind>(
+		(a, b): &'w SystemParamItem<<Self::AllParams as PredParam>::Param>,
+		kind: K,
+	) -> Self::CombSplit<'w, K> {
+		(
+			A::comb(a, todo!()).into_kind(kind),
+			[
+				B::comb_split(b, CombBranch::A(kind.pal())),
+				B::comb_split(b, CombBranch::B(kind)),
+			]
+		)
+	}
 }
 
 /// ...

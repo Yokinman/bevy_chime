@@ -1274,6 +1274,7 @@ where
 	iter: <<<P::Param as PredParam>::Comb<'p>
 		as PredCombinator>::IntoKind<K>
 		as IntoIterator>::IntoIter,
+	sub_comb: P::SubComb<'p, K>,
 	node: NodeWriter<'p, P::Case<T>>,
 }
 
@@ -1328,9 +1329,10 @@ where
 	);
 	fn next(&mut self) -> Option<Self::Item> {
 		self.iter.next().map(|case| {
+			let ind = if case.is_diff() { 0 } else { 1 };
 			let (item, id) = case.into_parts();
 			let (_, node) = self.node.write((id, Node::default()));
-			let sub_state = PredSubState2::new(todo!(), node, todo!());
+			let sub_state = PredSubState2::new(self.sub_comb[ind].clone(), node);
 			(sub_state, item)
 		})
 	}
