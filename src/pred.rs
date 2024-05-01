@@ -652,6 +652,7 @@ pub trait PredBranch {
 	type Branch: PredBranch;
 	type Case<T>: PredNodeCase<Id = <Self::Param as PredParam>::Id>;
 	type AllParams: PredParam;
+	type Input: Clone;
 	type SubComb<'w, K: CombKind>;
 	type CombSplit<'w, K: CombKind>: Clone;
 	
@@ -678,11 +679,13 @@ pub trait PredBranch {
 	
 	fn comb_split<'w, K: CombKind>(
 		params: &'w SystemParamItem<<Self::AllParams as PredParam>::Param>,
+		input: Self::Input,
 		kind: K,
 	) -> Self::CombSplit<'w, K>;
 }
 
 /// ...
+#[derive(Clone)]
 pub struct Single<T>(T);
 
 impl<A> PredBranch for Single<A>
@@ -693,6 +696,7 @@ where
 	type Branch = Single<()>;
 	type Case<T> = PredStateCase<A::Id, T>;
 	type AllParams = A;
+	type Input = Single<A::Input>;
 	type SubComb<'w, K: CombKind> = ();
 	type CombSplit<'w, K: CombKind> = <A::Comb<'w> as PredCombinator>::IntoKind<K>;
 	
@@ -719,13 +723,15 @@ where
 	
 	fn comb_split<'w, K: CombKind>(
 		params: &'w SystemParamItem<<Self::AllParams as PredParam>::Param>,
+		Single(input): Self::Input,
 		kind: K,
 	) -> Self::CombSplit<'w, K> {
-		A::comb(params, todo!()).into_kind(kind)
+		A::comb(params, input).into_kind(kind)
 	}
 }
 
 /// ...
+#[derive(Clone)]
 pub struct Nested<A, B>(A, B);
 
 impl<A, B> PredBranch for Nested<A, B>
@@ -737,6 +743,7 @@ where
 	type Branch = B;
 	type Case<T> = (A::Id, Node<B::Case<T>>);
 	type AllParams = (A, B::AllParams);
+	type Input = Nested<A::Input, B::Input>;
 	type SubComb<'w, K: CombKind> = [B::CombSplit<'w, CombBranch<K::Pal, K>>; 2];
 	type CombSplit<'w, K: CombKind> = (
 		<<Self::Param as PredParam>::Comb<'w> as PredCombinator>::IntoKind<K>,
@@ -766,13 +773,14 @@ where
 	
 	fn comb_split<'w, K: CombKind>(
 		(a, b): &'w SystemParamItem<<Self::AllParams as PredParam>::Param>,
+		Nested(a_input, b_input): Self::Input,
 		kind: K,
 	) -> Self::CombSplit<'w, K> {
 		(
-			A::comb(a, todo!()).into_kind(kind),
+			A::comb(a, a_input).into_kind(kind),
 			[
-				B::comb_split(b, CombBranch::A(kind.pal())),
-				B::comb_split(b, CombBranch::B(kind)),
+				B::comb_split(b, b_input.clone(), CombBranch::A(kind.pal())),
+				B::comb_split(b, b_input, CombBranch::B(kind)),
 			]
 		)
 	}
