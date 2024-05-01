@@ -1267,7 +1267,6 @@ where
 /// ...
 pub struct PredComb2<'p, T, P, K>
 where
-	T: 'p,
 	P: PredBranch,
 	K: CombKind,
 {
@@ -1294,7 +1293,6 @@ where
 
 impl<'p, T, P, K> Iterator for PredComb2<'p, T, Single<P>, K>
 where
-	T: Prediction + 'p,
 	P: PredParam,
 	K: CombKind,
 {
@@ -1316,7 +1314,6 @@ where
 
 impl<'p, T, A, B, K> Iterator for PredComb2<'p, T, Nested<A, B>, K>
 where
-	T: 'p,
 	A: PredParam,
 	B: PredBranch,
 	K: CombKind,

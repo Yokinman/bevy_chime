@@ -459,8 +459,7 @@ impl PredStateMisc for () {
 /// ...
 pub struct PredSubState2<'p, T, P, K>
 where
-	T: 'p,
-	P: PredBranch + ?Sized,
+	P: PredBranch,
 	K: CombKind,
 {
 	pub(crate) comb: P::CombSplit<'p, K>,
