@@ -681,6 +681,41 @@ where
 }
 
 /// ...
+pub trait PredPermBranch: std::ops::Index<usize> {
+	fn sort_unstable(&mut self)
+	where
+		Self: Ord
+	{
+		todo!()
+	}
+}
+
+impl<T, const N: usize> PredPermBranch for [T; N] {}
+
+/// ...
+#[derive(Clone)]
+pub struct NestedPerm<A, B>(A, B);
+
+impl<A, const N: usize, B> std::ops::Index<usize> for NestedPerm<[A; N], B>
+where
+	B: PredPermBranch<Output = A>,
+{
+	type Output = A;
+	fn index(&self, index: usize) -> &Self::Output {
+		if index < N {
+			self.0.index(index)
+		} else {
+			self.1.index(index - N)
+		}
+	}
+}
+
+impl<A, const N: usize, B> PredPermBranch for NestedPerm<[A; N], B>
+where
+	B: PredPermBranch<Output = A>,
+{}
+
+/// ...
 pub trait PredBranch {
 	type Param: PredParam;
 	type Branch: PredBranch;
