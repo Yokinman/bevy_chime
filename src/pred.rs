@@ -721,6 +721,7 @@ pub trait PredBranch {
 	type Branch: PredBranch;
 	type Case<T>: PredNodeCase<Id = <Self::Param as PredParam>::Id>;
 	type AllParams: PredParam;
+	type Id: PredId;
 	type Input: Clone;
 	type SubComb<'w, K: CombKind>;
 	type CombSplit<'w, K: CombKind>: Clone;
@@ -740,7 +741,7 @@ pub trait PredBranch {
 		K: CombKind,
 		Self::Branch: 'p;
 	
-	type CaseIter<T>: Iterator<Item = PredStateCase<<Self::AllParams as PredParam>::Id, T>>;
+	type CaseIter<T>: Iterator<Item = PredStateCase<Self::Id, T>>;
 	
 	fn comb_split<'w, K: CombKind>(
 		params: &'w SystemParamItem<<Self::AllParams as PredParam>::Param>,
@@ -770,6 +771,7 @@ where
 	type Branch = Single<()>;
 	type Case<T> = PredStateCase<A::Id, T>;
 	type AllParams = A;
+	type Id = A::Id;
 	type Input = Single<A::Input>;
 	type SubComb<'w, K: CombKind> = ();
 	type CombSplit<'w, K: CombKind> = <A::Comb<'w> as PredCombinator>::IntoKind<K>;
@@ -824,6 +826,7 @@ where
 	type Branch = B;
 	type Case<T> = (A::Id, Node<B::Case<T>>);
 	type AllParams = (A, B::AllParams);
+	type Id = Nested<A::Id, B::Id>;
 	type Input = Nested<A::Input, B::Input>;
 	type SubComb<'w, K: CombKind> = [B::CombSplit<'w, CombBranch<K::Pal, K>>; 2];
 	type CombSplit<'w, K: CombKind> = (
@@ -907,25 +910,23 @@ pub struct NestedPredBranchIter<P: PredBranch, T> {
 	sub_iter: Option<<P::Branch as PredBranch>::CaseIter<T>>,
 }
 
-impl<P: PredBranch, T> Iterator for NestedPredBranchIter<P, T>
+impl<A, B, T> Iterator for NestedPredBranchIter<Nested<A, B>, T>
 where
-	P::AllParams: PredParam<Id = (
-		<P::Param as PredParam>::Id,
-		<<P::Branch as PredBranch>::AllParams as PredParam>::Id,
-	)>,
+	A: PredParam,
+	B: PredBranch,
 {
-	type Item = PredStateCase<<P::AllParams as PredParam>::Id, T>;
+	type Item = PredStateCase<Nested<A::Id, B::Id>, T>;
 	fn next(&mut self) -> Option<Self::Item> {
 		while let Some(iter) = self.sub_iter.as_mut() {
 			if let Some(case) = iter.next() {
 				let (id, pred) = case.into_parts();
 				return Some(PredStateCase {
-					id: (self.id, id),
+					id: Nested(self.id, id),
 					pred,
 				})
 			}
 			self.sub_iter = self.iter.next()
-				.map(P::Branch::case_iter);
+				.map(B::case_iter);
 		}
 		None
 	}
@@ -1020,7 +1021,7 @@ pub struct PredNode2<P: PredBranch, T> {
 }
 
 impl<P: PredBranch, T> IntoIterator for PredNode2<P, T> {
-	type Item = PredStateCase<<P::AllParams as PredParam>::Id, T>;
+	type Item = PredStateCase<P::Id, T>;
 	type IntoIter = PredNodeIter2<P, T>;
 	fn into_iter(self) -> Self::IntoIter {
 		let mut iter = self.inner.into_iter();
@@ -1036,7 +1037,7 @@ pub struct PredNodeIter2<P: PredBranch, T> {
 }
 
 impl<P: PredBranch, T> Iterator for PredNodeIter2<P, T> {
-	type Item = PredStateCase<<P::AllParams as PredParam>::Id, T>;
+	type Item = PredStateCase<P::Id, T>;
 	fn next(&mut self) -> Option<Self::Item> {
 		while let Some(case_iter) = self.case_iter.as_mut() {
 			if let Some(case) = case_iter.next() {
