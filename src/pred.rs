@@ -705,6 +705,8 @@ pub trait PredBranch {
 		K: CombKind,
 		Self::Branch: 'p;
 	
+	type CaseIter<T>: Iterator<Item = PredStateCase<<Self::AllParams as PredParam>::Id, T>>;
+	
 	fn comb_split<'w, K: CombKind>(
 		params: &'w SystemParamItem<<Self::AllParams as PredParam>::Param>,
 		input: Self::Input,
@@ -717,6 +719,8 @@ pub trait PredBranch {
 	)
 	where
 		K: CombKind;
+	
+	fn case_iter<T>(case: Self::Case<T>) -> Self::CaseIter<T>;
 }
 
 /// ...
@@ -747,6 +751,8 @@ where
 		K: CombKind,
 		Self::Branch: 'p;
 	
+	type CaseIter<T> = std::iter::Once<PredStateCase<A::Id, T>>;
+	
 	fn comb_split<'w, K: CombKind>(
 		params: &'w SystemParamItem<<Self::AllParams as PredParam>::Param>,
 		Single(input): Self::Input,
@@ -763,6 +769,10 @@ where
 		K: CombKind
 	{
 		(comb, ())
+	}
+	
+	fn case_iter<T>(case: Self::Case<T>) -> Self::CaseIter<T> {
+		std::iter::once(case)
 	}
 }
 
@@ -798,6 +808,8 @@ where
 		K: CombKind,
 		Self::Branch: 'p;
 	
+	type CaseIter<T> = NestedPredBranchIter<Self, T>;
+	
 	fn comb_split<'w, K: CombKind>(
 		(a, b): &'w SystemParamItem<<Self::AllParams as PredParam>::Param>,
 		Nested(a_input, b_input): Self::Input,
@@ -820,6 +832,12 @@ where
 		K: CombKind
 	{
 		comb
+	}
+	
+	fn case_iter<T>((id, node): Self::Case<T>) -> Self::CaseIter<T> {
+		let mut iter = node.into_iter();
+		let sub_iter = iter.next().map(B::case_iter);
+		NestedPredBranchIter { id, iter, sub_iter }
 	}
 }
 
@@ -845,6 +863,40 @@ where
 	fn with_id(id: Self::Id) -> Self {
 		(id, Node::default())
 	}
+}
+
+/// ...
+pub struct NestedPredBranchIter<P: PredBranch, T> {
+	id: <P::Param as PredParam>::Id,
+	iter: NodeIter<<P::Branch as PredBranch>::Case<T>>,
+	sub_iter: Option<<P::Branch as PredBranch>::CaseIter<T>>,
+}
+
+impl<P: PredBranch, T> Iterator for NestedPredBranchIter<P, T>
+where
+	P::AllParams: PredParam<Id = (
+		<P::Param as PredParam>::Id,
+		<<P::Branch as PredBranch>::AllParams as PredParam>::Id,
+	)>,
+{
+	type Item = PredStateCase<<P::AllParams as PredParam>::Id, T>;
+	fn next(&mut self) -> Option<Self::Item> {
+		while let Some(iter) = self.sub_iter.as_mut() {
+			if let Some(case) = iter.next() {
+				let (id, pred) = case.into_parts();
+				return Some(PredStateCase {
+					id: (self.id, id),
+					pred,
+				})
+			}
+			self.sub_iter = self.iter.next()
+				.map(P::Branch::case_iter);
+		}
+		None
+	}
+	// fn size_hint(&self) -> (usize, Option<usize>) {
+	// 	todo!()
+	// }
 }
 
 /// A one-way node that either stores an arbitrary amount of data or branches
