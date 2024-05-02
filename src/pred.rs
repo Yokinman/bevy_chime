@@ -979,6 +979,44 @@ impl<T, P: PredParam> Iterator for PredNodeIter<'_, T, P> {
 	}
 }
 
+/// ...
+pub struct PredNode2<P: PredBranch, T> {
+	inner: Node<P::Case<T>>,
+}
+
+impl<P: PredBranch, T> IntoIterator for PredNode2<P, T> {
+	type Item = PredStateCase<<P::AllParams as PredParam>::Id, T>;
+	type IntoIter = PredNodeIter2<P, T>;
+	fn into_iter(self) -> Self::IntoIter {
+		let mut iter = self.inner.into_iter();
+		let case_iter = iter.next().map(P::case_iter);
+		PredNodeIter2 { iter, case_iter }
+	}
+}
+
+/// ...
+pub struct PredNodeIter2<P: PredBranch, T> {
+	iter: NodeIter<P::Case<T>>,
+	case_iter: Option<P::CaseIter<T>>,
+}
+
+impl<P: PredBranch, T> Iterator for PredNodeIter2<P, T> {
+	type Item = PredStateCase<<P::AllParams as PredParam>::Id, T>;
+	fn next(&mut self) -> Option<Self::Item> {
+		while let Some(case_iter) = self.case_iter.as_mut() {
+			if let Some(case) = case_iter.next() {
+				return Some(case)
+			}
+			self.case_iter = self.iter.next()
+				.map(P::case_iter);
+		}
+		None
+	}
+	// fn size_hint(&self) -> (usize, Option<usize>) {
+	// 	todo!()
+	// }
+}
+
 /// Individual branch of a [`PredNodeBranches`] type.
 type PredNodeBranch<'s, T, P> = (
 	<<P as PredParamVec>::Head as PredParam>::Id,
