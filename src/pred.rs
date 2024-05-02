@@ -981,7 +981,7 @@ impl<T, P: PredParam> Iterator for PredNodeIter<'_, T, P> {
 
 /// ...
 pub struct PredNode2<P: PredBranch, T> {
-	inner: Node<P::Case<T>>,
+	pub(crate) inner: Node<P::Case<T>>,
 }
 
 impl<P: PredBranch, T> IntoIterator for PredNode2<P, T> {

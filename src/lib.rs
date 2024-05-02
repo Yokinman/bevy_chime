@@ -12,7 +12,7 @@ mod node;
 use comb::*;
 use pred::*;
 
-pub use pred::{In, PredState, PredFetch, WithId};
+pub use pred::{In, PredState2, PredFetch, WithId};
 
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, btree_map, BTreeMap, HashMap};
@@ -39,7 +39,7 @@ pub trait AddChimeEvent {
 	where
 		T: Prediction,
 		T::TimeRanges: Send + Sync + 'static,
-		P: PredParam + 'static,
+		P: PredBranch + 'static,
 		A: ReadOnlySystemParam + 'static,
 		I: IntoInput<P::Input> + Clone + Send + Sync + 'static,
 		F: PredFn<T, P, A> + Send + Sync + 'static;
@@ -53,7 +53,7 @@ impl AddChimeEvent for App {
 	where
 		T: Prediction,
 		T::TimeRanges: Send + Sync + 'static,
-		P: PredParam + 'static,
+		P: PredBranch + 'static,
 		A: ReadOnlySystemParam + 'static,
 		I: IntoInput<P::Input> + Clone + Send + Sync + 'static,
 		F: PredFn<T, P, A> + Send + Sync + 'static,
@@ -72,21 +72,21 @@ impl AddChimeEvent for App {
 		assert!(begin_sys.is_some() || end_sys.is_some() || outlier_sys.is_some());
 		
 		let id = self.world.resource_mut::<ChimeEventMap>()
-			.setup_id::<P::Id, T::TimeRanges>();
+			.setup_id::<<P::AllParams as PredParam>::Id, T::TimeRanges>();
 		
-		let mut state = system::SystemState::<(P::Param, A)>::new(
+		let mut state = system::SystemState::<(<P::AllParams as PredParam>::Param, A)>::new(
 			&mut self.world
 		);
 		
 		let system = move |world: &mut World| {
 			// !!! Cache this in a Local so it doesn't need to reallocate much.
 			// Maybe chop off nodes that go proportionally underused.
-			let mut node = PredNode::Blank;
+			let mut node = node::Node::default();
 			{
 				let (state, misc) = state.get(world);
 				pred_sys(
-					PredState::new(
-						P::comb(&state, input.clone().into_input()).into_kind(CombAnyTrue),
+					PredState2::new(
+						P::comb_split(&state, input.clone().into_input(), CombAnyTrue),
 						&mut node,
 					),
 					misc
@@ -95,7 +95,7 @@ impl AddChimeEvent for App {
 			let time = world.resource::<Time>().elapsed();
 			world.resource_scope::<ChimeEventMap, ()>(|world, mut event_map| {
 				event_map.sched(
-					node,
+					PredNode2::<P, T> { inner: node },
 					time,
 					id,
 					begin_sys.as_ref().map(|x| x.as_ref()),
@@ -150,23 +150,23 @@ impl AddChimeEvent for App {
 /// 
 ///   - *A.* ??? 
 pub trait PredFn<T, P, A>:
-	Fn(PredState<T, P>, SystemParamItem<A>)
+	Fn(PredState2<T, P>, SystemParamItem<A>)
 where
-	P: PredParam,
+	P: PredBranch,
 	A: ReadOnlySystemParam,
 {}
 
 impl<T, P, A, F> PredFn<T, P, A> for F
 where
-	P: PredParam,
+	P: PredBranch,
 	A: ReadOnlySystemParam,
-	F: Fn(PredState<T, P>, SystemParamItem<A>),
+	F: Fn(PredState2<T, P>, SystemParamItem<A>),
 {}
 
 /// Types that can be converted into a [`PredFn`].
 pub trait IntoPredFn<T, P, A>: Sized
 where
-	P: PredParam,
+	P: PredBranch,
 	A: ReadOnlySystemParam,
 {
 	// !!! This should probably be split into two traits, with the two separate
@@ -196,9 +196,9 @@ macro_rules! impl_into_pred_fn {
 	($($param:ident),*) => {
 		impl<F, T, P, $($param: ReadOnlySystemParam),*> IntoPredFn<T, P, ($($param,)*)> for F
 		where
-			F: Fn(PredState<T, P>, $($param),*)
-				+ Fn(PredState<T, P>, $(SystemParamItem<$param>),*),
-			P: PredParam,
+			F: Fn(PredState2<T, P>, $($param),*)
+				+ Fn(PredState2<T, P>, $(SystemParamItem<$param>),*),
+			P: PredBranch,
 		{
 			fn into_pred_fn(self) -> impl PredFn<T, P, ($($param,)*)> {
 				move |state, misc| {
@@ -233,7 +233,7 @@ where
 /// Builder for inserting a chime event into a [`World`].  
 pub struct ChimeEventBuilder<T, P, A, I, F>
 where
-	P: PredParam,
+	P: PredBranch,
 	A: ReadOnlySystemParam,
 	F: PredFn<T, P, A>,
 {
@@ -242,12 +242,12 @@ where
 	end_sys: Option<Box<dyn ChimeEventSystem>>,
 	outlier_sys: Option<Box<dyn ChimeEventSystem>>,
 	input: I,
-	_param: std::marker::PhantomData<fn(PredState<T, P>, SystemParamItem<A>)>,
+	_param: std::marker::PhantomData<fn(PredState2<T, P>, SystemParamItem<A>)>,
 }
 
 impl<U, P, A, I, F> ChimeEventBuilder<U, P, A, I, F>
 where
-	P: PredParam,
+	P: PredBranch,
 	A: ReadOnlySystemParam,
 	F: PredFn<U, P, A>,
 {
