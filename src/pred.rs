@@ -1193,6 +1193,10 @@ unsafe impl<D: PredFetchData> SystemParam for PredFetch<'_, D> {
 /// ..(A,) -> (*, B) where A: IntoInput<B>, *: Default
 /// (A,).. -> (B, *) where A: IntoInput<B>, *: Default
 /// ```
+/// 
+/// Single vs Nested
+/// 
+/// ...
 pub trait IntoInput<I> {
 	fn into_input(self) -> I;
 }
@@ -1280,6 +1284,27 @@ where
 {
 	fn into_input(self) -> [B; N] {
 		self.map(A::into_input)
+	}
+}
+
+impl<A, B> IntoInput<Single<B>> for Single<A>
+where
+	A: IntoInput<B>,
+{
+	fn into_input(self) -> Single<B> {
+		let Single(a) = self;
+		Single(a.into_input())
+	}
+}
+
+impl<A0, B0, A1, B1> IntoInput<Nested<B0, B1>> for Nested<A0, A1>
+where
+	A0: IntoInput<B0>,
+	A1: IntoInput<B1>,
+{
+	fn into_input(self) -> Nested<B0, B1> {
+		let Nested(a, b) = self;
+		Nested(a.into_input(), b.into_input())
 	}
 }
 
