@@ -617,6 +617,40 @@ where
 	}
 }
 
+/// Collects predictions from "when" systems for later compilation.
+pub struct PredState2<'p, T, P>
+where
+	P: PredBranch,
+{
+	inner: PredSubState2<'p, T, P, CombAnyTrue>,
+}
+
+impl<'p, T, P> PredState2<'p, T, P>
+where
+	P: PredBranch,
+{
+	pub(crate) fn new(
+		comb: P::CombSplit<'p, CombAnyTrue>,
+		node: &'p mut Node<P::Case<T>>,
+	) -> Self {
+		Self {
+			inner: PredSubState2::new(comb, node),
+		}
+	}
+}
+
+impl<'p, T, P> IntoIterator for PredState2<'p, T, P>
+where
+	P: PredBranch,
+	PredSubState2<'p, T, P, CombAnyTrue>: IntoIterator,
+{
+	type Item = <Self::IntoIter as Iterator>::Item;
+	type IntoIter = <PredSubState2<'p, T, P, CombAnyTrue> as IntoIterator>::IntoIter;
+	fn into_iter(self) -> Self::IntoIter {
+		self.inner.into_iter()
+	}
+}
+
 /// A scheduled case of prediction, used in [`crate::PredState`].
 pub struct PredStateCase<I, T> {
 	id: I,
