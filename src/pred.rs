@@ -690,7 +690,14 @@ pub trait PredPermBranch: std::ops::Index<usize> {
 	}
 }
 
-impl<T, const N: usize> PredPermBranch for [T; N] {}
+impl<T, const N: usize> PredPermBranch for Single<[T; N]> {}
+
+impl<T, const N: usize> std::ops::Index<usize> for Single<[T; N]> {
+	type Output = T;
+	fn index(&self, index: usize) -> &Self::Output {
+		self.0.index(index)
+	}
+}
 
 /// ...
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
