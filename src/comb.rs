@@ -152,6 +152,10 @@ pub trait PredCombinator<K: CombKind = CombNone>:
 		PredCombinator<Kind, Case=Self::Case, Id=Self::Id>;
 	
 	fn into_kind<Kind: CombKind>(self, kind: Kind) -> Self::IntoKind<Kind>;
+	
+	fn outer_skip(&mut self, n: [usize; 2]) {
+		// !!! This kinda sucks.
+	}
 }
 
 impl<K: CombKind> PredCombinator<K> for EmptyComb<K> {
@@ -261,6 +265,11 @@ where
 		} else {
 			PredArrayComb::new(self.comb, kind)
 		}
+	}
+	
+	fn outer_skip(&mut self, index: [usize; 2]) {
+		self.a_index += index[0];
+		self.b_index += index[1];
 	}
 }
 
@@ -1285,7 +1294,8 @@ where
 	K: CombKind,
 {
 	pub fn new(state: PredSubState2<'p, T, P, K>) -> Self {
-		let (comb, sub_comb) = P::combs(state.comb, state.index);
+		let (mut comb, sub_comb) = P::combs(state.comb, state.index);
+		comb.outer_skip(state.index);
 		let iter = comb.into_iter();
 		state.node.reserve(4 * iter.size_hint().0.max(1));
 		Self {
