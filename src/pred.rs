@@ -712,7 +712,7 @@ impl<T, const N: usize> std::ops::Index<usize> for Single<[T; N]> {
 
 /// ...
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug, Default)]
-pub struct NestedPerm<A, B>(A, B);
+pub struct NestedPerm<A, B>(pub A, pub B);
 
 impl<A, const N: usize, B> std::ops::Index<usize> for NestedPerm<[A; N], B>
 where
@@ -846,7 +846,7 @@ pub trait PredBranch {
 
 /// ...
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug, Default)]
-pub struct Single<T>(T);
+pub struct Single<T>(pub T);
 
 impl<A> PredBranch for Single<A>
 where
@@ -901,7 +901,7 @@ where
 
 /// ...
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug, Default)]
-pub struct Nested<A, B>(A, B);
+pub struct Nested<A, B>(pub A, pub B);
 
 impl<A, B> PredBranch for Nested<A, B>
 where
