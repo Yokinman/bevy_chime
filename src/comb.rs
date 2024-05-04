@@ -857,8 +857,8 @@ where
 {
 	a_comb: C::IntoKind<CombBranch<K::Pal, K>>,
 	b_comb: C::IntoKind<CombBranch<K::Pal, K>>,
-	a_index: usize,
-	b_index: usize,
+	pub(crate) a_index: usize,
+	pub(crate) b_index: usize,
 	comb: C,
 	kind: K,
 }
@@ -1275,6 +1275,8 @@ where
 		as IntoIterator>::IntoIter,
 	sub_comb: P::SubComb<'p, K>,
 	node: NodeWriter<'p, P::Case<T>>,
+	kind: K,
+	index: [usize; 2],
 }
 
 impl<'p, T, P, K> PredComb2<'p, T, P, K>
@@ -1283,11 +1285,16 @@ where
 	K: CombKind,
 {
 	pub fn new(state: PredSubState2<'p, T, P, K>) -> Self {
-		let (comb, sub_comb) = P::combs(state.comb);
+		let (comb, sub_comb) = P::combs(state.comb, state.index);
 		let iter = comb.into_iter();
 		state.node.reserve(4 * iter.size_hint().0.max(1));
-		let node = NodeWriter::new(state.node);
-		Self { iter, sub_comb, node }
+		Self {
+			iter,
+			sub_comb,
+			node: NodeWriter::new(state.node),
+			kind: state.kind,
+			index: state.index,
+		}
 	}
 }
 
@@ -1324,10 +1331,60 @@ where
 	);
 	fn next(&mut self) -> Option<Self::Item> {
 		self.iter.next().map(|case| {
-			let ind = if case.is_diff() { 0 } else { 1 };
+			let kind;
+			let ind = if self.kind.has_state(case.is_diff()) {
+				kind = CombBranch::A(self.kind.pal());
+				0
+			} else {
+				kind = CombBranch::B(self.kind);
+				1
+			};
 			let (item, id) = case.into_parts();
 			let (_, node) = self.node.write((id, Node::default()));
-			let sub_state = PredSubState2::new(self.sub_comb[ind].clone(), node);
+			let sub_state = PredSubState2::new(self.sub_comb[ind].clone(), node, kind);
+			(sub_state, item)
+		})
+	}
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		self.iter.size_hint()
+	}
+}
+
+impl<'p, T, A, const N: usize, B, K> Iterator
+	for PredComb2<'p, T, NestedPerm<[A; N], B>, K>
+where
+	A: PredParam,
+	A::Id: Ord,
+	B: PredPermBranch<Output = A>,
+	K: CombKind,
+{
+	type Item = (
+		PredSubState2<'p, T, B, CombBranch<K::Pal, K>>,
+		PredParamItem<'p, [A; N]>,
+	);
+	fn next(&mut self) -> Option<Self::Item> {
+		self.iter.next().map(|case| {
+			self.index[0] += 1;
+			let kind;
+			let ind = if self.kind.has_state(case.is_diff()) {
+				self.index[1] += 1;
+				kind = CombBranch::A(self.kind.pal());
+				0
+			} else {
+				kind = CombBranch::B(self.kind);
+				1
+			};
+			let (item, id) = case.into_parts();
+			let (_, node) = self.node.write((id, Node::default()));
+			let mut sub_state = PredSubState2::new(self.sub_comb[ind].clone(), node, kind);
+			sub_state.index = [
+				self.index[0],
+				if ind == 0 {
+					self.index[1]
+				} else {
+					self.index[0]
+				},
+			];
 			(sub_state, item)
 		})
 	}

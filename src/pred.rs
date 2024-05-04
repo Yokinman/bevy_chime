@@ -464,6 +464,8 @@ where
 {
 	pub(crate) comb: P::CombSplit<'p, K>,
 	pub(crate) node: &'p mut Node<P::Case<T>>,
+	pub(crate) kind: K,
+	pub(crate) index: [usize; 2],
 }
 
 impl<'p, T, P, K> PredSubState2<'p, T, P, K>
@@ -474,8 +476,14 @@ where
 	pub(crate) fn new(
 		comb: P::CombSplit<'p, K>,
 		node: &'p mut Node<P::Case<T>>,
+		kind: K,
 	) -> Self {
-		Self { comb, node }
+		Self {
+			comb,
+			node,
+			kind,
+			index: [0; 2],
+		}
 	}
 }
 
@@ -634,7 +642,7 @@ where
 		node: &'p mut Node<P::Case<T>>,
 	) -> Self {
 		Self {
-			inner: PredSubState2::new(comb, node),
+			inner: PredSubState2::new(comb, node, CombAnyTrue),
 		}
 	}
 }
@@ -681,7 +689,7 @@ where
 }
 
 /// ...
-pub trait PredPermBranch: std::ops::Index<usize> {
+pub trait PredPermBranch: PredBranch + std::ops::Index<usize> {
 	fn sort_unstable(&mut self)
 	where
 		Self: Ord
@@ -690,7 +698,10 @@ pub trait PredPermBranch: std::ops::Index<usize> {
 	}
 }
 
-impl<T, const N: usize> PredPermBranch for Single<[T; N]> {}
+impl<T, const N: usize> PredPermBranch for Single<[T; N]>
+where
+	[T; N]: PredParam,
+{}
 
 impl<T, const N: usize> std::ops::Index<usize> for Single<[T; N]> {
 	type Output = T;
@@ -717,8 +728,75 @@ where
 	}
 }
 
+impl<A, const N: usize, B> PredBranch for NestedPerm<[A; N], B>
+where
+	A: PredParam,
+	A::Id: Ord,
+	B: PredPermBranch<Output = A>,
+{
+	type Param = [A; N];
+	type Branch = B;
+	type Case<T> = (<[A; N] as PredParam>::Id, Node<B::Case<T>>);
+	type AllParams = ([A; N], B::AllParams);
+	type Id = NestedPerm<<[A; N] as PredParam>::Id, B::Id>;
+	type Input = NestedPerm<<[A; N] as PredParam>::Input, B::Input>;
+	type SubComb<'w, K: CombKind> = [B::CombSplit<'w, CombBranch<K::Pal, K>>; 2];
+	type CombSplit<'w, K: CombKind> = (
+		<<Self::Param as PredParam>::Comb<'w> as PredCombinator>::IntoKind<K>,
+		Self::SubComb<'w, K>,
+	);
+	
+	type Item<'p, T, K> = PredSubState2<'p, T, B, CombBranch<K::Pal, K>>
+	where
+		T: Prediction + 'p,
+		K: CombKind,
+		Self::Branch: 'p;
+	
+	type Comb<'p, T, K> = PredComb2<'p, T, Self, K>
+	where
+		T: Prediction + 'p,
+		K: CombKind,
+		Self::Branch: 'p;
+	
+	type CaseIter<T> = NestedPredBranchIter<Self, T>;
+	
+	fn comb_split<'w, K: CombKind>(
+		(a, b): &'w SystemParamItem<<Self::AllParams as PredParam>::Param>,
+		NestedPerm(a_input, b_input): Self::Input,
+		kind: K,
+	) -> Self::CombSplit<'w, K> {
+		(
+			<[A; N]>::comb(a, a_input).into_kind(kind),
+			[
+				B::comb_split(b, b_input.clone(), CombBranch::A(kind.pal())),
+				B::comb_split(b, b_input, CombBranch::B(kind)),
+			]
+		)
+	}
+	
+	fn combs<K>((mut comb, sub_comb): Self::CombSplit<'_, K>, index: [usize; 2]) -> (
+		<<Self::Param as PredParam>::Comb<'_> as PredCombinator>::IntoKind<K>,
+		Self::SubComb<'_, K>,
+	)
+	where
+		K: CombKind
+	{
+		comb.a_index = index[0];
+		comb.b_index = index[1];
+		(comb, sub_comb)
+	}
+	
+	fn case_iter<T>((id, node): Self::Case<T>) -> Self::CaseIter<T> {
+		let mut iter = node.into_iter();
+		let sub_iter = iter.next().map(B::case_iter);
+		NestedPredBranchIter { id, iter, sub_iter }
+	}
+}
+
 impl<A, const N: usize, B> PredPermBranch for NestedPerm<[A; N], B>
 where
+	A: PredParam,
+	A::Id: Ord,
 	B: PredPermBranch<Output = A>,
 {}
 
@@ -756,7 +834,7 @@ pub trait PredBranch {
 		kind: K,
 	) -> Self::CombSplit<'w, K>;
 	
-	fn combs<K>(comb: Self::CombSplit<'_, K>) -> (
+	fn combs<K>(comb: Self::CombSplit<'_, K>, index: [usize; 2]) -> (
 		<<Self::Param as PredParam>::Comb<'_> as PredCombinator>::IntoKind<K>,
 		Self::SubComb<'_, K>,
 	)
@@ -805,13 +883,14 @@ where
 		A::comb(params, input).into_kind(kind)
 	}
 	
-	fn combs<K>(comb: Self::CombSplit<'_, K>) -> (
+	fn combs<K>(comb: Self::CombSplit<'_, K>, index: [usize; 2]) -> (
 		<<Self::Param as PredParam>::Comb<'_> as PredCombinator>::IntoKind<K>,
 		Self::SubComb<'_, K>,
 	)
 	where
 		K: CombKind
 	{
+		debug_assert_eq!(index, [0; 2]);
 		(comb, ())
 	}
 	
@@ -869,13 +948,14 @@ where
 		)
 	}
 	
-	fn combs<K>(comb: Self::CombSplit<'_, K>) -> (
+	fn combs<K>(comb: Self::CombSplit<'_, K>, index: [usize; 2]) -> (
 		<<Self::Param as PredParam>::Comb<'_> as PredCombinator>::IntoKind<K>,
 		Self::SubComb<'_, K>,
 	)
 	where
 		K: CombKind
 	{
+		debug_assert_eq!(index, [0; 2]);
 		comb
 	}
 	
@@ -931,6 +1011,32 @@ where
 					id: Nested(self.id, id),
 					pred,
 				})
+			}
+			self.sub_iter = self.iter.next()
+				.map(B::case_iter);
+		}
+		None
+	}
+	// fn size_hint(&self) -> (usize, Option<usize>) {
+	// 	todo!()
+	// }
+}
+
+impl<A, const N: usize, B, T> Iterator
+	for NestedPredBranchIter<NestedPerm<[A; N], B>, T>
+where
+	A: PredParam,
+	A::Id: Ord,
+	B: PredPermBranch<Output = A>,
+{
+	type Item = PredStateCase<NestedPerm<<[A; N] as PredParam>::Id, B::Id>, T>;
+	fn next(&mut self) -> Option<Self::Item> {
+		while let Some(iter) = self.sub_iter.as_mut() {
+			if let Some(case) = iter.next() {
+				let (id, pred) = case.into_parts();
+				let id = NestedPerm(self.id, id);
+				// !!! id.sort();
+				return Some(PredStateCase { id, pred })
 			}
 			self.sub_iter = self.iter.next()
 				.map(B::case_iter);
