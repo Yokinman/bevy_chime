@@ -1547,6 +1547,17 @@ where
 	}
 }
 
+impl<A0, B0, A1, B1> IntoInput<NestedPerm<B0, B1>> for NestedPerm<A0, A1>
+where
+	A0: IntoInput<B0>,
+	A1: IntoInput<B1>,
+{
+	fn into_input(self) -> NestedPerm<B0, B1> {
+		let NestedPerm(a, b) = self;
+		NestedPerm(a.into_input(), b.into_input())
+	}
+}
+
 #[cfg(test)]
 mod testing {
 	use super::*;
