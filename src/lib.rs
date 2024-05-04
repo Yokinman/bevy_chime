@@ -12,7 +12,7 @@ mod node;
 use comb::*;
 use pred::*;
 
-pub use pred::{In, PredState2, PredFetch, WithId};
+pub use pred::{In, PredState2, PredFetch, WithId, Single, Nested, NestedPerm};
 
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, btree_map, BTreeMap, HashMap};
