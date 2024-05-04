@@ -72,7 +72,7 @@ impl AddChimeEvent for App {
 		assert!(begin_sys.is_some() || end_sys.is_some() || outlier_sys.is_some());
 		
 		let id = self.world.resource_mut::<ChimeEventMap>()
-			.setup_id::<<P::AllParams as PredParam>::Id, T::TimeRanges>();
+			.setup_id::<P::Id, T::TimeRanges>();
 		
 		let mut state = system::SystemState::<(<P::AllParams as PredParam>::Param, A)>::new(
 			&mut self.world
