@@ -1338,6 +1338,30 @@ where
 	}
 }
 
+impl<A, B> PredFetchData for Nested<A, B>
+where
+	A: PredFetchData,
+	B: PredFetchData,
+{
+	type Id = Nested<A::Id, B::Id>;
+	type Output<'w> = Nested<A::Output<'w>, B::Output<'w>>;
+	unsafe fn get_inner(world: UnsafeWorldCell, Nested(a, b): Self::Id) -> Self::Output<'_> {
+		Nested(A::get_inner(world, a), B::get_inner(world, b))
+	}
+}
+
+impl<A, B> PredFetchData for NestedPerm<A, B>
+where
+	A: PredFetchData,
+	B: PredFetchData,
+{
+	type Id = NestedPerm<A::Id, B::Id>;
+	type Output<'w> = NestedPerm<A::Output<'w>, B::Output<'w>>;
+	unsafe fn get_inner(world: UnsafeWorldCell, NestedPerm(a, b): Self::Id) -> Self::Output<'_> {
+		NestedPerm(A::get_inner(world, a), B::get_inner(world, b))
+	}
+}
+
 /// Prediction data fed as a parameter to an event's systems.
 pub struct PredFetch<'world, D: PredFetchData> {
     inner: D::Output<'world>,
