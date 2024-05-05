@@ -1035,37 +1035,6 @@ where
 	}
 }
 
-/// Specific type of [`PredNodeBranchesIterator`] trait objects.
-pub struct PredNodeBranchesIter<'s, T, P: PredParamVec> {
-	node_iter: NodeIter<PredNodeBranch<'s, T, P>>,
-	branch_id: Option<<P::Head as PredParam>::Id>,
-	branch_iter: PredNodeIter<'s, T, P::Tail>,
-}
-
-impl<'s, T, P> Iterator for PredNodeBranchesIter<'s, T, P>
-where
-	P: PredParamVec
-{
-	type Item = PredStateCase<P::Id, T>;
-	fn next(&mut self) -> Option<Self::Item> {
-		if let Some(case) = self.branch_iter.next() {
-			Some(PredStateCase {
-				id: P::join_id(self.branch_id.unwrap(), case.id),
-				pred: case.pred,
-			})
-		} else if let Some((id, node)) = self.node_iter.next() {
-			self.branch_id = Some(id);
-			self.branch_iter = node.into_iter();
-			self.next()
-		} else {
-			None
-		}
-	}
-	fn size_hint(&self) -> (usize, Option<usize>) {
-		(self.branch_iter.size_hint().0, None)
-	}
-}
-
 /// Types that can be used to query for a specific entity.
 pub trait PredFetchData {
 	type Id: PredId;
