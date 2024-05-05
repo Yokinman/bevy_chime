@@ -808,56 +808,6 @@ where
 	}
 }
 
-/// [`PredParamVec::Split`] type of 2-tuples.
-pub struct PredPairCombSplit<A, B, K> {
-	a_iter: A,
-	b_comb: B,
-	kind: K,
-}
-
-impl<A, B, K> PredPairCombSplit<A, B, K>
-where
-	K: CombKind,
-{
-	pub fn new<C>(comb: PredPairComb<C, B, K>) -> Self
-	where
-		C: PredCombinator,
-		C::IntoKind<K::Pal>: IntoIterator<IntoIter=A>,
-	{
-		Self {
-			a_iter: comb.a_comb.into_kind(comb.kind.pal()).into_iter(),
-			b_comb: comb.b_comb,
-			kind: comb.kind,
-		}
-	}
-}
-
-impl<A, B, K> Iterator for PredPairCombSplit<A, B, K>
-where
-	A: Iterator,
-	A::Item: PredCombinatorCase,
-	B: PredCombinator,
-	K: CombKind,
-{
-	type Item = (A::Item, B::IntoKind<CombBranch<K::Pal, K>>);
-	fn next(&mut self) -> Option<Self::Item> {
-		if let Some(case) = self.a_iter.next() {
-			let kind = if case.is_diff() {
-				CombBranch::A(self.kind.pal())
-			} else {
-				CombBranch::B(self.kind)
-			};
-			let sub_comb = self.b_comb.clone().into_kind(kind);
-			Some((case, sub_comb))
-		} else {
-			None
-		}
-	}
-	fn size_hint(&self) -> (usize, Option<usize>) {
-		self.a_iter.size_hint()
-	}
-}
-
 /// Combinator for `PredParam` array implementation.
 pub struct PredArrayComb<C, const N: usize, K = CombNone>
 where
