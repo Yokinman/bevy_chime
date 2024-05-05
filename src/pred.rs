@@ -935,7 +935,7 @@ impl<'s, T, P: PredParam> IntoIterator for PredNode<'s, T, P> {
 		match self {
 			Self::Blank => PredNodeIter::Blank,
 			Self::Data(node) => PredNodeIter::Data(node.into_iter()),
-			Self::Branches(mut branches) => PredNodeIter::Branches(branches.into_branch_iter()),
+			Self::Branches(mut branches) => unimplemented!(),
 		}
 	}
 }
@@ -944,7 +944,7 @@ impl<'s, T, P: PredParam> IntoIterator for PredNode<'s, T, P> {
 pub enum PredNodeIter<'s, T, P: PredParam> {
 	Blank,
 	Data(NodeIter<PredStateCase<P::Id, T>>),
-	Branches(Box<dyn PredNodeBranchesIterator<'s, T, P> + 's>),
+	Branches(&'s ()),
 }
 
 impl<T, P: PredParam> Iterator for PredNodeIter<'_, T, P> {
@@ -953,14 +953,14 @@ impl<T, P: PredParam> Iterator for PredNodeIter<'_, T, P> {
 		match self {
 			Self::Blank => None,
 			Self::Data(iter) => iter.next(),
-			Self::Branches(iter) => iter.next(),
+			Self::Branches(iter) => unimplemented!(),
 		}
 	}
 	fn size_hint(&self) -> (usize, Option<usize>) {
 		match self {
 			Self::Blank => (0, Some(0)),
 			Self::Data(iter) => iter.size_hint(),
-			Self::Branches(iter) => iter.size_hint(),
+			Self::Branches(iter) => unimplemented!(),
 		}
 	}
 }
@@ -1020,8 +1020,6 @@ pub trait PredNodeBranches<'s, T, P: PredParam> {
 	fn as_writer<'n>(&'n mut self) -> NodeWriter<'n, PredNodeBranch<'s, T, P>>
 	where
 		P: PredParamVec;
-	
-	fn into_branch_iter(&mut self) -> Box<dyn PredNodeBranchesIterator<'s, T, P> + 's>;
 }
 
 impl<'s, T, P> PredNodeBranches<'s, T, P> for Node<PredNodeBranch<'s, T, P>>
@@ -1034,14 +1032,6 @@ where
 		P: PredParamVec
 	{
 		NodeWriter::new(self)
-	}
-	
-	fn into_branch_iter(&mut self) -> Box<dyn PredNodeBranchesIterator<'s, T, P> + 's> {
-		Box::new(PredNodeBranchesIter {
-			node_iter: std::mem::take(self).into_iter(),
-			branch_id: None,
-			branch_iter: PredNodeIter::Blank,
-		})
 	}
 }
 
@@ -1075,17 +1065,6 @@ where
 		(self.branch_iter.size_hint().0, None)
 	}
 }
-
-/// Used to define a trait object for dynamic branching in [`PredNodeIter`], as
-/// not all [`PredParam`] types implement [`PredParamVec`].
-pub trait PredNodeBranchesIterator<'s, T, P: PredParam>:
-	Iterator<Item = PredStateCase<P::Id, T>>
-{}
-
-impl<'s, T, P> PredNodeBranchesIterator<'s, T, P> for PredNodeBranchesIter<'s, T, P>
-where
-	P: PredParamVec
-{}
 
 /// Types that can be used to query for a specific entity.
 pub trait PredFetchData {
