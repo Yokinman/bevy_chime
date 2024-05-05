@@ -1294,7 +1294,7 @@ where
 	K: CombKind,
 {
 	pub fn new(state: PredSubState2<'p, T, P, K>) -> Self {
-		let (mut comb, sub_comb) = P::combs(state.comb, state.index);
+		let (mut comb, sub_comb) = P::combs(state.comb);
 		comb.outer_skip(state.index);
 		let iter = comb.into_iter();
 		state.node.reserve(4 * iter.size_hint().0.max(1));

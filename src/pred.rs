@@ -774,15 +774,13 @@ where
 		)
 	}
 	
-	fn combs<K>((mut comb, sub_comb): Self::CombSplit<'_, K>, index: [usize; 2]) -> (
+	fn combs<K>((mut comb, sub_comb): Self::CombSplit<'_, K>) -> (
 		<<Self::Param as PredParam>::Comb<'_> as PredCombinator>::IntoKind<K>,
 		Self::SubComb<'_, K>,
 	)
 	where
 		K: CombKind
 	{
-		comb.a_index = index[0];
-		comb.b_index = index[1];
 		(comb, sub_comb)
 	}
 	
@@ -834,7 +832,7 @@ pub trait PredBranch {
 		kind: K,
 	) -> Self::CombSplit<'w, K>;
 	
-	fn combs<K>(comb: Self::CombSplit<'_, K>, index: [usize; 2]) -> (
+	fn combs<K>(comb: Self::CombSplit<'_, K>) -> (
 		<<Self::Param as PredParam>::Comb<'_> as PredCombinator>::IntoKind<K>,
 		Self::SubComb<'_, K>,
 	)
@@ -883,14 +881,13 @@ where
 		A::comb(params, input).into_kind(kind)
 	}
 	
-	fn combs<K>(comb: Self::CombSplit<'_, K>, index: [usize; 2]) -> (
+	fn combs<K>(comb: Self::CombSplit<'_, K>) -> (
 		<<Self::Param as PredParam>::Comb<'_> as PredCombinator>::IntoKind<K>,
 		Self::SubComb<'_, K>,
 	)
 	where
 		K: CombKind
 	{
-		debug_assert_eq!(index, [0; 2]);
 		(comb, ())
 	}
 	
@@ -948,14 +945,13 @@ where
 		)
 	}
 	
-	fn combs<K>(comb: Self::CombSplit<'_, K>, index: [usize; 2]) -> (
+	fn combs<K>(comb: Self::CombSplit<'_, K>) -> (
 		<<Self::Param as PredParam>::Comb<'_> as PredCombinator>::IntoKind<K>,
 		Self::SubComb<'_, K>,
 	)
 	where
 		K: CombKind
 	{
-		debug_assert_eq!(index, [0; 2]);
 		comb
 	}
 	
