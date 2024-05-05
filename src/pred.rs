@@ -885,31 +885,6 @@ where
 	// }
 }
 
-/// Iterator of [`PredNode`]'s items.
-pub enum PredNodeIter<'s, T, P: PredParam> {
-	Blank,
-	Data(NodeIter<PredStateCase<P::Id, T>>),
-	Branches(&'s ()),
-}
-
-impl<T, P: PredParam> Iterator for PredNodeIter<'_, T, P> {
-	type Item = PredStateCase<P::Id, T>;
-	fn next(&mut self) -> Option<Self::Item> {
-		match self {
-			Self::Blank => None,
-			Self::Data(iter) => iter.next(),
-			Self::Branches(iter) => unimplemented!(),
-		}
-	}
-	fn size_hint(&self) -> (usize, Option<usize>) {
-		match self {
-			Self::Blank => (0, Some(0)),
-			Self::Data(iter) => iter.size_hint(),
-			Self::Branches(iter) => unimplemented!(),
-		}
-	}
-}
-
 /// ...
 pub struct PredNode2<P: PredBranch, T> {
 	pub(crate) inner: Node<P::Case<T>>,
