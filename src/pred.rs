@@ -525,7 +525,7 @@ where
 		)
 	}
 	
-	fn combs<K>((mut comb, sub_comb): Self::CombSplit<'_, K>) -> (
+	fn combs<K>((comb, sub_comb): Self::CombSplit<'_, K>) -> (
 		<<Self::Param as PredParam>::Comb<'_> as PredCombinator>::IntoKind<K::Pal>,
 		Self::SubComb<'_, K>,
 	)

@@ -4,7 +4,6 @@ use bevy_ecs::component::Component;
 use bevy_ecs::entity::Entity;
 use bevy_ecs::query::{ArchetypeFilter, QueryIter};
 use bevy_ecs::system::{Query, Resource};
-use chime::pred::Prediction;
 use crate::node::{Node, NodeWriter};
 use crate::pred::*;
 
@@ -153,7 +152,7 @@ pub trait PredCombinator<K: CombKind = CombNone>:
 	
 	fn into_kind<Kind: CombKind>(self, kind: Kind) -> Self::IntoKind<Kind>;
 	
-	fn outer_skip(&mut self, n: [usize; 2]) {
+	fn outer_skip(&mut self, _n: [usize; 2]) {
 		// !!! This kinda sucks.
 	}
 }
