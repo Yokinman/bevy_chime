@@ -885,45 +885,6 @@ where
 	// }
 }
 
-/// A one-way node that either stores an arbitrary amount of data or branches
-/// into sub-nodes.
-pub enum PredNode<'s, T: 's, P: PredParam + 's> {
-	Blank,
-	Data(Node<PredStateCase<P::Id, T>>),
-	Branches(&'s ()),
-}
-
-impl<'s, T, P> PredNode<'s, T, P>
-where
-	T: 's,
-	P: PredParam + 's
-{
-	pub fn init_data(&mut self, cap: usize) -> NodeWriter<PredStateCase<P::Id, T>> {
-		if let Self::Blank = self {
-			*self = Self::Data(Node::with_capacity(cap));
-			if let Self::Data(node) = self {
-				NodeWriter::new(node)
-			} else {
-				unreachable!()
-			}
-		} else {
-			panic!("expected a Blank variant");
-		}
-	}
-}
-
-impl<'s, T, P: PredParam> IntoIterator for PredNode<'s, T, P> {
-	type Item = PredStateCase<P::Id, T>;
-	type IntoIter = PredNodeIter<'s, T, P>;
-	fn into_iter(self) -> Self::IntoIter {
-		match self {
-			Self::Blank => PredNodeIter::Blank,
-			Self::Data(node) => PredNodeIter::Data(node.into_iter()),
-			Self::Branches(mut branches) => unimplemented!(),
-		}
-	}
-}
-
 /// Iterator of [`PredNode`]'s items.
 pub enum PredNodeIter<'s, T, P: PredParam> {
 	Blank,
