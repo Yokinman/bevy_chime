@@ -742,7 +742,7 @@ where
 	type Input = NestedPerm<<[A; N] as PredParam>::Input, B::Input>;
 	type SubComb<'w, K: CombKind> = [B::CombSplit<'w, CombBranch<K::Pal, K>>; 2];
 	type CombSplit<'w, K: CombKind> = (
-		<<Self::Param as PredParam>::Comb<'w> as PredCombinator>::IntoKind<K>,
+		<<Self::Param as PredParam>::Comb<'w> as PredCombinator>::IntoKind<K::Pal>,
 		Self::SubComb<'w, K>,
 	);
 	
@@ -766,7 +766,7 @@ where
 		kind: K,
 	) -> Self::CombSplit<'w, K> {
 		(
-			<[A; N]>::comb(a, a_input).into_kind(kind),
+			<[A; N]>::comb(a, a_input).into_kind(kind.pal()),
 			[
 				B::comb_split(b, b_input.clone(), CombBranch::A(kind.pal())),
 				B::comb_split(b, b_input, CombBranch::B(kind)),
@@ -775,7 +775,7 @@ where
 	}
 	
 	fn combs<K>((mut comb, sub_comb): Self::CombSplit<'_, K>) -> (
-		<<Self::Param as PredParam>::Comb<'_> as PredCombinator>::IntoKind<K>,
+		<<Self::Param as PredParam>::Comb<'_> as PredCombinator>::IntoKind<K::Pal>,
 		Self::SubComb<'_, K>,
 	)
 	where
@@ -833,7 +833,7 @@ pub trait PredBranch {
 	) -> Self::CombSplit<'w, K>;
 	
 	fn combs<K>(comb: Self::CombSplit<'_, K>) -> (
-		<<Self::Param as PredParam>::Comb<'_> as PredCombinator>::IntoKind<K>,
+		<<Self::Param as PredParam>::Comb<'_> as PredCombinator>::IntoKind<K::Pal>,
 		Self::SubComb<'_, K>,
 	)
 	where
@@ -857,7 +857,7 @@ where
 	type Id = A::Id;
 	type Input = Single<A::Input>;
 	type SubComb<'w, K: CombKind> = ();
-	type CombSplit<'w, K: CombKind> = <A::Comb<'w> as PredCombinator>::IntoKind<K>;
+	type CombSplit<'w, K: CombKind> = <A::Comb<'w> as PredCombinator>::IntoKind<K::Pal>;
 	
 	type Item<'p, T, K> = &'p mut Self::Case<T>
 	where
@@ -878,11 +878,11 @@ where
 		Single(input): Self::Input,
 		kind: K,
 	) -> Self::CombSplit<'w, K> {
-		A::comb(params, input).into_kind(kind)
+		A::comb(params, input).into_kind(kind.pal())
 	}
 	
 	fn combs<K>(comb: Self::CombSplit<'_, K>) -> (
-		<<Self::Param as PredParam>::Comb<'_> as PredCombinator>::IntoKind<K>,
+		<<Self::Param as PredParam>::Comb<'_> as PredCombinator>::IntoKind<K::Pal>,
 		Self::SubComb<'_, K>,
 	)
 	where
@@ -913,7 +913,7 @@ where
 	type Input = Nested<A::Input, B::Input>;
 	type SubComb<'w, K: CombKind> = [B::CombSplit<'w, CombBranch<K::Pal, K>>; 2];
 	type CombSplit<'w, K: CombKind> = (
-		<<Self::Param as PredParam>::Comb<'w> as PredCombinator>::IntoKind<K>,
+		<<Self::Param as PredParam>::Comb<'w> as PredCombinator>::IntoKind<K::Pal>,
 		Self::SubComb<'w, K>,
 	);
 	
@@ -937,7 +937,7 @@ where
 		kind: K,
 	) -> Self::CombSplit<'w, K> {
 		(
-			A::comb(a, a_input).into_kind(kind),
+			A::comb(a, a_input).into_kind(kind.pal()),
 			[
 				B::comb_split(b, b_input.clone(), CombBranch::A(kind.pal())),
 				B::comb_split(b, b_input, CombBranch::B(kind)),
@@ -946,7 +946,7 @@ where
 	}
 	
 	fn combs<K>(comb: Self::CombSplit<'_, K>) -> (
-		<<Self::Param as PredParam>::Comb<'_> as PredCombinator>::IntoKind<K>,
+		<<Self::Param as PredParam>::Comb<'_> as PredCombinator>::IntoKind<K::Pal>,
 		Self::SubComb<'_, K>,
 	)
 	where

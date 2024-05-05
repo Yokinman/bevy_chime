@@ -1280,7 +1280,7 @@ where
 	K: CombKind,
 {
 	iter: <<<P::Param as PredParam>::Comb<'p>
-		as PredCombinator>::IntoKind<K>
+		as PredCombinator>::IntoKind<K::Pal>
 		as IntoIterator>::IntoIter,
 	sub_comb: P::SubComb<'p, K>,
 	node: NodeWriter<'p, P::Case<T>>,
@@ -1318,14 +1318,17 @@ where
 		PredParamItem<'p, P>,
 	);
 	fn next(&mut self) -> Option<Self::Item> {
-		self.iter.next().map(|case| {
-			let (item, id) = case.into_parts();
-			let case = self.node.write(PredStateCase::new(id));
-			(case, item)
-		})
+		while let Some(case) = self.iter.next() {
+			if self.kind.has_state(case.is_diff()) {
+				let (item, id) = case.into_parts();
+				let case = self.node.write(PredStateCase::new(id));
+				return Some((case, item))
+			}
+		}
+		None
 	}
 	fn size_hint(&self) -> (usize, Option<usize>) {
-		self.iter.size_hint()
+		(0, self.iter.size_hint().1)
 	}
 }
 
