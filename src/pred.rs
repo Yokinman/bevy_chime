@@ -466,32 +466,6 @@ where
 	}
 }
 
-/// Collects predictions from "when" systems for later compilation. More general
-/// form of [`PredState`] for stepping through combinators layer-wise.
-pub struct PredSubState<'p, 's, T, P, K>
-where
-	's: 'p,
-	P: PredParam,
-	K: CombKind,
-{
-	pub(crate) comb: <P::Comb<'p> as PredCombinator>::IntoKind<K>,
-	pub(crate) node: &'p mut PredNode<'s, T, P>,
-}
-
-impl<'p, 's, T, P, K> PredSubState<'p, 's, T, P, K>
-where
-	's: 'p,
-	P: PredParam,
-	K: CombKind,
-{
-	fn new(
-		comb: <P::Comb<'p> as PredCombinator>::IntoKind<K>,
-		node: &'p mut PredNode<'s, T, P>,
-	) -> Self {
-		Self { comb, node }
-	}
-}
-
 /// Collects predictions from "when" systems for later compilation.
 pub struct PredState2<'p, T, P>
 where
