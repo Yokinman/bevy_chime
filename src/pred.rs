@@ -125,42 +125,6 @@ macro_rules! impl_pred_param_vec_for_array {
 // method to [`PredSubState::outer_iter`] might be worthwhile for convenience.
 impl_pred_param_vec_for_array!(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12);
 
-/// Iterator of [`PredSubState::outer_iter`].
-pub struct PredSubStateSplitIter<'p, 's, T, P, K>
-where
-	's: 'p,
-	P: PredParamVec,
-	K: CombKind,
-{
-	iter: <P as PredParamVec>::Split<'p, K>,
-	branches: NodeWriter<'p, PredNodeBranch<'s, T, P>>,
-}
-
-impl<'p, 's, T, P, K> Iterator for PredSubStateSplitIter<'p, 's, T, P, K>
-where
-	's: 'p,
-	P: PredParamVec,
-	K: CombKind,
-{
-	type Item = (
-		PredSubState<'p, 's, T, P::Tail, CombBranch<K::Pal, K>>,
-		PredParamItem<'p, P::Head>,
-	);
-	fn next(&mut self) -> Option<Self::Item> {
-		if let Some((head, tail)) = self.iter.next() {
-			let (head_item, head_id) = head.into_parts();
-			let node = &mut self.branches.write((head_id, PredNode::Blank)).1;
-			let sub_state = PredSubState::new(tail, node);
-			Some((sub_state, head_item))
-		} else {
-			None
-		}
-	}
-	fn size_hint(&self) -> (usize, Option<usize>) {
-		self.iter.size_hint()
-	}
-}
-
 /// Shortcut for accessing `PredParam::Comb::Case::Item`.
 pub type PredParamItem<'w, P> = <<<P
 	as PredParam>::Comb<'w>
@@ -543,23 +507,6 @@ where
 				case.set(pred.clone());
 			}
 			first.set(pred);
-		}
-	}
-}
-
-impl<'p, 's, T, P, K> PredSubState<'p, 's, T, P, K>
-where
-	's: 'p,
-	P: PredParamVec,
-	K: CombKind,
-{
-	pub fn outer_iter(self) -> PredSubStateSplitIter<'p, 's, T, P, K> {
-		let PredSubState { comb, node } = self;
-		let iter = P::split(comb);
-		let capacity = 4 * iter.size_hint().0.max(1);
-		PredSubStateSplitIter {
-			iter,
-			branches: node.init_branches(capacity),
 		}
 	}
 }
