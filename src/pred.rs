@@ -890,7 +890,7 @@ where
 pub enum PredNode<'s, T: 's, P: PredParam + 's> {
 	Blank,
 	Data(Node<PredStateCase<P::Id, T>>),
-	Branches(Box<dyn PredNodeBranches<'s, T, P> + 's>),
+	Branches(&'s ()),
 }
 
 impl<'s, T, P> PredNode<'s, T, P>
@@ -903,22 +903,6 @@ where
 			*self = Self::Data(Node::with_capacity(cap));
 			if let Self::Data(node) = self {
 				NodeWriter::new(node)
-			} else {
-				unreachable!()
-			}
-		} else {
-			panic!("expected a Blank variant");
-		}
-	}
-	
-	fn init_branches(&mut self, cap: usize) -> NodeWriter<PredNodeBranch<'s, T, P>>
-	where
-		P: PredParamVec
-	{
-		if let Self::Blank = self {
-			*self = Self::Branches(Box::new(Node::with_capacity(cap)));
-			if let Self::Branches(branches) = self {
-				branches.as_writer()
 			} else {
 				unreachable!()
 			}
@@ -1001,38 +985,6 @@ impl<P: PredBranch, T> Iterator for PredNodeIter2<P, T> {
 	// fn size_hint(&self) -> (usize, Option<usize>) {
 	// 	todo!()
 	// }
-}
-
-/// Individual branch of a [`PredNodeBranches`] type.
-type PredNodeBranch<'s, T, P> = (
-	<<P as PredParamVec>::Head as PredParam>::Id,
-	PredNode<'s, T, <P as PredParamVec>::Tail>,
-);
-
-/// Used to define a trait object for dynamic branching in [`PredNode`], as not
-/// all [`PredParam`] types implement [`PredParamVec`].
-/// 
-/// ??? To avoid dynamic dispatch: could move all `PredParamVec` items into
-/// `PredParam` and implement empty defaults for scalar types. However, this
-/// would only support a subset of arrays instead of all sizes, which feels
-/// like an unnecessary constraint. Specialization would probably help here.
-pub trait PredNodeBranches<'s, T, P: PredParam> {
-	fn as_writer<'n>(&'n mut self) -> NodeWriter<'n, PredNodeBranch<'s, T, P>>
-	where
-		P: PredParamVec;
-}
-
-impl<'s, T, P> PredNodeBranches<'s, T, P> for Node<PredNodeBranch<'s, T, P>>
-where
-	T: 's,
-	P: PredParamVec + 's,
-{
-	fn as_writer<'n>(&'n mut self) -> NodeWriter<'n, PredNodeBranch<'s, T, P>>
-	where
-		P: PredParamVec
-	{
-		NodeWriter::new(self)
-	}
 }
 
 /// Types that can be used to query for a specific entity.
