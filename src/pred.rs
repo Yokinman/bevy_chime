@@ -492,39 +492,6 @@ where
 	}
 }
 
-impl<'p, 's, T, P, K> PredSubState<'p, 's, T, P, K>
-where
-	's: 'p,
-	T: Prediction + Clone,
-	P: PredParam,
-	K: CombKind,
-{
-	/// Sets all updated cases to the given times.
-	pub fn set(self, pred: T) {
-		let mut iter = self.into_iter();
-		if let Some((first, ..)) = iter.next() {
-			for (case, ..) in iter {
-				case.set(pred.clone());
-			}
-			first.set(pred);
-		}
-	}
-}
-
-impl<'p, 's, T, P, K> IntoIterator for PredSubState<'p, 's, T, P, K>
-where
-	's: 'p,
-	P: PredParam,
-	K: CombKind,
-	PredComb<'p, T, P, K>: Iterator,
-{
-	type Item = <Self::IntoIter as IntoIterator>::Item;
-	type IntoIter = PredComb<'p, T, P, K>;
-	fn into_iter(self) -> Self::IntoIter {
-		PredComb::new(self)
-	}
-}
-
 /// Collects predictions from "when" systems for later compilation.
 pub struct PredState2<'p, T, P>
 where

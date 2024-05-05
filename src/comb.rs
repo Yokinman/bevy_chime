@@ -1226,53 +1226,6 @@ where
 	}
 }
 
-/// Produces all case combinations in need of a new prediction, alongside a
-/// [`PredStateCase`] for scheduling.
-pub struct PredComb<'p, T, P, K>
-where
-	P: PredParam,
-	K: CombKind,
-{
-	iter: <<P::Comb<'p> as PredCombinator>::IntoKind<K> as IntoIterator>::IntoIter,
-	node: NodeWriter<'p, PredStateCase<P::Id, T>>,
-}
-
-impl<'p, T, P, K> PredComb<'p, T, P, K>
-where
-	P: PredParam,
-	K: CombKind,
-{
-	pub fn new<'s: 'p>(state: PredSubState<'p, 's, T, P, K>) -> Self {
-		let iter = state.comb.into_iter();
-		let node = state.node.init_data(4 * iter.size_hint().0.max(1));
-		Self { iter, node }
-	}
-}
-
-impl<'p, T, P, K> Iterator for PredComb<'p, T, P, K>
-where
-	T: Prediction,
-	P: PredParam,
-	K: CombKind,
-{
-	type Item = (
-		&'p mut PredStateCase<P::Id, T>,
-		PredParamItem<'p, P>,
-	);
-	fn next(&mut self) -> Option<Self::Item> {
-		self.iter.next().map(|case| {
-			let (item, id) = case.into_parts();
-			(
-				self.node.write(PredStateCase::new(id)),
-				item,
-			)
-		})
-	}
-	fn size_hint(&self) -> (usize, Option<usize>) {
-		self.iter.size_hint()
-	}
-}
-
 /// ...
 pub struct PredComb2<'p, T, P, K>
 where
