@@ -1143,6 +1143,56 @@ where
 }
 
 /// ...
+pub struct SinglePredComb2<'p, T, P, K>
+where
+	P: PredParam,
+	K: CombKind,
+{
+	iter: <<P::Comb<'p>
+		as PredCombinator>::IntoKind<K>
+		as IntoIterator>::IntoIter,
+	node: NodeWriter<'p, PredStateCase<P::Id, T>>,
+}
+
+impl<'p, T, P, K> SinglePredComb2<'p, T, P, K>
+where
+	P: PredParam,
+	K: CombKind,
+{
+	pub fn new(state: PredSubState2<'p, T, Single<P>, K>) -> Self {
+		let mut comb = state.comb;
+		comb.outer_skip(state.index);
+		let iter = comb.into_iter();
+		state.node.reserve(4 * iter.size_hint().0.max(1));
+		Self {
+			iter,
+			node: NodeWriter::new(state.node),
+		}
+	}
+}
+
+impl<'p, T, P, K> Iterator for SinglePredComb2<'p, T, P, K>
+where
+	P: PredParam,
+	K: CombKind,
+{
+	type Item = (
+		&'p mut PredStateCase<P::Id, T>,
+		PredParamItem<'p, P>,
+	);
+	fn next(&mut self) -> Option<Self::Item> {
+		self.iter.next().map(|case| {
+			let (item, id) = case.into_parts();
+			let case = self.node.write(PredStateCase::new(id));
+			(case, item)
+		})
+	}
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		self.iter.size_hint()
+	}
+}
+
+/// ...
 pub struct PredComb2<'p, T, P, K>
 where
 	P: PredBranch,

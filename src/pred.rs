@@ -623,7 +623,7 @@ where
 	type Id = A::Id;
 	type Input = Single<A::Input>;
 	type SubComb<'w, K: CombKind> = ();
-	type CombSplit<'w, K: CombKind> = <A::Comb<'w> as PredCombinator>::IntoKind<K::Pal>;
+	type CombSplit<'w, K: CombKind> = <A::Comb<'w> as PredCombinator>::IntoKind<K>;
 	
 	type Item<'p, T, K> = &'p mut Self::Case<T>
 	where
@@ -631,7 +631,7 @@ where
 		K: CombKind,
 		Self::Branch: 'p;
 	
-	type Comb<'p, T, K> = PredComb2<'p, T, Self, K>
+	type Comb<'p, T, K> = SinglePredComb2<'p, T, Self::Param, K>
 	where
 		T: Prediction + 'p,
 		K: CombKind,
@@ -644,7 +644,7 @@ where
 		Single(input): Self::Input,
 		kind: K,
 	) -> Self::CombSplit<'w, K> {
-		A::comb(params, input).into_kind(kind.pal())
+		A::comb(params, input).into_kind(kind)
 	}
 	
 	fn combs<K>(comb: Self::CombSplit<'_, K>) -> (
@@ -654,7 +654,7 @@ where
 	where
 		K: CombKind
 	{
-		(comb, ())
+		unimplemented!()
 	}
 	
 	fn case_iter<T>(case: Self::Case<T>) -> Self::CaseIter<T> {
@@ -667,7 +667,7 @@ where
 		K: CombKind,
 		Self::Branch: 'p,
 	{
-		PredComb2::new(state)
+		SinglePredComb2::new(state)
 	}
 }
 
