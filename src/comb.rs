@@ -485,6 +485,7 @@ pub enum QueryCombIter<'w, T, F, K>
 where
 	T: Component,
 	F: ArchetypeFilter,
+	K: CombKind,
 {
 	Normal { 
 		iter: CombIter<QueryIter<'w, 'w, (Ref<'static, T>, Entity), F>, K>,
@@ -542,14 +543,19 @@ where
 }
 
 /// `Iterator` of `ResComb`'s `IntoIterator` implementation.
-pub struct CombIter<T, K> {
+pub struct CombIter<T, K: CombKind> {
 	iter: T,
-	kind: K,
+	true_kind: K::True,
+	false_kind: K::False,
 }
 
-impl<T, K> CombIter<T, K> {
+impl<T, K: CombKind> CombIter<T, K> {
 	pub fn new(iter: T, kind: K) -> Self {
-		Self { iter, kind }
+		Self {
+			iter,
+			true_kind: kind.true_(),
+			false_kind: kind.false_(),
+		}
 	}
 }
 
@@ -562,23 +568,26 @@ where
 {
 	type Item = PredCombCase<P::Item, I>;
 	fn next(&mut self) -> Option<Self::Item> {
-		if self.kind.has_none() {
-			return None
-		}
-		for (item, id) in self.iter.by_ref() {
-			let is_updated = P::is_updated(&item);
-			if self.kind.has_state(is_updated) {
-				return Some(if is_updated {
-					PredCombCase::Diff(item.into_item(), id)
-				} else {
-					PredCombCase::Same(item.into_item(), id)
-				})
+		let has_true = self.true_kind.has_state(true);
+		let has_false = self.false_kind.has_state(false);
+		if has_true || has_false {
+			for (item, id) in self.iter.by_ref() {
+				if P::is_updated(&item) {
+					if has_true {
+						return Some(PredCombCase::Diff(item.into_item(), id))
+					}
+				} else if has_false {
+					return Some(PredCombCase::Same(item.into_item(), id))
+				}
 			}
 		}
 		None
 	}
 	fn size_hint(&self) -> (usize, Option<usize>) {
-		match self.kind.states() {
+		match [
+			self.true_kind.has_state(true),
+			self.false_kind.has_state(false),
+		] {
 			[false, false] => (0, Some(0)),
 			[true, true] => self.iter.size_hint(),
 			_ => (0, self.iter.size_hint().1)
