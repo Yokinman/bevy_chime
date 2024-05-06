@@ -333,7 +333,7 @@ impl PredStateMisc for () {
 /// ...
 pub struct PredSubState2<'p, T, P, K>
 where
-	P: PredBranch,
+	P: PredBranch + ?Sized,
 	K: CombKind,
 {
 	pub(crate) comb: P::CombSplit<'p, K>,
@@ -364,7 +364,7 @@ where
 impl<'p, T, P, K> IntoIterator for PredSubState2<'p, T, P, K>
 where
 	T: Prediction + 'p,
-	P: PredBranch<Comb<'p, T, K> = PredComb2<'p, T, P, K>>,
+	P: PredBranch,
 	P::Branch: 'p,
 	K: CombKind,
 	P::Comb<'p, T, K>: Iterator,
@@ -372,7 +372,7 @@ where
 	type Item = <Self::IntoIter as IntoIterator>::Item;
 	type IntoIter = P::Comb<'p, T, K>;
 	fn into_iter(self) -> Self::IntoIter {
-		PredComb2::new(self)
+		P::new_comb(self)
 	}
 }
 
@@ -540,6 +540,15 @@ where
 		let sub_iter = iter.next().map(B::case_iter);
 		NestedPredBranchIter { id, iter, sub_iter }
 	}
+	
+	fn new_comb<'p, T, K>(state: PredSubState2<'p, T, Self, K>) -> Self::Comb<'p, T, K>
+	where
+		T: Prediction + 'p,
+		K: CombKind,
+		Self::Branch: 'p,
+	{
+		PredComb2::new(state)
+	}
 }
 
 impl<A, const N: usize, B> PredPermBranch for NestedPerm<[A; N], B>
@@ -591,6 +600,12 @@ pub trait PredBranch {
 		K: CombKind;
 	
 	fn case_iter<T>(case: Self::Case<T>) -> Self::CaseIter<T>;
+	
+	fn new_comb<'p, T, K>(state: PredSubState2<'p, T, Self, K>) -> Self::Comb<'p, T, K>
+	where
+		T: Prediction + 'p,
+		K: CombKind,
+		Self::Branch: 'p;
 }
 
 /// ...
@@ -644,6 +659,15 @@ where
 	
 	fn case_iter<T>(case: Self::Case<T>) -> Self::CaseIter<T> {
 		std::iter::once(case)
+	}
+	
+	fn new_comb<'p, T, K>(state: PredSubState2<'p, T, Self, K>) -> Self::Comb<'p, T, K>
+	where
+		T: Prediction + 'p,
+		K: CombKind,
+		Self::Branch: 'p,
+	{
+		PredComb2::new(state)
 	}
 }
 
@@ -710,6 +734,15 @@ where
 		let mut iter = node.into_iter();
 		let sub_iter = iter.next().map(B::case_iter);
 		NestedPredBranchIter { id, iter, sub_iter }
+	}
+	
+	fn new_comb<'p, T, K>(state: PredSubState2<'p, T, Self, K>) -> Self::Comb<'p, T, K>
+	where
+		T: Prediction + 'p,
+		K: CombKind,
+		Self::Branch: 'p,
+	{
+		PredComb2::new(state)
 	}
 }
 
