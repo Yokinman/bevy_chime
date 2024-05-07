@@ -441,6 +441,8 @@ where
 
 /// ...
 pub trait PredPermBranch: PredBranch + std::ops::Index<usize> {
+	fn depth() -> usize;
+	
 	fn sort_unstable(&mut self)
 	where
 		Self: Ord
@@ -452,7 +454,11 @@ pub trait PredPermBranch: PredBranch + std::ops::Index<usize> {
 impl<T, const N: usize> PredPermBranch for Single<[T; N]>
 where
 	[T; N]: PredParam,
-{}
+{
+	fn depth() -> usize {
+		N
+	}
+}
 
 impl<T, const N: usize> std::ops::Index<usize> for Single<[T; N]> {
 	type Output = T;
@@ -545,7 +551,11 @@ where
 	A: PredParam,
 	A::Id: Ord,
 	B: PredPermBranch<Output = A>,
-{}
+{
+	fn depth() -> usize {
+		N + B::depth()
+	}
+}
 
 /// ...
 pub trait PredBranch {
