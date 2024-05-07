@@ -1324,3 +1324,82 @@ where
 		self.iter.size_hint()
 	}
 }
+
+/// ...
+pub struct NestedPermPredComb2<'p, T, A, B, K>
+where
+	A: PredParam,
+	B: PredPermBranch,
+	K: CombKind,
+{
+	iter: <<A::Comb<'p>
+		as PredCombinator>::IntoKind<K::Pal>
+		as IntoIterator>::IntoIter,
+	sub_comb: [B::CombSplit<'p, CombBranch<K::Pal, K>>; 2],
+	node: NodeWriter<'p, (<A as PredParam>::Id, Node<B::Case<T>>)>,
+	kind: K,
+	index: [usize; 2],
+}
+
+impl<'p, T, A, const N: usize, B, K> NestedPermPredComb2<'p, T, [A; N], B, K>
+where
+	A: PredParam,
+	A::Id: Ord,
+	B: PredPermBranch<Output = A>,
+	K: CombKind,
+{
+	pub fn new(state: PredSubState2<'p, T, NestedPerm<[A; N], B>, K>) -> Self {
+		let (mut comb, sub_comb) = state.comb;
+		comb.outer_skip(state.index);
+		let iter = comb.into_iter();
+		state.node.reserve(4 * iter.size_hint().0.max(1));
+		Self {
+			iter,
+			sub_comb,
+			node: NodeWriter::new(state.node),
+			kind: state.kind,
+			index: state.index,
+		}
+	}
+}
+
+impl<'p, T, A, B, K> Iterator for NestedPermPredComb2<'p, T, A, B, K>
+where
+	A: PredParam,
+	B: PredPermBranch,
+	K: CombKind,
+{
+	type Item = (
+		PredSubState2<'p, T, B, CombBranch<K::Pal, K>>,
+		PredParamItem<'p, A>,
+	);
+	fn next(&mut self) -> Option<Self::Item> {
+		self.iter.next().map(|case| {
+			self.index[0] += 1;
+			let kind;
+			let ind = if self.kind.has_state(case.is_diff()) {
+				self.index[1] += 1;
+				kind = CombBranch::A(self.kind.pal());
+				0
+			} else {
+				kind = CombBranch::B(self.kind);
+				1
+			};
+			let (item, id) = case.into_parts();
+			let (_, node) = self.node.write((id, Node::default()));
+			let mut sub_state = PredSubState2::new(self.sub_comb[ind].clone(), node, kind);
+			sub_state.index = [
+				self.index[0],
+				if ind == 0 {
+					self.index[1]
+				} else {
+					self.index[0]
+				},
+			];
+			(sub_state, item)
+		})
+	}
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		self.iter.size_hint()
+	}
+}
