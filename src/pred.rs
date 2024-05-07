@@ -525,16 +525,6 @@ where
 		)
 	}
 	
-	fn combs<K>((comb, sub_comb): Self::CombSplit<'_, K>) -> (
-		<<Self::Param as PredParam>::Comb<'_> as PredCombinator>::IntoKind<K::Pal>,
-		Self::SubComb<'_, K>,
-	)
-	where
-		K: CombKind
-	{
-		(comb, sub_comb)
-	}
-	
 	fn case_iter<T>((id, node): Self::Case<T>) -> Self::CaseIter<T> {
 		let mut iter = node.into_iter();
 		let sub_iter = iter.next().map(B::case_iter);
@@ -592,13 +582,6 @@ pub trait PredBranch {
 		kind: K,
 	) -> Self::CombSplit<'w, K>;
 	
-	fn combs<K>(comb: Self::CombSplit<'_, K>) -> (
-		<<Self::Param as PredParam>::Comb<'_> as PredCombinator>::IntoKind<K::Pal>,
-		Self::SubComb<'_, K>,
-	)
-	where
-		K: CombKind;
-	
 	fn case_iter<T>(case: Self::Case<T>) -> Self::CaseIter<T>;
 	
 	fn new_comb<'p, T, K>(state: PredSubState2<'p, T, Self, K>) -> Self::Comb<'p, T, K>
@@ -645,16 +628,6 @@ where
 		kind: K,
 	) -> Self::CombSplit<'w, K> {
 		A::comb(params, input).into_kind(kind)
-	}
-	
-	fn combs<K>(comb: Self::CombSplit<'_, K>) -> (
-		<<Self::Param as PredParam>::Comb<'_> as PredCombinator>::IntoKind<K::Pal>,
-		Self::SubComb<'_, K>,
-	)
-	where
-		K: CombKind
-	{
-		unimplemented!()
 	}
 	
 	fn case_iter<T>(case: Self::Case<T>) -> Self::CaseIter<T> {
@@ -718,16 +691,6 @@ where
 				B::comb_split(b, b_input, CombBranch::B(kind)),
 			]
 		)
-	}
-	
-	fn combs<K>(comb: Self::CombSplit<'_, K>) -> (
-		<<Self::Param as PredParam>::Comb<'_> as PredCombinator>::IntoKind<K::Pal>,
-		Self::SubComb<'_, K>,
-	)
-	where
-		K: CombKind
-	{
-		comb
 	}
 	
 	fn case_iter<T>((id, node): Self::Case<T>) -> Self::CaseIter<T> {
