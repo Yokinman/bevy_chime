@@ -698,7 +698,7 @@ where
 		K: CombKind,
 		Self::Branch: 'p;
 	
-	type Comb<'p, T, K> = PredComb2<'p, T, Self, K>
+	type Comb<'p, T, K> = NestedPredComb2<'p, T, A, B, K>
 	where
 		T: Prediction + 'p,
 		K: CombKind,
@@ -742,7 +742,7 @@ where
 		K: CombKind,
 		Self::Branch: 'p,
 	{
-		PredComb2::new(state)
+		NestedPredComb2::new(state)
 	}
 }
 
