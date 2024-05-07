@@ -491,10 +491,9 @@ where
 	type AllParams = ([A; N], B::AllParams);
 	type Id = NestedPerm<<[A; N] as PredParam>::Id, B::Id>;
 	type Input = NestedPerm<<[A; N] as PredParam>::Input, B::Input>;
-	type SubComb<'w, K: CombKind> = [B::CombSplit<'w, CombBranch<K::Pal, K>>; 2];
 	type CombSplit<'w, K: CombKind> = (
 		<<Self::Param as PredParam>::Comb<'w> as PredCombinator>::IntoKind<K::Pal>,
-		Self::SubComb<'w, K>,
+		[B::CombSplit<'w, CombBranch<K::Pal, K>>; 2],
 	);
 	
 	type Item<'p, T, K> = PredSubState2<'p, T, B, CombBranch<K::Pal, K>>
@@ -556,7 +555,6 @@ pub trait PredBranch {
 	type AllParams: PredParam;
 	type Id: PredId;
 	type Input: Clone;
-	type SubComb<'w, K: CombKind>;
 	type CombSplit<'w, K: CombKind>: Clone;
 	
 	type Item<'p, T, K>
@@ -605,7 +603,6 @@ where
 	type AllParams = A;
 	type Id = A::Id;
 	type Input = Single<A::Input>;
-	type SubComb<'w, K: CombKind> = ();
 	type CombSplit<'w, K: CombKind> = <A::Comb<'w> as PredCombinator>::IntoKind<K>;
 	
 	type Item<'p, T, K> = &'p mut Self::Case<T>
@@ -659,10 +656,9 @@ where
 	type AllParams = (A, B::AllParams);
 	type Id = Nested<A::Id, B::Id>;
 	type Input = Nested<A::Input, B::Input>;
-	type SubComb<'w, K: CombKind> = [B::CombSplit<'w, CombBranch<K::Pal, K>>; 2];
 	type CombSplit<'w, K: CombKind> = (
 		<<Self::Param as PredParam>::Comb<'w> as PredCombinator>::IntoKind<K::Pal>,
-		Self::SubComb<'w, K>,
+		[B::CombSplit<'w, CombBranch<K::Pal, K>>; 2],
 	);
 	
 	type Item<'p, T, K> = PredSubState2<'p, T, B, CombBranch<K::Pal, K>>
