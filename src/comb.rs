@@ -191,11 +191,6 @@ pub trait PredCombinator<K: CombKind = CombNone>:
 	
 	type Param: PredParam<Id=Self::Id>;
 	
-	type IntoKind<Kind: CombKind>:
-		PredCombinator<Kind, Case=Self::Case, Id=Self::Id>;
-	
-	fn into_kind<Kind: CombKind>(self, kind: Kind) -> Self::IntoKind<Kind>;
-	
 	fn outer_skip(&mut self, _n: [usize; 2]) {
 		// !!! This kinda sucks.
 	}
@@ -207,12 +202,6 @@ impl<K: CombKind> PredCombinator<K> for EmptyComb<K> {
 	type Case = PredCombCase<(), ()>;
 	
 	type Param = ();
-	
-	type IntoKind<Kind: CombKind> = EmptyComb<Kind>;
-	
-	fn into_kind<Kind: CombKind>(self, kind: Kind) -> Self::IntoKind<Kind> {
-		EmptyComb::new(kind)
-	}
 }
 
 impl<'w, R, K> PredCombinator<K> for ResComb<'w, R, K>
@@ -225,12 +214,6 @@ where
 	type Case = PredCombCase<Res<'w, R>, ()>;
 	
 	type Param = Res<'w, R>;
-	
-	type IntoKind<Kind: CombKind> = ResComb<'w, R, Kind>;
-	
-	fn into_kind<Kind: CombKind>(self, kind: Kind) -> Self::IntoKind<Kind> {
-		ResComb::new(Res::clone(&self.inner), kind)
-	}
 }
 
 impl<'w, T, F, K> PredCombinator<K> for QueryComb<'w, T, F, K>
@@ -244,26 +227,6 @@ where
 	type Case = PredCombCase<&'w T, Entity>;
 	
 	type Param = Query<'w, 'w, &'w T, F>;
-	
-	type IntoKind<Kind: CombKind> = QueryComb<'w, T, F, Kind>;
-	
-	fn into_kind<Kind: CombKind>(self, new_kind: Kind) -> Self::IntoKind<Kind> {
-		match self {
-			QueryComb::Normal { inner, .. } => {
-				QueryComb::new(inner, new_kind)
-			},
-			QueryComb::Cached { slice, kind } => {
-				if kind.states() == new_kind.states() {
-					QueryComb::Cached {
-						slice,
-						kind: new_kind,
-					}
-				} else {
-					unimplemented!("I don't think this happens, prove me wrong")
-				}
-			},
-		}
-	}
 }
 
 impl<'w, A, B, K> PredCombinator<K> for PredPairComb<'w, A, B, K>
@@ -277,12 +240,6 @@ where
 	type Case = (A::Case<'w>, B::Case<'w>);
 	
 	type Param = (A, B);
-	
-	type IntoKind<Kind: CombKind> = PredPairComb<'w, A, B, Kind>;
-	
-	fn into_kind<Kind: CombKind>(self, kind: Kind) -> Self::IntoKind<Kind> {
-		unimplemented!()
-	}
 }
 
 impl<'w, C, const N: usize, K> PredCombinator<K> for PredArrayComb<'w, C, N, K>
@@ -296,12 +253,6 @@ where
 	type Case = [C::Case<'w>; N];
 	
 	type Param = [C; N];
-	
-	type IntoKind<Kind: CombKind> = PredArrayComb<'w, C, N, Kind>;
-	
-	fn into_kind<Kind: CombKind>(self, kind: Kind) -> Self::IntoKind<Kind> {
-		unimplemented!()
-	}
 	
 	fn outer_skip(&mut self, index: [usize; 2]) {
 		self.a_index += index[0];
@@ -320,12 +271,6 @@ where
 	type Case = PredCombCase<WithId<I::Item>, I::Item>;
 	
 	type Param = WithId<I>;
-	
-	type IntoKind<Kind: CombKind> = PredIdComb<I>;
-	
-	fn into_kind<Kind: CombKind>(self, _kind: Kind) -> Self::IntoKind<Kind> {
-		self
-	}
 }
 
 /// Combinator for `PredParam` `()` implementation.
