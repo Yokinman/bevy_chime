@@ -635,10 +635,10 @@ where
 	B: PredParam,
 	K: CombKind,
 {
-	a_comb: A::Comb<'w, K>,
-	b_comb: B::Comb<'w, K::Pal>,
-	a_inv_comb: A::Comb<'w, K::Inv>,
-	b_inv_comb: B::Comb<'w, <<K::Inv as CombKind>::Pal as CombKind>::Inv>,
+	a_comb: A::Comb<'w, CombAnyTrue>,
+	a_inv_comb: A::Comb<'w, CombAllFalse>,
+	b_comb: B::Comb<'w, K::True>,
+	b_inv_comb: B::Comb<'w, K::False>,
 	kind: K,
 }
 
@@ -666,10 +666,10 @@ where
 	K: CombKind,
 {
 	pub(crate) fn new(
-		a_comb: A::Comb<'w, K>,
-		b_comb: B::Comb<'w, K::Pal>,
-		a_inv_comb: A::Comb<'w, K::Inv>,
-		b_inv_comb: B::Comb<'w, <<K::Inv as CombKind>::Pal as CombKind>::Inv>,
+		a_comb: A::Comb<'w, CombAnyTrue>,
+		a_inv_comb: A::Comb<'w, CombAllFalse>,
+		b_comb: B::Comb<'w, K::True>,
+		b_inv_comb: B::Comb<'w, K::False>,
 		kind: K,
 	) -> Self {
 		Self {
@@ -709,18 +709,18 @@ where
 {
 	Empty,
 	Primary {
-		a_iter: <A::Comb<'w, K> as IntoIterator>::IntoIter,
+		a_iter: <A::Comb<'w, CombAnyTrue> as IntoIterator>::IntoIter,
 		a_case: A::Case<'w>,
-		b_comb: B::Comb<'w, K::Pal>,
-		b_iter: <B::Comb<'w, K::Pal> as IntoIterator>::IntoIter,
-		a_inv_comb: A::Comb<'w, K::Inv>,
-		b_inv_comb: B::Comb<'w, <<K::Inv as CombKind>::Pal as CombKind>::Inv>,
+		b_comb: B::Comb<'w, K::True>,
+		b_iter: <B::Comb<'w, K::True> as IntoIterator>::IntoIter,
+		a_inv_comb: A::Comb<'w, CombAllFalse>,
+		b_inv_comb: B::Comb<'w, K::False>,
 	},
 	Secondary {
-		b_iter: <B::Comb<'w, <<K::Inv as CombKind>::Pal as CombKind>::Inv> as IntoIterator>::IntoIter,
-		b_case: <B::Comb<'w, <<K::Inv as CombKind>::Pal as CombKind>::Inv> as IntoIterator>::Item,
-		a_comb: A::Comb<'w, K::Inv>,
-		a_iter: <A::Comb<'w, K::Inv> as IntoIterator>::IntoIter,
+		a_iter: <A::Comb<'w, CombAllFalse> as IntoIterator>::IntoIter,
+		a_case: A::Case<'w>,
+		b_comb: B::Comb<'w, K::False>,
+		b_iter: <B::Comb<'w, K::False> as IntoIterator>::IntoIter,
 	},
 }
 
@@ -731,10 +731,10 @@ where
 	K: CombKind,
 {
 	fn primary_next(
-		mut a_iter: <A::Comb<'w, K> as IntoIterator>::IntoIter,
-		b_comb: B::Comb<'w, K::Pal>,
-		a_inv_comb: A::Comb<'w, K::Inv>,
-		b_inv_comb: B::Comb<'w, <<K::Inv as CombKind>::Pal as CombKind>::Inv>,
+		mut a_iter: <A::Comb<'w, CombAnyTrue> as IntoIterator>::IntoIter,
+		b_comb: B::Comb<'w, K::True>,
+		a_inv_comb: A::Comb<'w, CombAllFalse>,
+		b_inv_comb: B::Comb<'w, K::False>,
 	) -> Self {
 		if let Some(a_case) = a_iter.next() {
 			let b_iter = b_comb.clone().into_iter();
@@ -744,17 +744,17 @@ where
 				}
 			}
 		}
-		Self::secondary_next(b_inv_comb.into_iter(), a_inv_comb)
+		Self::secondary_next(a_inv_comb.into_iter(), b_inv_comb)
 	}
 	
 	fn secondary_next(
-		mut b_iter: <B::Comb<'w, <<K::Inv as CombKind>::Pal as CombKind>::Inv> as IntoIterator>::IntoIter,
-		a_comb: A::Comb<'w, K::Inv>,
+		mut a_iter: <A::Comb<'w, CombAllFalse> as IntoIterator>::IntoIter,
+		b_comb: B::Comb<'w, K::False>,
 	) -> Self {
-		if let Some(b_case) = b_iter.next() {
-			let a_iter = a_comb.clone().into_iter();
-			if a_iter.size_hint().1 != Some(0) {
-				return Self::Secondary { b_iter, b_case, a_comb, a_iter }
+		if let Some(a_case) = a_iter.next() {
+			let b_iter = b_comb.clone().into_iter();
+			if b_iter.size_hint().1 != Some(0) {
+				return Self::Secondary { a_iter, a_case, b_comb, b_iter }
 			}
 		}
 		Self::Empty
@@ -787,13 +787,13 @@ where
 				self.next()
 			}
 			
-			Self::Secondary { b_iter, b_case, a_comb, mut a_iter } => {
-				if let Some(a_case) = a_iter.next() {
-					let case = Some((a_case, b_case.clone()));
-					*self = Self::Secondary { b_iter, b_case, a_comb, a_iter };
+			Self::Secondary { a_iter, a_case, b_comb, mut b_iter } => {
+				if let Some(b_case) = b_iter.next() {
+					let case = Some((a_case.clone(), b_case));
+					*self = Self::Secondary { a_iter, a_case, b_comb, b_iter };
 					return case
 				}
-				*self = Self::secondary_next(b_iter, a_comb);
+				*self = Self::secondary_next(a_iter, b_comb);
 				self.next()
 			},
 		}
@@ -813,11 +813,11 @@ where
 				});
 				(min, max)
 			},
-			Self::Secondary { b_iter, a_comb, a_iter, .. } => {
-				let min = a_iter.size_hint().0;
-				let max = b_iter.size_hint().1.and_then(|b_max| {
-					let a_max = a_comb.clone().into_iter().size_hint().1?;
-					min.checked_add(a_max.checked_mul(b_max)?)
+			Self::Secondary { a_iter, b_comb, b_iter, .. } => {
+				let min = b_iter.size_hint().0;
+				let max = a_iter.size_hint().1.and_then(|a_max| {
+					let b_max = b_comb.clone().into_iter().size_hint().1?;
+					min.checked_add(b_max.checked_mul(a_max)?)
 				});
 				(min, max)
 			},

@@ -148,10 +148,10 @@ where
 		(a_in, b_in): Self::Input,
 	) -> Self::Comb<'w, K> {
 		PredPairComb::new(
-			A::comb(a, kind, a_in.clone()),
-			B::comb(b, kind.pal(), b_in.clone()),
-			A::comb(a, kind.inv(), a_in),
-			B::comb(b, kind.inv().pal().inv(), b_in),
+			A::comb(a, CombAnyTrue, a_in.clone()),
+			A::comb(a, CombAllFalse, a_in),
+			B::comb(b, kind.true_(), b_in.clone()),
+			B::comb(b, kind.false_(), b_in),
 			kind,
 		)
 	}
