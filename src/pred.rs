@@ -36,10 +36,7 @@ where
 {}
 
 /// Shortcut for accessing `PredParam::Comb::Case::Item`.
-pub type PredParamItem<'w, P> = <<<P
-	as PredParam>::Comb<'w, CombNone>
-	as PredCombinator>::Case
-	as PredCombinatorCase>::Item;
+pub type PredParamItem<'w, P> = <P as PredParam>::Item<'w>;
 
 /// A set of [`PredItem`] values used to predict & schedule events.
 pub trait PredParam {
