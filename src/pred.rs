@@ -52,7 +52,7 @@ pub trait PredParam {
 	type Input: Clone;
 	
 	/// Creates combinator iterators over [`Self::Param`]'s items.
-	type Comb<'w, K: CombKind>: PredCombinator<K, Case=Self::Case<'w>, Inner=Self::Item<'w>, Id=Self::Id>;
+	type Comb<'w, K: CombKind>: PredCombinator<K, Case=Self::Case<'w>, Id=Self::Id>;
 	
 	/// Produces [`Self::Comb`].
 	fn comb<'w, K: CombKind>(
