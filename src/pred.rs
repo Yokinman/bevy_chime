@@ -146,13 +146,19 @@ where
 	type Item<'w> = (A::Item<'w>, B::Item<'w>);
 	type Case<'w> = (A::Case<'w>, B::Case<'w>);
 	type Input = (A::Input, B::Input);
-	type Comb<'w, K: CombKind> = PredPairComb<A::Comb<'w, CombNone>, B::Comb<'w, CombNone>, K>;
+	type Comb<'w, K: CombKind> = PredPairComb<'w, A, B, K>;
 	fn comb<'w, K: CombKind>(
 		(a, b): &'w SystemParamItem<Self::Param>,
 		kind: K,
 		(a_in, b_in): Self::Input,
 	) -> Self::Comb<'w, K> {
-		PredPairComb::new(A::comb(a, CombNone, a_in), B::comb(b, CombNone, b_in), kind)
+		PredPairComb::new(
+			A::comb(a, kind, a_in.clone()),
+			B::comb(b, kind.pal(), b_in.clone()),
+			A::comb(a, kind.inv(), a_in),
+			B::comb(b, kind.inv().pal().inv(), b_in),
+			kind,
+		)
 	}
 }
 
