@@ -175,7 +175,6 @@ where
 		PredArrayComb::new(
 			P::comb(param, CombBranch::A(kind.pal()), input[0].clone()),
 			P::comb(param, CombBranch::B(kind), input[0].clone()),
-			P::comb(param, CombNone, input[0].clone()),
 			kind,
 		) // !!! Fix input
 	}

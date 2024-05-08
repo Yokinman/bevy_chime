@@ -835,7 +835,6 @@ where
 	b_comb: C::Comb<'w, CombBranch<K::Pal, K>>,
 	pub(crate) a_index: usize,
 	pub(crate) b_index: usize,
-	comb: C::Comb<'w, CombNone>,
 	kind: K,
 }
 
@@ -850,7 +849,6 @@ where
 			b_comb: self.b_comb.clone(),
 			a_index: self.a_index,
 			b_index: self.b_index,
-			comb: self.comb.clone(),
 			kind: self.kind,
 		}
 	}
@@ -865,7 +863,6 @@ where
 	pub fn new(
 		a_comb: C::Comb<'w, CombBranch<K::Pal, K>>,
 		b_comb: C::Comb<'w, CombBranch<K::Pal, K>>,
-		comb: C::Comb<'w, CombNone>,
 		kind: K,
 	) -> Self {
 		Self {
@@ -873,7 +870,6 @@ where
 			b_comb,
 			a_index: 0,
 			b_index: 0,
-			comb,
 			kind,
 		}
 	}
