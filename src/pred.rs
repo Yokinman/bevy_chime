@@ -172,13 +172,18 @@ where
 	type Item<'w> = [P::Item<'w>; N];
 	type Case<'w> = [P::Case<'w>; N];
 	type Input = [P::Input; N];
-	type Comb<'w, K: CombKind> = PredArrayComb<P::Comb<'w, CombNone>, N, K>;
+	type Comb<'w, K: CombKind> = PredArrayComb<'w, P, N, K>;
 	fn comb<'w, K: CombKind>(
 		param: &'w SystemParamItem<Self::Param>,
 		kind: K,
 		input: Self::Input,
 	) -> Self::Comb<'w, K> {
-		PredArrayComb::new(P::comb(param, CombNone, input[0].clone()), kind) // !!! Fix input
+		PredArrayComb::new(
+			P::comb(param, CombBranch::A(kind.pal()), input[0].clone()),
+			P::comb(param, CombBranch::B(kind), input[0].clone()),
+			P::comb(param, CombNone, input[0].clone()),
+			kind,
+		) // !!! Fix input
 	}
 }
 
