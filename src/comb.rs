@@ -186,7 +186,8 @@ pub trait PredCombinator<K: CombKind = CombNone>:
 	Clone + IntoIterator<Item=Self::Case>
 {
 	type Id: PredId;
-	type Case: PredCombinatorCase<Id=Self::Id>;
+	type Inner: PredItem;
+	type Case: PredCombinatorCase<Item=Self::Inner, Id=Self::Id>;
 	
 	type Param: PredParam<Id=Self::Id>;
 	
@@ -202,6 +203,7 @@ pub trait PredCombinator<K: CombKind = CombNone>:
 
 impl<K: CombKind> PredCombinator<K> for EmptyComb<K> {
 	type Id = ();
+	type Inner = ();
 	type Case = PredCombCase<(), ()>;
 	
 	type Param = ();
@@ -219,6 +221,7 @@ where
 	R: Resource,
 {
 	type Id = ();
+	type Inner = Res<'w, R>;
 	type Case = PredCombCase<Res<'w, R>, ()>;
 	
 	type Param = Res<'w, R>;
@@ -237,6 +240,7 @@ where
 	F: ArchetypeFilter + 'static,
 {
 	type Id = Entity;
+	type Inner = &'w T;
 	type Case = PredCombCase<&'w T, Entity>;
 	
 	type Param = Query<'w, 'w, &'w T, F>;
@@ -269,6 +273,7 @@ where
 	B: PredCombinator,
 {
 	type Id = (A::Id, B::Id);
+	type Inner = (A::Inner, B::Inner);
 	type Case = (A::Case, B::Case);
 	
 	type Param = (A::Param, B::Param);
@@ -287,6 +292,7 @@ where
 	C::Id: Ord,
 {
 	type Id = [C::Id; N];
+	type Inner = [C::Inner; N];
 	type Case = [C::Case; N];
 	
 	type Param = [C::Param; N];
@@ -322,6 +328,7 @@ where
 	K: CombKind,
 {
 	type Id = I::Item;
+	type Inner = WithId<I::Item>;
 	type Case = PredCombCase<WithId<I::Item>, I::Item>;
 	
 	type Param = WithId<I>;
