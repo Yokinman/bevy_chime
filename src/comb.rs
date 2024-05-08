@@ -1155,9 +1155,7 @@ where
 	P: PredParam,
 	K: CombKind,
 {
-	iter: <<P::Comb<'p, CombNone>
-		as PredCombinator>::IntoKind<K>
-		as IntoIterator>::IntoIter,
+	iter: <P::Comb<'p, K> as IntoIterator>::IntoIter,
 	node: NodeWriter<'p, PredStateCase<P::Id, T>>,
 }
 
@@ -1206,9 +1204,7 @@ where
 	B: PredBranch,
 	K: CombKind,
 {
-	iter: <<A::Comb<'p, CombNone>
-		as PredCombinator>::IntoKind<K::Pal>
-		as IntoIterator>::IntoIter,
+	iter: <A::Comb<'p, K::Pal> as IntoIterator>::IntoIter,
 	sub_comb: [B::CombSplit<'p, CombBranch<K::Pal, K>>; 2],
 	node: NodeWriter<'p, (<A as PredParam>::Id, Node<B::Case<T>>)>,
 	kind: K,
@@ -1272,9 +1268,7 @@ where
 	B: PredPermBranch,
 	K: CombKind,
 {
-	iter: <<A::Comb<'p, CombNone>
-		as PredCombinator>::IntoKind<K::Pal>
-		as IntoIterator>::IntoIter,
+	iter: <A::Comb<'p, K::Pal> as IntoIterator>::IntoIter,
 	sub_comb: [B::CombSplit<'p, CombBranch<K::Pal, K>>; 2],
 	node: NodeWriter<'p, (<A as PredParam>::Id, Node<B::Case<T>>)>,
 	kind: K,

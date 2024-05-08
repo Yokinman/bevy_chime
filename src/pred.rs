@@ -511,7 +511,7 @@ where
 	type Id = NestedPerm<<[A; N] as PredParam>::Id, B::Id>;
 	type Input = NestedPerm<<[A; N] as PredParam>::Input, B::Input>;
 	type CombSplit<'w, K: CombKind> = (
-		<<Self::Param as PredParam>::Comb<'w, CombNone> as PredCombinator>::IntoKind<K::Pal>,
+		<Self::Param as PredParam>::Comb<'w, K::Pal>,
 		[B::CombSplit<'w, CombBranch<K::Pal, K>>; 2],
 	);
 	
@@ -535,7 +535,7 @@ where
 		kind: K,
 	) -> Self::CombSplit<'w, K> {
 		(
-			<[A; N]>::comb(a, CombNone, a_input).into_kind(kind.pal()),
+			<[A; N]>::comb(a, kind.pal(), a_input),
 			[
 				B::comb_split(b, b_input.clone(), CombBranch::A(kind.pal())),
 				B::comb_split(b, b_input, CombBranch::B(kind)),
@@ -626,7 +626,7 @@ where
 	type AllParams = A;
 	type Id = A::Id;
 	type Input = Single<A::Input>;
-	type CombSplit<'w, K: CombKind> = <A::Comb<'w, CombNone> as PredCombinator>::IntoKind<K>;
+	type CombSplit<'w, K: CombKind> = A::Comb<'w, K>;
 	
 	type Item<'p, T, K> = &'p mut Self::Case<T>
 	where
@@ -647,7 +647,7 @@ where
 		Single(input): Self::Input,
 		kind: K,
 	) -> Self::CombSplit<'w, K> {
-		A::comb(params, CombNone, input).into_kind(kind)
+		A::comb(params, kind, input)
 	}
 	
 	fn case_iter<T>(case: Self::Case<T>) -> Self::CaseIter<T> {
@@ -680,7 +680,7 @@ where
 	type Id = Nested<A::Id, B::Id>;
 	type Input = Nested<A::Input, B::Input>;
 	type CombSplit<'w, K: CombKind> = (
-		<<Self::Param as PredParam>::Comb<'w, CombNone> as PredCombinator>::IntoKind<K::Pal>,
+		<Self::Param as PredParam>::Comb<'w, K::Pal>,
 		[B::CombSplit<'w, CombBranch<K::Pal, K>>; 2],
 	);
 	
@@ -704,7 +704,7 @@ where
 		kind: K,
 	) -> Self::CombSplit<'w, K> {
 		(
-			A::comb(a, CombNone, a_input).into_kind(kind.pal()),
+			A::comb(a, kind.pal(), a_input),
 			[
 				B::comb_split(b, b_input.clone(), CombBranch::A(kind.pal())),
 				B::comb_split(b, b_input, CombBranch::B(kind)),
