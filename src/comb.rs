@@ -28,7 +28,7 @@ use crate::pred::*;
 /// 
 /// ??? Potentially rewrite to define separate associated types for `True` and
 /// `False`. Could support kinds like `AllSame` + `AnyDiff` if ever needed.
-pub trait CombKind: Copy {
+pub trait CombKind: Copy + 'static {
 	/// This is like a helper kind. I'm not really sure how to describe it. It
 	/// generally defines a combination superset. A coincidental utility? 
 	type Pal: CombKind;
@@ -1148,7 +1148,7 @@ where
 	P: PredParam,
 	K: CombKind,
 {
-	iter: <<P::Comb<'p>
+	iter: <<P::Comb<'p, CombNone>
 		as PredCombinator>::IntoKind<K>
 		as IntoIterator>::IntoIter,
 	node: NodeWriter<'p, PredStateCase<P::Id, T>>,
@@ -1199,7 +1199,7 @@ where
 	B: PredBranch,
 	K: CombKind,
 {
-	iter: <<A::Comb<'p>
+	iter: <<A::Comb<'p, CombNone>
 		as PredCombinator>::IntoKind<K::Pal>
 		as IntoIterator>::IntoIter,
 	sub_comb: [B::CombSplit<'p, CombBranch<K::Pal, K>>; 2],
@@ -1265,7 +1265,7 @@ where
 	B: PredPermBranch,
 	K: CombKind,
 {
-	iter: <<A::Comb<'p>
+	iter: <<A::Comb<'p, CombNone>
 		as PredCombinator>::IntoKind<K::Pal>
 		as IntoIterator>::IntoIter,
 	sub_comb: [B::CombSplit<'p, CombBranch<K::Pal, K>>; 2],
@@ -1289,7 +1289,7 @@ where
 				.count()
 				.saturating_sub(NestedPerm::<[A; N], B>::depth() - 1),
 			comb.clone().into_iter()
-				.filter(<<[A; N] as PredParam>::Comb<'p> as PredCombinator>::Case::is_diff)
+				.filter(<<[A; N] as PredParam>::Comb<'p, CombNone> as PredCombinator>::Case::is_diff)
 				.count(),
 		];
 		comb.outer_skip(state.index);
