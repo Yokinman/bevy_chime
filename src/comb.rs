@@ -835,6 +835,7 @@ where
 	b_comb: C::Comb<'w, CombBranch<K::Pal, K>>,
 	pub(crate) a_index: usize,
 	pub(crate) b_index: usize,
+	pub(crate) is_nested: bool,
 	kind: K,
 }
 
@@ -849,6 +850,7 @@ where
 			b_comb: self.b_comb.clone(),
 			a_index: self.a_index,
 			b_index: self.b_index,
+			is_nested: self.is_nested,
 			kind: self.kind,
 		}
 	}
@@ -870,6 +872,7 @@ where
 			b_comb,
 			a_index: 0,
 			b_index: 0,
+			is_nested: false,
 			kind,
 		}
 	}
@@ -889,10 +892,11 @@ where
 		let mut a_index = self.a_index;
 		let mut b_index = self.b_index;
 		let mut layer = N;
+		let is_nested = self.is_nested;
 		let kind = self.kind;
 		
 		let iters = std::array::from_fn(|i| {
-			if i == N-1 && layer == N {
+			if i == N-1 && layer == N && !is_nested {
 				let mut iter = b_comb.clone().into_iter();
 				if let Some(case) = iter.nth(b_index) {
 					a_index += 1;
@@ -908,6 +912,11 @@ where
 					if kind.has_state(case.is_diff()) {
 						b_index += 1;
 						layer = layer.min(i + 1);
+					} else if i == N-1
+						&& layer == N
+						&& b_comb.clone().into_iter().nth(b_index).is_none()
+					{
+						return None
 					}
 					Some((iter, case, [a_index, b_index]))
 				} else {
@@ -922,7 +931,7 @@ where
 			None
 		};
 		
-		PredArrayCombIter { a_comb, b_comb, iters, layer, kind }
+		PredArrayCombIter { a_comb, b_comb, iters, layer, is_nested, kind }
 	}
 }
 
@@ -940,6 +949,7 @@ where
 		[usize; 2],
 	); N]>,
 	layer: usize,
+	is_nested: bool,
 	kind: K,
 }
 
@@ -953,12 +963,10 @@ where
 		if let Some(iters) = &mut self.iters {
 			let (iter, case, [a_index, b_index]) = &mut iters[i];
 			if let Some(next_case) = iter.next() {
-				if i != N-1 {
-					*a_index += 1;
-					if self.kind.has_state(next_case.is_diff()) {
-						*b_index += 1;
-						self.layer = self.layer.min(i + 1);
-					}
+				*a_index += 1;
+				if self.kind.has_state(next_case.is_diff()) {
+					*b_index += 1;
+					self.layer = self.layer.min(i + 1);
 				}
 				*case = next_case;
 				return
@@ -983,7 +991,7 @@ where
 				*a_index = sub_a_index;
 				*b_index = sub_b_index;
 				
-				if i == N-1 && self.layer == N {
+				if i == N-1 && self.layer == N && !self.is_nested {
 					*iter = self.b_comb.clone().into_iter();
 					if *b_index != 0 && iter.nth(*b_index - 1).is_none() {
 						self.iters = None;
@@ -1035,11 +1043,13 @@ where
 					let (.., [mut a_index, mut b_index]) = iters[i];
 					if i == N-1 {
 						a_index -= 1;
-						b_index -= 1;
 					}
 					let mut remaining = a_remaining - a_index;
 					let mut num = falling_factorial(remaining, N - i);
-					if i < self.layer {
+					if i < self.layer && !self.is_nested {
+						if i == N-1 {
+							b_index -= 1;
+						}
 						remaining -= b_remaining - b_index;
 						num -= falling_factorial(remaining, N - i);
 					}
@@ -1228,12 +1238,11 @@ where
 	B: PredPermBranch,
 	K: CombKind,
 {
-	iter: <A::Comb<'p, K::Pal> as IntoIterator>::IntoIter,
+	iter: <A::Comb<'p, K> as IntoIterator>::IntoIter,
 	sub_comb: [B::CombSplit<'p, CombBranch<K::Pal, K>>; 2],
 	node: NodeWriter<'p, (<A as PredParam>::Id, Node<B::Case<T>>)>,
 	kind: K,
 	count: [usize; 2],
-	index: [usize; 2],
 }
 
 impl<'p, T, A, const N: usize, B, K> NestedPermPredComb2<'p, T, [A; N], B, K>
@@ -1246,12 +1255,8 @@ where
 	pub fn new(state: PredSubState2<'p, T, NestedPerm<[A; N], B>, K>) -> Self {
 		let (mut comb, sub_comb) = state.comb;
 		let count = [
-			comb.clone().into_iter()
-				.count()
-				.saturating_sub(NestedPerm::<[A; N], B>::depth() - 1),
-			comb.clone().into_iter()
-				.filter(<<[A; N] as PredParam>::Comb<'p, CombNone> as PredCombinator>::Case::is_diff)
-				.count(),
+			comb.a_comb.clone().into_iter().count().saturating_sub(B::depth()),
+			comb.b_comb.clone().into_iter().count(),
 		];
 		comb.outer_skip(state.index);
 		let iter = comb.into_iter();
@@ -1262,62 +1267,63 @@ where
 			node: NodeWriter::new(state.node),
 			kind: state.kind,
 			count,
-			index: state.index,
 		}
 	}
 }
 
-impl<'p, T, A, B, K> Iterator for NestedPermPredComb2<'p, T, A, B, K>
+impl<'p, T, A, const N: usize, B, K> Iterator
+	for NestedPermPredComb2<'p, T, [A; N], B, K>
 where
 	A: PredParam,
-	B: PredPermBranch,
-	NestedPerm<A, B>: PredPermBranch,
+	A::Id: Ord,
+	B: PredPermBranch<Output = A>,
 	K: CombKind,
 {
 	type Item = (
 		PredSubState2<'p, T, B, CombBranch<K::Pal, K>>,
-		PredParamItem<'p, A>,
+		PredParamItem<'p, [A; N]>,
 	);
 	fn next(&mut self) -> Option<Self::Item> {
-		if self.index[0] >= self.count[0]
-			|| self.index[1] >= self.count[1]
-		{
-			return None
-		}
-		self.iter.next().map(|case| {
-			self.index[0] += 1;
-			let kind;
-			let ind = if self.kind.has_state(case.is_diff()) {
-				self.index[1] += 1;
-				kind = CombBranch::A(self.kind.pal());
-				0
-			} else {
-				kind = CombBranch::B(self.kind);
-				1
-			};
-			let (item, id) = case.into_parts();
-			let (_, node) = self.node.write((id, Node::default()));
-			let mut sub_state = PredSubState2::new(self.sub_comb[ind].clone(), node, kind);
-			sub_state.index = [
-				self.index[0],
-				if ind == 0 {
-					self.index[0]
+		if let Some(iters) = &self.iter.iters {
+			let (.., ind) = iters[N-1];
+			if ind[0] > self.count[0] || ind[1] > self.count[1] {
+				return None
+			}
+			self.iter.next().map(|case| {
+				let kind;
+				let sub_comb;
+				let index;
+				if self.kind.has_state(case.is_diff()) {
+					kind = CombBranch::A(self.kind.pal());
+					sub_comb = self.sub_comb[0].clone();
+					index = [ind[0], ind[0]];
 				} else {
-					self.index[1]
-				},
-			];
-			(sub_state, item)
-		})
+					kind = CombBranch::B(self.kind);
+					sub_comb = self.sub_comb[1].clone();
+					index = ind;
+				};
+				let (item, id) = case.into_parts();
+				let (_, node) = self.node.write((id, Node::default()));
+				let mut sub_state = PredSubState2::new(sub_comb, node, kind);
+				sub_state.index = index;
+				(sub_state, item)
+			})
+		} else {
+			None
+		}
 	}
 	fn size_hint(&self) -> (usize, Option<usize>) {
-		if self.index[0] >= self.count[0]
-			|| self.index[1] >= self.count[1]
-		{
-			return (0, Some(0))
+		if let Some(iters) = &self.iter.iters {
+			let (.., ind) = iters[N-1];
+			if ind[0] > self.count[0] || ind[1] > self.count[1] {
+				return (0, Some(0))
+			}
+			(
+				(self.count[1] - ind[1].saturating_sub(1)).saturating_sub(B::depth()),
+				Some(self.count[0] - ind[0].saturating_sub(1)),
+			)
+		} else {
+			(0, Some(0))
 		}
-		(
-			(self.count[1] - self.index[1]).saturating_sub(NestedPerm::<A, B>::depth() - 1),
-			Some(self.count[0] - self.index[0]),
-		)
 	}
 }

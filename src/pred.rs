@@ -522,7 +522,7 @@ where
 	type Id = NestedPerm<<[A; N] as PredParam>::Id, B::Id>;
 	type Input = NestedPerm<<[A; N] as PredParam>::Input, B::Input>;
 	type CombSplit<'w, K: CombKind> = (
-		<Self::Param as PredParam>::Comb<'w, K::Pal>,
+		<Self::Param as PredParam>::Comb<'w, K>,
 		[B::CombSplit<'w, CombBranch<K::Pal, K>>; 2],
 	);
 	
@@ -545,8 +545,10 @@ where
 		NestedPerm(a_input, b_input): Self::Input,
 		kind: K,
 	) -> Self::CombSplit<'w, K> {
+		let mut comb = <[A; N]>::comb(a, kind, a_input);
+		comb.is_nested = true;
 		(
-			<[A; N]>::comb(a, kind.pal(), a_input),
+			comb,
 			[
 				B::comb_split(b, b_input.clone(), CombBranch::A(kind.pal())),
 				B::comb_split(b, b_input, CombBranch::B(kind)),
