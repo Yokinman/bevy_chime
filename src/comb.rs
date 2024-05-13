@@ -36,18 +36,6 @@ pub trait CombKind: Copy + 'static {
 	/// The inverse of this kind, filter-wise. Not overlapping; complementary.
 	type Inv: CombKind;
 	
-	/// ...
-	type True: CombKind;
-	
-	/// ...
-	type False: CombKind;
-	
-	/// ...
-	fn true_(self) -> Self::True;
-	
-	/// ...
-	fn false_(self) -> Self::False;
-	
 	/// Filters some state.
 	fn has_state(self, state: bool) -> bool;
 	
@@ -77,7 +65,7 @@ pub trait CombKind: Copy + 'static {
 }
 
 macro_rules! def_comb_kind {
-	($name:ident, $t:ident, $f:ident, $pal:ident, $inv:ident, $state:pat => $has_state:expr) => {
+	($name:ident, $pal:ident, $inv:ident, $state:pat => $has_state:expr) => {
 		/// See [`CombKind`].
 		#[derive(Copy, Clone)]
 		pub struct $name;
@@ -85,18 +73,6 @@ macro_rules! def_comb_kind {
 		impl CombKind for $name {
 			type Pal = $pal;
 			type Inv = $inv;
-			type True = $t;
-			type False = $f;
-			
-			#[inline]
-			fn true_(self) -> Self::True {
-				$t
-			}
-			
-			#[inline]
-			fn false_(self) -> Self::False {
-				$f
-			}
 			
 			#[inline]
 			fn has_state(self, $state: bool) -> bool {
@@ -116,11 +92,11 @@ macro_rules! def_comb_kind {
 	};
 }
 
-            // Name,         True,     False,        Pal,          Inv,          Filter
-def_comb_kind!(CombNone,     CombNone, CombNone,     CombNone,     CombAll,      _ => false);
-def_comb_kind!(CombAll,      CombAll,  CombAll,      CombAll,      CombNone,     _ => true);
-def_comb_kind!(CombAllFalse, CombNone, CombAllFalse, CombAllFalse, CombAnyTrue,  x => !x);
-def_comb_kind!(CombAnyTrue,  CombAll,  CombAnyTrue,  CombAll,      CombAllFalse, x => x);
+            // Name,         Pal,          Inv,          Filter
+def_comb_kind!(CombNone,     CombNone,     CombAll,      _ => false);
+def_comb_kind!(CombAll,      CombAll,      CombNone,     _ => true);
+def_comb_kind!(CombAllFalse, CombAllFalse, CombAnyTrue,  x => !x);
+def_comb_kind!(CombAnyTrue,  CombAll,      CombAllFalse, x => x);
 
 /// A branching [`CombKind`] for combinators that split into two paths.
 #[derive(Copy, Clone)]
@@ -136,25 +112,6 @@ where
 {
 	type Pal = CombBranch<A::Pal, B::Pal>;
 	type Inv = CombBranch<A::Inv, B::Inv>;
-	
-	type True = CombBranch<A::True, B::True>;
-	type False = CombBranch<A::False, B::False>;
-	
-	#[inline]
-	fn true_(self) -> Self::True {
-		match self {
-			Self::A(a) => CombBranch::A(a.true_()),
-			Self::B(b) => CombBranch::B(b.true_()),
-		}
-	}
-	
-	#[inline]
-	fn false_(self) -> Self::False {
-		match self {
-			Self::A(a) => CombBranch::A(a.false_()),
-			Self::B(b) => CombBranch::B(b.false_()),
-		}
-	}
 	
 	#[inline]
 	fn has_state(self, state: bool) -> bool {
