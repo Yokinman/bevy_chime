@@ -250,7 +250,6 @@ where
 {
 	type Id = ();
 	type Case = Misc<T::Case>;
-	type Param = Misc<T::Param>;
 	fn outer_skip(&mut self, n: [usize; 2]) {
 		let Misc(inner) = self;
 		inner.outer_skip(n)
