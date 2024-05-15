@@ -6,7 +6,7 @@ use bevy_ecs::change_detection::{DetectChanges, Ref, Res};
 use bevy_ecs::component::{Component, Tick};
 use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::{Query, Resource, World};
-use bevy_ecs::query::ArchetypeFilter;
+use bevy_ecs::query::{ArchetypeFilter, ReadOnlyQueryData, WorldQuery};
 use bevy_ecs::system::{ReadOnlySystemParam, SystemMeta, SystemParam, SystemParamItem};
 use bevy_ecs::world::{Mut, unsafe_world_cell::UnsafeWorldCell};
 use chime::{Flux, MomentRef, MomentRefMut};
@@ -62,14 +62,15 @@ pub trait PredParam {
 	) -> Self::Comb<'w, K>;
 }
 
-impl<T, F> PredParam for Query<'_, '_, &T, F>
+impl<T, F> PredParam for Query<'_, '_, T, F>
 where
-	T: Component,
+	T: PredParamQueryData + 'static,
 	F: ArchetypeFilter + 'static,
+	for<'w> <T::ItemRef as WorldQuery>::Item<'w>: PredItemRef,
 {
-	type Param = Query<'static, 'static, (Ref<'static, T>, Entity), F>;
+	type Param = Query<'static, 'static, (T::ItemRef, Entity), F>;
 	type Id = Entity;
-	type Case<'w> = PredCombCase<&'w T, Entity>;
+	type Case<'w> = PredCombCase<<<T::ItemRef as WorldQuery>::Item<'w> as PredItemRef>::Item, Entity>;
 	type Input = ();
 	type Comb<'w, K: CombKind> = QueryComb<'w, T, F, K>;
 	fn comb<'w, K: CombKind>(
@@ -302,6 +303,29 @@ where
 	}
 }
 
+/// ...
+pub trait PredParamQueryData: ReadOnlyQueryData + PredItem {
+	type Item_<'w>: PredParamQueryData<ItemRef = <Self::ItemRef as WorldQuery>::Item<'w>>;
+	type ItemRef: ReadOnlyQueryData + PredItemRef;
+}
+
+impl<'a, T> PredParamQueryData for &'a T
+where
+	T: Component,
+{
+	type Item_<'w> = &'w T;
+	type ItemRef = Ref<'a, T>;
+}
+
+impl<'a, 'b, A, B> PredParamQueryData for (&'a A, &'b B)
+where
+	A: Component,
+	B: Component,
+{
+	type Item_<'w> = (&'w A, &'w B);
+	type ItemRef = (Ref<'a, A>, Ref<'b, B>);
+}
+
 /// Unused - may replace the output of `QueryComb` if the concept of
 /// case-by-case prediction closures is implemented.
 pub struct Fetch<D, F> {
@@ -412,6 +436,22 @@ impl PredItemRef for () {
 	}
 	fn is_updated(_item: &Self) -> bool {
 		true
+	}
+}
+
+impl<A, B> PredItemRef for (A, B)
+where
+	A: PredItemRef,
+	B: PredItemRef,
+{
+	type Item = (A::Item, B::Item);
+	fn into_item(self) -> Self::Item {
+		let (a, b) = self;
+		(a.into_item(), b.into_item())
+	}
+	fn is_updated(item: &Self) -> bool {
+		let (a, b) = item;
+		A::is_updated(a) || B::is_updated(b)
 	}
 }
 
