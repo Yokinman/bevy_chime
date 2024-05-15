@@ -218,7 +218,7 @@ where
 {
 	type Param = T::Param;
 	type Input = T::Input;
-	type Id = ();
+	type Id = T::Id;
 	type Case<'w> = Misc<T::Case<'w>>;
 	type Comb<'w, K: CombKind> = Misc<T::Comb<'w, K>>;
 	fn comb<'w, K: CombKind>(
@@ -230,7 +230,7 @@ where
 	}
 }
 
-/// `PredParam` wrapper for stripping the unique identifier.
+/// `PredParam` wrapper for stripping the updated state.
 #[derive(Clone)]
 pub struct Misc<T>(pub T);
 
@@ -249,7 +249,7 @@ where
 	T: PredCombinator<K>,
 	K: CombKind,
 {
-	type Id = ();
+	type Id = T::Id;
 	type Case = Misc<T::Case>;
 	fn outer_skip(&mut self, n: [usize; 2]) {
 		let Misc(inner) = self;
@@ -261,15 +261,15 @@ impl<T> PredCombinatorCase for Misc<T>
 where
 	T: PredCombinatorCase,
 {
-	type Id = ();
+	type Id = T::Id;
 	type Item = Misc<T::Item>;
 	fn is_diff(&self) -> bool {
 		false
 	}
 	fn into_parts(self) -> (Self::Item, Self::Id) {
 		let Misc(inner) = self;
-		let (item, _) = T::into_parts(inner);
-		(Misc(item), ())
+		let (item, id) = T::into_parts(inner);
+		(Misc(item), id)
 	}
 }
 
