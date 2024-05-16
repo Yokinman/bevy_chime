@@ -120,16 +120,16 @@ where
 	A: PredParam,
 {
 	type Param = A::Param;
-	type Id = A::Id;
-	type Case<'w> = A::Case<'w>;
-	type Input = A::Input;
-	type Comb<'w, K: CombKind> = A::Comb<'w, K>;
+	type Id = (A::Id,);
+	type Case<'w> = (A::Case<'w>,);
+	type Input = (A::Input,);
+	type Comb<'w, K: CombKind> = PredSingleComb<'w, A, K>;
 	fn comb<'w, K: CombKind>(
 		param: &'w SystemParamItem<Self::Param>,
 		kind: K,
-		input: Self::Input,
+		(input,): Self::Input,
 	) -> Self::Comb<'w, K> {
-		A::comb(param, kind, input)
+		PredSingleComb::new(A::comb(param, kind, input))
 	}
 }
 
@@ -376,6 +376,16 @@ where
 impl<T: Resource> PredItem for Res<'_, T> {
 	fn clone(&self) -> Self {
 		Res::clone(self) // GGGRRAAAAAAHHHHH!!!!!!!!!
+	}
+}
+
+impl<A,> PredItem for (A,)
+where
+	A: PredItem,
+{
+	fn clone(&self) -> Self {
+		let (a,) = self;
+		(a.clone(),)
 	}
 }
 

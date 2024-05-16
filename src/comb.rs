@@ -174,6 +174,15 @@ where
 	type Case = PredCombCase<<<T::ItemRef as WorldQuery>::Item<'w> as PredItemRef>::Item, Entity>;
 }
 
+impl<'w, A, K> PredCombinator<K> for PredSingleComb<'w, A, K>
+where
+	K: CombKind,
+	A: PredParam,
+{
+	type Id = (A::Id,);
+	type Case = (A::Case<'w>,);
+}
+
 impl<'w, A, B, K> PredCombinator<K> for PredPairComb<'w, A, B, K>
 where
 	K: CombKind,
@@ -531,6 +540,22 @@ where
 	}
 }
 
+impl<A> PredCombinatorCase for (A,)
+where
+	A: PredCombinatorCase,
+{
+	type Item = (A::Item,);
+	type Id = (A::Id,);
+	fn is_diff(&self) -> bool {
+		self.0.is_diff()
+	}
+	fn into_parts(self) -> (Self::Item, Self::Id) {
+		let (a,) = self;
+		let (a_item, a_id) = a.into_parts();
+		((a_item,), (a_id,))
+	}
+}
+
 impl<A, B> PredCombinatorCase for (A, B)
 where
 	A: PredCombinatorCase,
@@ -565,6 +590,74 @@ where
 			Self::Diff(item, id) => Self::Diff(item.clone(), *id),
 			Self::Same(item, id) => Self::Same(item.clone(), *id),
 		}
+	}
+}
+
+/// ...
+pub struct PredSingleComb<'w, A, K>
+where
+	A: PredParam,
+	K: CombKind,
+{
+	comb: A::Comb<'w, K>,
+}
+
+impl<'w, A, K> PredSingleComb<'w, A, K>
+where
+	A: PredParam,
+	K: CombKind,
+{
+	pub(crate) fn new(comb: A::Comb<'w, K>) -> Self {
+		Self { comb }
+	}
+}
+
+impl<'w, A, K> Clone for PredSingleComb<'w, A, K>
+where
+	A: PredParam,
+	K: CombKind,
+{
+	fn clone(&self) -> Self {
+		Self {
+			comb: self.comb.clone(),
+		}
+	}
+}
+
+impl<'w, A, K> IntoIterator for PredSingleComb<'w, A, K>
+where
+	A: PredParam,
+	K: CombKind,
+{
+	type Item = <Self::IntoIter as Iterator>::Item;
+	type IntoIter = PredSingleCombIter<'w, A, K>;
+	fn into_iter(self) -> Self::IntoIter {
+		PredSingleCombIter {
+			iter: self.comb.into_iter(),
+		}
+	}
+}
+
+/// ...
+pub struct PredSingleCombIter<'w, A, K>
+where
+	A: PredParam,
+	K: CombKind,
+{
+	iter: <A::Comb<'w, K> as IntoIterator>::IntoIter,
+}
+
+impl<'w, A, K> Iterator for PredSingleCombIter<'w, A, K>
+where
+	A: PredParam,
+	K: CombKind,
+{
+	type Item = <PredSingleComb<'w, A, K> as PredCombinator<K>>::Case;
+	fn next(&mut self) -> Option<Self::Item> {
+		self.iter.next().map(|x| (x,))
+	}
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		self.iter.size_hint()
 	}
 }
 
