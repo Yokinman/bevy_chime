@@ -171,8 +171,7 @@ where
 	K: CombKind,
 	T: PredParamQueryData + 'static,
 	F: ArchetypeFilter + 'static,
-	<T::ItemRef as WorldQuery>::Item<'w>: PredItemRef,
-	Query<'static, 'static, T, F>: PredParam<Id = Entity>,
+	for<'a> <T::ItemRef as WorldQuery>::Item<'a>: PredItemRef,
 {
 	type Id = Entity;
 	type Case = PredCombCase<
