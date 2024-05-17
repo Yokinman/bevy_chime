@@ -85,7 +85,7 @@ where
 	}
 }
 
-impl<R> PredParam for Res<'_, R>
+impl<R> PredParam for Res<'static, R>
 where
 	R: Resource
 {
