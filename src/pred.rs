@@ -497,23 +497,6 @@ where
 }
 
 /// ...
-pub trait PredStateMisc: Clone {
-	type Item: PredId;
-	type MiscIter: Iterator<Item = Self::Item>;
-	fn from_misc(inner: Box<[Self::Item]>) -> Self;
-	fn into_misc_iter(self) -> Self::MiscIter;
-}
-
-impl PredStateMisc for () {
-	type Item = ();
-	type MiscIter = std::iter::Once<()>;
-	fn from_misc(_inner: Box<[Self::Item]>) -> Self {}
-	fn into_misc_iter(self) -> Self::MiscIter {
-		std::iter::once(())
-	}
-}
-
-/// ...
 pub struct PredSubState2<'p, T, P, K>
 where
 	P: PredBranch + ?Sized,
