@@ -62,7 +62,7 @@ pub trait PredParam {
 	) -> Self::Comb<'w, K>;
 }
 
-impl<T, F> PredParam for Query<'_, '_, T, F>
+impl<T, F> PredParam for Query<'static, 'static, T, F>
 where
 	T: PredParamQueryData + 'static,
 	F: ArchetypeFilter + 'static,
@@ -1345,11 +1345,10 @@ mod testing {
 		b_update_list: &[usize],
 	)
 	where
-		for<'w, 's, 'w1, 's1>
-			<(Query<'w, 's, &'static Test>, Query<'w1, 's1, &'static TestB>)
-				as PredParam>::Input:
-					Default + IntoInput<<(Query<'w, 's, &'static Test>, Query<'w1, 's1, &'static TestB>)
-				as PredParam>::Input> + Send + Sync + 'static,
+		<(Query<'static, 'static, &'static Test>, Query<'static, 'static, &'static TestB>)
+			as PredParam>::Input:
+				Default + IntoInput<<(Query<'static, 'static, &'static Test>, Query<'static, 'static, &'static TestB>)
+			as PredParam>::Input> + Send + Sync + 'static,
 	{
 		use crate::*;
 		
@@ -1368,7 +1367,7 @@ mod testing {
 		let update_vec = update_list.to_vec();
 		let b_update_vec = b_update_list.to_vec();
 		app.add_chime_events((move |
-			state: PredState2<DynPred, Single<(Query<&Test>, Query<&TestB>)>>,
+			state: PredState2<DynPred, Single<(Query<'static, 'static, &'static Test>, Query<'static, 'static, &'static TestB>)>>,
 			a_query: Query<&Test>,
 			b_query: Query<&TestB>,
 			mut index: system::Local<usize>,
@@ -1529,10 +1528,10 @@ mod testing {
 		const S: usize,
 	>(update_list: &[usize])
 	where
-		for<'w, 's> <[Query<'w, 's, &'static Test>; R] as PredParam>::Input:
-			Default + IntoInput<<[Query<'w, 's, &'static Test>; R] as PredParam>::Input> + Send + Sync + 'static,
-		for<'w, 's> <[Query<'w, 's, &'static Test>; S] as PredParam>::Input:
-			Default + IntoInput<<[Query<'w, 's, &'static Test>; S] as PredParam>::Input> + Send + Sync + 'static,
+		<[Query<'static, 'static, &'static Test>; R] as PredParam>::Input:
+			Default + IntoInput<<[Query<'static, 'static, &'static Test>; R] as PredParam>::Input> + Send + Sync + 'static,
+		<[Query<'static, 'static, &'static Test>; S] as PredParam>::Input:
+			Default + IntoInput<<[Query<'static, 'static, &'static Test>; S] as PredParam>::Input> + Send + Sync + 'static,
 	{
 		use crate::*;
 		
@@ -1557,7 +1556,7 @@ mod testing {
 		let n_choose_r = choose(N, R);
 		let update_vec = update_list.to_vec();
 		app.add_chime_events((move |
-			state: PredState2<DynPred, Single<[Query<&Test>; R]>>,
+			state: PredState2<DynPred, Single<[Query<'static, 'static, &'static Test>; R]>>,
 			query: Query<&Test>,
 			mut index: system::Local<usize>,
 		| {
