@@ -1368,17 +1368,10 @@ mod testing {
 		b_update_list: &[usize],
 	)
 	where
-		for<'w, 's, 'a, 'w1, 's1, 'a1, 'b>
-			(Query<'w, 's, &'a Test>, Query<'w1, 's1, &'a1 TestB>):
-				PredParamVec<
-					Head = Query<'w, 's, &'a Test>,
-					Tail = Query<'w1, 's1, &'a1 TestB>,
-					Comb<'b> = PredPairComb<QueryComb<'b, Test, ()>, QueryComb<'b, TestB, ()>>
-				>,
-		for<'w, 's, 'a, 'w1, 's1, 'a1>
-			<(Query<'w, 's, &'a Test>, Query<'w1, 's1, &'a1 TestB>)
+		for<'w, 's, 'w1, 's1>
+			<(Query<'w, 's, &'static Test>, Query<'w1, 's1, &'static TestB>)
 				as PredParam>::Input:
-					Default + IntoInput<<(Query<'w, 's, &'a Test>, Query<'w1, 's1, &'a1 TestB>)
+					Default + IntoInput<<(Query<'w, 's, &'static Test>, Query<'w1, 's1, &'static TestB>)
 				as PredParam>::Input> + Send + Sync + 'static,
 	{
 		use crate::*;
@@ -1398,7 +1391,7 @@ mod testing {
 		let update_vec = update_list.to_vec();
 		let b_update_vec = b_update_list.to_vec();
 		app.add_chime_events((move |
-			state: PredState<DynPred, (Query<&Test>, Query<&TestB>)>,
+			state: PredState2<DynPred, Single<(Query<&Test>, Query<&TestB>)>>,
 			a_query: Query<&Test>,
 			b_query: Query<&TestB>,
 			mut index: system::Local<usize>,
@@ -1414,8 +1407,8 @@ mod testing {
 						for b in &b_query {
 							// This assumes `iter` and `QueryIter` will always
 							// produce the same order.
-							if let Some((_, next)) = iter.next() {
-								assert_eq!(next, (a, b));
+							if let Some((_, (x, y))) = iter.next() {
+								assert_eq!((*x, *y), (a, b));
 							} else {
 								panic!();
 							}
@@ -1456,12 +1449,12 @@ mod testing {
 		let update_vec = update_list.to_vec();
 		let b_update_vec = b_update_list.to_vec();
 		app.add_chime_events((move |
-			state: PredState<DynPred, (Query<&Test>, Query<&TestB>)>,
+			state: PredState2<DynPred, Nested<Query<'static, 'static, &'static Test>, Single<Query<'static, 'static, &'static TestB>>>>,
 			a_query: Query<Ref<Test>>,
 			b_query: Query<Ref<TestB>>,
 			mut index: system::Local<usize>,
 		| {
-			let mut iter = state.outer_iter();
+			let mut iter = state.into_iter();
 			match *index {
 				0 => { // Full
 					// !!! This should be `(0, Some(A))`, and PredPairCombSplit
@@ -1472,12 +1465,12 @@ mod testing {
 						if let Some((state, x)) = iter.next() {
 							let mut iter = state.into_iter();
 							assert_eq!(iter.size_hint(), (B, Some(B)));
-							assert_eq!(*x, *a);
+							assert_eq!(**x, *a);
 							for b in &b_query {
 								// This assumes `iter` and `QueryIter` always
 								// produce the same order.
 								if let Some((_, y)) = iter.next() {
-									assert_eq!(*y, *b);
+									assert_eq!(**y, *b);
 								} else {
 									panic!();
 								}
@@ -1509,13 +1502,13 @@ mod testing {
 					for ((state, a), a_ref) in iter.zip(&a_query) {
 						// This assumes `iter` and `QueryIter` always produce
 						// the same order.
-						assert_eq!(*a, *a_ref);
+						assert_eq!(**a, *a_ref);
 						let iter = state.into_iter();
 						if DetectChanges::is_changed(&a_ref) {
 							assert!(update_vec.contains(&a.0));
 							assert_eq!(iter.size_hint(), (B, Some(B)));
 							for ((_, b), b_ref) in iter.zip(&b_query) {
-								assert_eq!(*b, *b_ref);
+								assert_eq!(**b, *b_ref);
 								n += 1;
 							}
 						} else {
@@ -1553,32 +1546,20 @@ mod testing {
 		app.world.run_schedule(ChimeSchedule);
 	}
 	
-	fn test_array<const N: usize, const R: usize>(update_list: &[usize])
+	fn test_array<
+		const N: usize,
+		const R: usize,
+		const S: usize,
+	>(update_list: &[usize])
 	where
-		for<'w, 's, 'a, 'b> [Query<'w, 's, &'a Test>; R]:
-			PredParamVec<
-				Head = Query<'w, 's, &'a Test>,
-				Comb<'b> = PredArrayComb<QueryComb<'b, Test, ()>, R>
-			>,
-		for<'w, 's, 'a, 'b>
-			<<<<[Query<'w, 's, &'a Test>; R]
-				as PredParamVec>::Tail
-				as PredParam>::Comb<'b>
-				as PredCombinator>::Case
-				as PredCombinatorCase>::Item:
-					IntoIterator,
-		for<'w, 's, 'a, 'b>
-			<<<<<[Query<'w, 's, &'a Test>; R]
-				as PredParamVec>::Tail
-				as PredParam>::Comb<'b>
-				as PredCombinator>::Case
-				as PredCombinatorCase>::Item
-				as IntoIterator>::Item:
-					Deref<Target = Test>,
-		for<'w, 's, 'a> <[Query<'w, 's, &'a Test>; R] as PredParam>::Input:
-			Default + IntoInput<<[Query<'w, 's, &'a Test>; R] as PredParam>::Input> + Send + Sync + 'static,
+		for<'w, 's> <[Query<'w, 's, &'static Test>; R] as PredParam>::Input:
+			Default + IntoInput<<[Query<'w, 's, &'static Test>; R] as PredParam>::Input> + Send + Sync + 'static,
+		for<'w, 's> <[Query<'w, 's, &'static Test>; S] as PredParam>::Input:
+			Default + IntoInput<<[Query<'w, 's, &'static Test>; S] as PredParam>::Input> + Send + Sync + 'static,
 	{
 		use crate::*;
+		
+		assert_eq!(R, S+1);
 		
 		let mut app = App::new();
 		app.insert_resource::<Time>(Time::default());
@@ -1599,7 +1580,7 @@ mod testing {
 		let n_choose_r = choose(N, R);
 		let update_vec = update_list.to_vec();
 		app.add_chime_events((move |
-			state: PredState<DynPred, [Query<&Test>; R]>,
+			state: PredState2<DynPred, Single<[Query<&Test>; R]>>,
 			query: Query<&Test>,
 			mut index: system::Local<usize>,
 		| {
@@ -1608,11 +1589,14 @@ mod testing {
 				0 => { // Full
 					assert_eq!(iter.size_hint(), (n_choose_r, Some(n_choose_r)));
 					let mut n = 0;
-					for ((_, mut a), mut b) in iter
+					for ((_, a), mut b) in iter
 						.zip(query.iter_combinations::<R>())
 					{
 						// This assumes `iter` and `Query::iter_combinations`
 						// will always return in the same order.
+						let mut a = a.into_iter()
+							.map(Fetch::into_inner)
+							.collect::<Vec<_>>();
 						a.sort_unstable();
 						b.sort_unstable();
 						assert_eq!(a, b);
@@ -1633,6 +1617,9 @@ mod testing {
 					assert_eq!(iter.size_hint(), (count, Some(count)));
 					let mut n = 0;
 					for (_, a) in iter {
+						let a = a.into_iter()
+							.map(Fetch::into_inner)
+							.collect::<Vec<_>>();
 						assert!(update_vec.iter()
 							.any(|i| a.contains(&&Test(*i))));
 						n += 1;
@@ -1647,20 +1634,20 @@ mod testing {
 		 // Setup [`PredSubState::outer_iter`] Testing:
 		let update_vec = update_list.to_vec();
 		app.add_chime_events((move |
-			state: PredState<DynPred, [Query<&Test>; R]>,
+			state: PredState2<DynPred, NestedPerm<[Query<'static, 'static, &'static Test>; 1], Single<[Query<'static, 'static, &'static Test>; S]>>>,
 			query: Query<Ref<Test>>,
 			mut index: system::Local<usize>,
 		| {
-			let mut iter = state.outer_iter();
+			let mut iter = state.into_iter();
 			match *index {
 				0 => { // Full
 					let count = N.checked_sub(R).map(|x| x + 1).unwrap_or(0);
 					assert_eq!(iter.size_hint(), (count, Some(count)));
 					let mut n = 0;
-					for ((state, a), b) in iter.zip(&query) {
+					for ((state, [a]), b) in iter.zip(&query) {
 						// This assumes `iter` and `Query` will always return
 						// in the same order.
-						assert_eq!(*a, *b);
+						assert_eq!(**a, *b);
 						let count = choose(N - (n + 1), R - 1);
 						assert_eq!(state.into_iter().size_hint(), (count, Some(count)));
 						n += 1;
@@ -1685,10 +1672,10 @@ mod testing {
 						Some(count)
 					));
 					let mut n = 0;
-					for ((state, a), b) in iter.zip(&query) {
+					for ((state, [a]), b) in iter.zip(&query) {
 						// This assumes `iter` and `Query` will always return
 						// in the same order.
-						assert_eq!(*a, *b);
+						assert_eq!(**a, *b);
 						if DetectChanges::is_changed(&b) {
 							assert!(update_vec.contains(&n));
 							let count = choose(N - (n + 1), R - 1);
@@ -1731,15 +1718,15 @@ mod testing {
 	#[test]
 	fn array_comb() {
 		 // Normal Cases:
-		test_array::<10, 4>(&[0, 4, 6]);
-		test_array::<200, 2>(&[10, 17, 100, 101, 102, 103, 104, 105, 199]);
+		test_array::<10, 4, 3>(&[0, 4, 6]);
+		test_array::<200, 2, 1>(&[10, 17, 100, 101, 102, 103, 104, 105, 199]);
 		
 		 // Weird Cases:
-		test_array::<10, 10>(&[]);
-		test_array::<16, 1>(&[]);
-		test_array::<0, 2>(&[]);
-		// test_array::<10, 0>(&[]);
-		// test_array::<0, 0>(&[]);
+		test_array::<10, 10, 9>(&[]);
+		// test_array::<16, 1, 0>(&[]);
+		test_array::<0, 2, 1>(&[]);
+		// test_array::<10, 0, 0>(&[]);
+		// test_array::<0, 0, 0>(&[]);
 	}
 	
 	#[test]

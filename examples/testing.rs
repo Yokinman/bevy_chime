@@ -202,7 +202,7 @@ fn add_many_dogs(world: &mut World) {
 	println!("COUNT: {n}");
 }
 
-fn when_func_a(state: PredState<DynPred, Query<&Pos>>) {
+fn when_func_a(state: PredState2<DynPred, Single<Query<&'static Pos>>>) {
 	// let a_time = Instant::now();
 	for (state, pos) in state {
 		let pred =
@@ -219,7 +219,7 @@ fn do_func_a(query: PredFetch<&mut Pos>, time: Res<Time>) {
 	pos_x.spd.val *= -1.;
 }
 
-fn when_func_b(state: PredState<DynPred, Query<&Pos>>) {
+fn when_func_b(state: PredState2<DynPred, Single<Query<&'static Pos>>>) {
 	// let a_time = Instant::now();
 	// let time = time.elapsed();
 	for (state, pos) in state {
@@ -273,10 +273,10 @@ fn outlier_func_b(query: PredFetch<&mut Pos>, time: Res<Time>) {
 	// 	pos[1].poly(pos[1].base_time())));
 }
 
-fn when_func_c(state: PredState<DynPred, [Query<&Pos>; 2]>) {
+fn when_func_c(state: PredState2<DynPred, NestedPerm<[Query<'static, 'static, &'static Pos>; 1], Single<[Query<'static, 'static, &'static Pos>; 1]>>>) {
 	// let mut n = 0;
 	// let a_time = Instant::now();
-	for (state, pos) in state.outer_iter() {
+	for (state, [pos]) in state.into_iter() {
 		let time = pos.max_base_time();
 		let pos_poly_vec = pos.poly_vec(time);
 		for (state, [b_pos]) in state {
@@ -360,8 +360,8 @@ fn when_func_c(state: PredState<DynPred, [Query<&Pos>; 2]>) {
 	// println!("  when_func_c ({n}): {:?}", Instant::now().duration_since(a_time));
 }
 
-fn do_func_c(query: PredFetch<[&mut Pos; 2]>, time: Res<Time>) {
-	let [mut poss, mut b_poss] = query.get_inner();
+fn do_func_c(query: PredFetch<NestedPerm<[&mut Pos; 1], [&mut Pos; 1]>>, time: Res<Time>) {
+	let NestedPerm([mut poss], [mut b_poss]) = query.get_inner();
 	
 	let poly = (poss[0].poly(poss[0].base_time()) - b_poss[0].poly(b_poss[0].base_time())).sqr()
 		+ (poss[1].poly(poss[1].base_time()) - b_poss[1].poly(b_poss[1].base_time())).sqr();
@@ -441,8 +441,8 @@ fn do_func_c(query: PredFetch<[&mut Pos; 2]>, time: Res<Time>) {
 	// assert!(poly.rate_at(time.elapsed()) >= 0., "{:?}", poly);
 }
 
-fn outlier_func_c(query: PredFetch<[&mut Pos; 2]>, time: Res<Time>) {
-	let [mut poss, mut b_poss] = query.get_inner();
+fn outlier_func_c(query: PredFetch<NestedPerm<[&mut Pos; 1], [&mut Pos; 1]>>, time: Res<Time>) {
+	let NestedPerm([mut poss], [mut b_poss]) = query.get_inner();
 	let mut pos = poss.at_vec_mut(time.elapsed());
 	let mut b_pos = b_poss.at_vec_mut(time.elapsed());
 	pos[0].spd.val = 0.; pos[0].spd.acc.val = 0.;
