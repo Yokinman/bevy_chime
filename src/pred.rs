@@ -886,14 +886,10 @@ where
 /// ...
 pub trait PredNodeCase {
 	type Id;
-	fn with_id(id: Self::Id) -> Self;
 }
 
 impl<I, T> PredNodeCase for PredStateCase<I, T> {
 	type Id = I;
-	fn with_id(id: Self::Id) -> Self {
-		PredStateCase::new(id)
-	}
 }
 
 impl<I, T> PredNodeCase for (I, Node<T>)
@@ -902,9 +898,6 @@ where
 	T: PredNodeCase,
 {
 	type Id = I;
-	fn with_id(id: Self::Id) -> Self {
-		(id, Node::default())
-	}
 }
 
 /// ...
