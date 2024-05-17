@@ -340,6 +340,10 @@ impl<D, F> Fetch<D, F> {
 			_filter: std::marker::PhantomData,
 		}
 	}
+	
+	pub fn into_inner(self) -> D {
+		self.inner
+	}
 }
 
 impl<D, F> Deref for Fetch<D, F> {
