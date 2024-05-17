@@ -317,13 +317,13 @@ where
 	type ItemRef = Ref<'a, T>;
 }
 
-impl<'a, 'b, A, B> PredParamQueryData for (&'a A, &'b B)
+impl<A, B> PredParamQueryData for (A, B)
 where
-	A: Component,
-	B: Component,
+	A: PredParamQueryData,
+	B: PredParamQueryData,
 {
-	type Item_<'w> = (&'w A, &'w B);
-	type ItemRef = (Ref<'a, A>, Ref<'b, B>);
+	type Item_<'w> = (A::Item_<'w>, B::Item_<'w>);
+	type ItemRef = (A::ItemRef, B::ItemRef);
 }
 
 /// Unused - may replace the output of `QueryComb` if the concept of
