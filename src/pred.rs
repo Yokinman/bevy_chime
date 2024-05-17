@@ -70,7 +70,10 @@ where
 {
 	type Param = Query<'static, 'static, (T::ItemRef, Entity), F>;
 	type Id = Entity;
-	type Case<'w> = PredCombCase<<<T::ItemRef as WorldQuery>::Item<'w> as PredItemRef>::Item, Entity>;
+	type Case<'w> = PredCombCase<
+		Fetch<<<T::ItemRef as WorldQuery>::Item<'w> as PredItemRef>::Item, F>,
+		Entity,
+	>;
 	type Input = ();
 	type Comb<'w, K: CombKind> = QueryComb<'w, T, F, K>;
 	fn comb<'w, K: CombKind>(
@@ -328,13 +331,14 @@ where
 
 /// Unused - may replace the output of `QueryComb` if the concept of
 /// case-by-case prediction closures is implemented.
+#[derive(Debug)]
 pub struct Fetch<D, F> {
 	inner: D,
 	_filter: std::marker::PhantomData<F>,
 }
 
 impl<D, F> Fetch<D, F> {
-	fn new(inner: D) -> Self {
+	pub(crate) fn new(inner: D) -> Self {
 		Self {
 			inner,
 			_filter: std::marker::PhantomData,
@@ -370,10 +374,10 @@ impl<T> PredItem for &T {
 
 impl<D, F> PredItem for Fetch<D, F>
 where
-	D: Copy
+	D: PredItem
 {
 	fn clone(&self) -> Self {
-		Fetch::new(self.inner)
+		Fetch::new(self.inner.clone())
 	}
 }
 

@@ -171,7 +171,10 @@ where
 	<T::ItemRef as WorldQuery>::Item<'w>: PredItemRef,
 {
 	type Id = Entity;
-	type Case = PredCombCase<<<T::ItemRef as WorldQuery>::Item<'w> as PredItemRef>::Item, Entity>;
+	type Case = PredCombCase<
+		Fetch<<<T::ItemRef as WorldQuery>::Item<'w> as PredItemRef>::Item, F>,
+		Entity,
+	>;
 }
 
 impl<'w, A, K> PredCombinator<K> for PredSingleComb<'w, A, K>
@@ -299,7 +302,10 @@ where
 		kind: K,
 	},
 	Cached {
-		slice: Rc<[PredCombCase<<<T::ItemRef as WorldQuery>::Item<'w> as PredItemRef>::Item, Entity>]>,
+		slice: Rc<[PredCombCase<
+			Fetch<<<T::ItemRef as WorldQuery>::Item<'w> as PredItemRef>::Item, F>,
+			Entity,
+		>]>,
 		kind: K,
 	},
 }
@@ -380,7 +386,10 @@ where
 		iter: CombIter<QueryIter<'w, 'w, (T::ItemRef, Entity), F>, K>,
 	},
 	Cached {
-		slice: Rc<[PredCombCase<<<T::ItemRef as WorldQuery>::Item<'w> as PredItemRef>::Item, Entity>]>,
+		slice: Rc<[PredCombCase<
+			Fetch<<<T::ItemRef as WorldQuery>::Item<'w> as PredItemRef>::Item, F>,
+			Entity,
+		>]>,
 		index: usize,
 	},
 }
@@ -392,10 +401,16 @@ where
 	K: CombKind,
 	<T::ItemRef as WorldQuery>::Item<'w>: PredItemRef,
 {
-	type Item = PredCombCase<<<T::ItemRef as WorldQuery>::Item<'w> as PredItemRef>::Item, Entity>;
+	type Item = PredCombCase<
+		Fetch<<<T::ItemRef as WorldQuery>::Item<'w> as PredItemRef>::Item, F>,
+		Entity,
+	>;
 	fn next(&mut self) -> Option<Self::Item> {
 		match self {
-			Self::Normal { iter } => iter.next(),
+			Self::Normal { iter } => iter.next().map(|x| match x {
+				PredCombCase::Diff(item, id) => PredCombCase::Diff(Fetch::new(item), id),
+				PredCombCase::Same(item, id) => PredCombCase::Same(Fetch::new(item), id),
+			}),
 			Self::Cached { slice, index } => {
 				if let Some(case) = slice.get(*index) {
 					*index += 1;
@@ -417,7 +432,10 @@ where
 	}
 	fn nth(&mut self, n: usize) -> Option<Self::Item> {
 		match self {
-			Self::Normal { iter } => iter.nth(n),
+			Self::Normal { iter } => iter.nth(n).map(|x| match x {
+				PredCombCase::Diff(item, id) => PredCombCase::Diff(Fetch::new(item), id),
+				PredCombCase::Same(item, id) => PredCombCase::Same(Fetch::new(item), id),
+			}),
 			Self::Cached { index, .. } => {
 				*index += n;
 				self.next()
