@@ -433,6 +433,16 @@ impl<'w, T: 'static> PredItemRef for Ref<'w, T> {
 	}
 }
 
+impl<'w, T: 'static, F> PredItemRef for Fetch<Ref<'w, T>, F> {
+	type Item = &'w T;
+	fn into_item(self) -> Self::Item {
+		self.into_inner().into_inner()
+	}
+	fn is_updated(item: &Self) -> bool {
+		DetectChanges::is_changed(&**item)
+	}
+}
+
 impl<'w, R: Resource> PredItemRef for Res<'w, R> {
 	type Item = Self;
 	fn into_item(self) -> Self::Item {
