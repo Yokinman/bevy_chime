@@ -214,6 +214,86 @@ impl_into_pred_fn!(@all
 	_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15
 );
 
+/// ...
+pub trait PredCaseFn<P, B: PredBranch, M> {
+	fn run<'w, K: CombKind>(&self, input: PredSubState2<'w, P, B, K>)
+	where
+		P: 'w,
+		B: 'w;
+	
+	fn into_events(self) -> ChimeEventBuilder<P, B, (), <B as PredBranch>::Input, impl PredFn<P, B, ()>>
+	where
+		Self: Sized,
+		P: 'static,
+		B: 'static,
+		<B as PredBranch>::Input: Default + Send + Sync,
+	{
+		ChimeEventBuilder::new(
+			move |state: PredState2<P, B>, _misc: ()| {
+				self.run(state.inner);
+			},
+			B::Input::default(),
+		)
+	}
+}
+
+impl<F, P, A,> PredCaseFn<P, Single<(A,)>, ()> for F
+where
+	P: Prediction,
+	A: PredParam,
+	F: Fn(PredParamItem<A>,) -> P,
+{
+	fn run<'w, K: CombKind>(&self, input: PredSubState2<'w, P, Single<(A,)>, K>)
+	where
+		P: 'w,
+		Single<(A,)>: 'w,
+	{
+		for (case, (a,)) in input {
+			let pred = self(a,);
+			case.set(pred)
+		}
+	}
+}
+
+impl<F, P, A, B,> PredCaseFn<P, Single<(A, B,)>, ()> for F
+where
+	P: Prediction,
+	A: PredParam,
+	B: PredParam,
+	F: Fn(PredParamItem<A>, PredParamItem<B>,) -> P,
+{
+	fn run<'w, K: CombKind>(&self, input: PredSubState2<'w, P, Single<(A, B,)>, K>)
+	where
+		P: 'w,
+		Single<(A, B,)>: 'w,
+	{
+		for (case, (a, b,)) in input {
+			let pred = self(a, b,);
+			case.set(pred);
+		}
+	}
+}
+
+impl<F, P, O, A, T, M> PredCaseFn<P, Nested<(A,), T>, (O, M)> for F
+where
+	P: Prediction,
+	A: PredParam,
+	T: PredBranch,
+	O: PredCaseFn<P, T, M>,
+	F: Fn(PredParamItem<A>,) -> O,
+{
+	fn run<'w, K: CombKind>(&self, input: PredSubState2<'w, P, Nested<(A,), T>, K>)
+	where
+		P: 'w,
+		Nested<(A,), T>: 'w,
+	{
+		for (state, (a,)) in input {
+			let x = self(a,);
+			x.run(state);
+		}
+	}
+}
+
 /// Begin/end-type system for a chime event (object-safe).
 trait ChimeEventSystem: System<In=(), Out=()> + Send + Sync {
 	fn init_sys(&self, store: &mut Option<Box<dyn System<In=(), Out=()>>>, world: &mut World);

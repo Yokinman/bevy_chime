@@ -546,7 +546,7 @@ pub struct PredState2<'p, T, P>
 where
 	P: PredBranch,
 {
-	inner: PredSubState2<'p, T, P, CombAnyTrue>,
+	pub(crate) inner: PredSubState2<'p, T, P, CombAnyTrue>,
 }
 
 impl<'p, T, P> PredState2<'p, T, P>
