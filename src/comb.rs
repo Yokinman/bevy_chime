@@ -142,7 +142,7 @@ pub trait PredCombinator<K: CombKind = CombNone>:
 	Clone + IntoIterator<Item=Self::Case>
 {
 	type Id: PredId;
-	type Case: PredCombinatorCase<Id=Self::Id>;
+	type Case: PredCombinatorCase<Self::Param, Id=Self::Id>;
 	type Param: PredParam<Id = Self::Id>;
 	
 	fn outer_skip(&mut self, _n: [usize; 2]) {
@@ -504,14 +504,14 @@ where
 }
 
 /// Item of a [`PredCombinator`]'s iterator.
-pub trait PredCombinatorCase: Clone {
+pub trait PredCombinatorCase<P: PredParam<Id = Self::Id> + ?Sized>: Clone {
 	type Item: PredItem;
 	type Id: PredId;
 	fn is_diff(&self) -> bool;
 	fn into_parts(self) -> (Self::Item, Self::Id);
 }
 
-impl PredCombinatorCase for () {
+impl PredCombinatorCase<()> for () {
 	type Item = ();
 	type Id = ();
 	fn is_diff(&self) -> bool {
@@ -522,8 +522,9 @@ impl PredCombinatorCase for () {
 	}
 }
 
-impl<P, I> PredCombinatorCase for PredCombCase<P, I>
+impl<T, P, I> PredCombinatorCase<T> for PredCombCase<P, I>
 where
+	T: PredParam<Id = I>,
 	P: PredItem,
 	I: PredId,
 {
@@ -541,8 +542,10 @@ where
 	}
 }
 
-impl<C: PredCombinatorCase, const N: usize> PredCombinatorCase for [C; N]
+impl<T, C, const N: usize> PredCombinatorCase<[T; N]> for [C; N]
 where
+	T: PredParam<Id = C::Id>,
+	C: PredCombinatorCase<T>,
 	C::Id: Ord
 {
 	type Item = [C::Item; N];
@@ -566,9 +569,10 @@ where
 	}
 }
 
-impl<A> PredCombinatorCase for (A,)
+impl<P, A> PredCombinatorCase<(P,)> for (A,)
 where
-	A: PredCombinatorCase,
+	P: PredParam<Id = A::Id>,
+	A: PredCombinatorCase<P>,
 {
 	type Item = (A::Item,);
 	type Id = (A::Id,);
@@ -582,10 +586,12 @@ where
 	}
 }
 
-impl<A, B> PredCombinatorCase for (A, B)
+impl<P, Q, A, B> PredCombinatorCase<(P, Q)> for (A, B)
 where
-	A: PredCombinatorCase,
-	B: PredCombinatorCase,
+	P: PredParam<Id = A::Id>,
+	Q: PredParam<Id = B::Id>,
+	A: PredCombinatorCase<P>,
+	B: PredCombinatorCase<Q>,
 {
 	type Item = (A::Item, B::Item);
 	type Id = (A::Id, B::Id);

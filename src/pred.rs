@@ -37,7 +37,7 @@ where
 
 /// Shortcut for accessing `PredParam::Comb::Case::Item`.
 pub type PredParamItem<'w, P>
-	= <<P as PredParam>::Case<'w> as PredCombinatorCase>::Item;
+	= <<P as PredParam>::Case<'w> as PredCombinatorCase<P>>::Item;
 
 /// A set of [`PredItem`] values used to predict & schedule events.
 pub trait PredParam {
@@ -46,13 +46,14 @@ pub trait PredParam {
 	
 	/// Unique identifier for each of [`Self::Param`]'s items.
 	type Id: PredId;
-	type Case<'w>: PredCombinatorCase<Id=Self::Id>;
+	type Case<'w>: PredCombinatorCase<Self, Id=Self::Id>;
 	
 	/// ...
 	type Input: Clone;
 	
 	/// Creates combinator iterators over [`Self::Param`]'s items.
-	type Comb<'w, K: CombKind>: PredCombinator<K, Case=Self::Case<'w>, Id=Self::Id>;
+	type Comb<'w, K: CombKind>:
+		PredCombinator<K, Case=Self::Case<'w>, Id=Self::Id, Param=Self>;
 	
 	/// Produces [`Self::Comb`].
 	fn comb<'w, K: CombKind>(
@@ -261,9 +262,10 @@ where
 	}
 }
 
-impl<T> PredCombinatorCase for Misc<T>
+impl<P, T> PredCombinatorCase<Misc<P>> for Misc<T>
 where
-	T: PredCombinatorCase,
+	P: PredParam<Id = T::Id>,
+	T: PredCombinatorCase<P>,
 {
 	type Id = T::Id;
 	type Item = Misc<T::Item>;
