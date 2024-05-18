@@ -68,6 +68,7 @@ where
 	T: PredParamQueryData + 'static,
 	F: ArchetypeFilter + 'static,
 	for<'w> <T::ItemRef as WorldQuery>::Item<'w>: PredItemRef,
+	for<'w> <<T::ItemRef as WorldQuery>::Item<'w> as PredItemRef>::Item: PredParamQueryData,
 {
 	type Param = Query<'static, 'static, (T::ItemRef, Entity), F>;
 	type Id = Entity;
@@ -377,7 +378,7 @@ impl<T> PredItem for &T {
 
 impl<D, F> PredItem for Fetch<D, F>
 where
-	D: PredItem
+	D: PredParamQueryData
 {
 	fn clone(&self) -> Self {
 		Fetch::new(self.inner.clone())
