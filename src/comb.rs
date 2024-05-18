@@ -172,7 +172,7 @@ where
 	T: PredParamQueryData + 'static,
 	F: ArchetypeFilter + 'static,
 	for<'a> <T::ItemRef as WorldQuery>::Item<'a>: PredItemRef,
-	for<'a> <<T::ItemRef as WorldQuery>::Item<'a> as PredItemRef>::Item: PredParamQueryData,
+	for<'a> Fetch<<<T::ItemRef as WorldQuery>::Item<'a> as PredItemRef>::Item, F>: PredItem,
 {
 	type Id = Entity;
 	type Case = PredCombCase<
@@ -325,7 +325,7 @@ where
 	F: ArchetypeFilter + 'static,
 	K: CombKind,
 	<T::ItemRef as WorldQuery>::Item<'w>: PredItemRef,
-	<<T::ItemRef as WorldQuery>::Item<'w> as PredItemRef>::Item: PredParamQueryData,
+	Fetch<<<T::ItemRef as WorldQuery>::Item<'w> as PredItemRef>::Item, F>: PredItem,
 {
 	pub(crate) fn new(inner: &'w Query<'w, 'w, (T::ItemRef, Entity), F>, kind: K) -> Self {
 		let comb = Self::Normal { inner, kind };
@@ -369,7 +369,7 @@ where
 	T: PredParamQueryData,
 	F: ArchetypeFilter + 'static,
 	<T::ItemRef as WorldQuery>::Item<'w>: PredItemRef,
-	<<T::ItemRef as WorldQuery>::Item<'w> as PredItemRef>::Item: PredParamQueryData,
+	Fetch<<<T::ItemRef as WorldQuery>::Item<'w> as PredItemRef>::Item, F>: PredItem,
 {
 	type Item = <Self::IntoIter as Iterator>::Item;
 	type IntoIter = QueryCombIter<'w, T, F, K>;
@@ -411,7 +411,7 @@ where
 	F: ArchetypeFilter,
 	K: CombKind,
 	<T::ItemRef as WorldQuery>::Item<'w>: PredItemRef,
-	<<T::ItemRef as WorldQuery>::Item<'w> as PredItemRef>::Item: PredParamQueryData,
+	Fetch<<<T::ItemRef as WorldQuery>::Item<'w> as PredItemRef>::Item, F>: PredItem,
 {
 	type Item = PredCombCase<
 		Fetch<<<T::ItemRef as WorldQuery>::Item<'w> as PredItemRef>::Item, F>,

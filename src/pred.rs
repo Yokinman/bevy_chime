@@ -68,7 +68,7 @@ where
 	T: PredParamQueryData + 'static,
 	F: ArchetypeFilter + 'static,
 	for<'w> <T::ItemRef as WorldQuery>::Item<'w>: PredItemRef,
-	for<'w> <<T::ItemRef as WorldQuery>::Item<'w> as PredItemRef>::Item: PredParamQueryData,
+	for<'w> Fetch<<<T::ItemRef as WorldQuery>::Item<'w> as PredItemRef>::Item, F>: PredItem,
 {
 	type Param = Query<'static, 'static, (T::ItemRef, Entity), F>;
 	type Id = Entity;
@@ -311,16 +311,14 @@ where
 }
 
 /// ...
-pub trait PredParamQueryData: ReadOnlyQueryData + PredItem {
-	type Item_<'w>: PredParamQueryData<ItemRef = <Self::ItemRef as WorldQuery>::Item<'w>>;
-	type ItemRef: ReadOnlyQueryData + PredItemRef;
+pub trait PredParamQueryData: ReadOnlyQueryData {
+	type ItemRef: ReadOnlyQueryData;
 }
 
 impl<'a, T> PredParamQueryData for &'a T
 where
 	T: Component,
 {
-	type Item_<'w> = &'w T;
 	type ItemRef = Ref<'a, T>;
 }
 
@@ -329,7 +327,6 @@ where
 	A: PredParamQueryData,
 	B: PredParamQueryData,
 {
-	type Item_<'w> = (A::Item_<'w>, B::Item_<'w>);
 	type ItemRef = (A::ItemRef, B::ItemRef);
 }
 
@@ -378,10 +375,10 @@ impl<T> PredItem for &T {
 
 impl<D, F> PredItem for Fetch<D, F>
 where
-	D: PredParamQueryData
+	D: Copy
 {
 	fn clone(&self) -> Self {
-		Fetch::new(self.inner.clone())
+		Fetch::new(self.inner)
 	}
 }
 
