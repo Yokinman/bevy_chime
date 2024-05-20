@@ -238,13 +238,13 @@ pub trait PredCaseFn<P, B: PredBranch, M> {
 	}
 }
 
-impl<F, P, A,> PredCaseFn<P, Single<(A,)>, ()> for F
+impl<F, P, A,> PredCaseFn<P, Single<PredSingleComb<'static, A>>, ()> for F
 where
 	P: Prediction,
 	A: PredParam,
 	F: Fn(PredParamItem<A>,) -> P,
 {
-	fn run<'w, K: CombKind>(&self, input: PredSubState2<'w, P, Single<(A,)>, K>)
+	fn run<'w, K: CombKind>(&self, input: PredSubState2<'w, P, Single<PredSingleComb<'static, A>>, K>)
 	where
 		P: 'w,
 		Single<(A,)>: 'w,
@@ -275,7 +275,7 @@ where
 	}
 }
 
-impl<F, P, O, A, T, M> PredCaseFn<P, Nested<(A,), T>, (O, M)> for F
+impl<F, P, O, A, T, M> PredCaseFn<P, Nested<PredSingleComb<'static, A>, T>, (O, M)> for F
 where
 	P: Prediction,
 	A: PredParam,
@@ -283,7 +283,7 @@ where
 	O: PredCaseFn<P, T, M>,
 	F: Fn(PredParamItem<A>,) -> O,
 {
-	fn run<'w, K: CombKind>(&self, input: PredSubState2<'w, P, Nested<(A,), T>, K>)
+	fn run<'w, K: CombKind>(&self, input: PredSubState2<'w, P, Nested<PredSingleComb<'static, A>, T>, K>)
 	where
 		P: 'w,
 		Nested<(A,), T>: 'w,

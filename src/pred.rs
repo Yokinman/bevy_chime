@@ -119,7 +119,7 @@ impl PredParam for EmptyComb {
 	}
 }
 
-impl<A> PredParam for (A,)
+impl<A> PredParam for PredSingleComb<'static, A>
 where
 	A: PredParam,
 {
@@ -437,7 +437,7 @@ where
 
 impl<T: Resource> PredItem2<ResComb<'static, T>> for Res<'_, T> {}
 
-impl<A, P,> PredItem2<(P,)> for (A,)
+impl<A, P,> PredItem2<PredSingleComb<'static, P>> for (A,)
 where
 	A: PredItem2<P>,
 	P: PredParam,

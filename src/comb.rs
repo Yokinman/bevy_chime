@@ -188,7 +188,7 @@ where
 {
 	type Id = (A::Id,);
 	type Case = (A::Case<'w>,);
-	type Param = (A,);
+	type Param = PredSingleComb<'static, A>;
 }
 
 impl<'w, A, B, K> PredCombinator<K> for PredPairComb<'w, A, B, K>
@@ -572,7 +572,7 @@ where
 	}
 }
 
-impl<P, A> PredCombinatorCase<(P,)> for (A,)
+impl<P, A> PredCombinatorCase<PredSingleComb<'static, P>> for (A,)
 where
 	P: PredParam<Id = A::Id>,
 	A: PredCombinatorCase<P>,
@@ -629,7 +629,7 @@ where
 }
 
 /// ...
-pub struct PredSingleComb<'w, A, K>
+pub struct PredSingleComb<'w, A, K = CombNone>
 where
 	A: PredParam,
 	K: CombKind,
