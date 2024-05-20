@@ -153,7 +153,7 @@ pub trait PredCombinator<K: CombKind = CombNone>:
 impl<K: CombKind> PredCombinator<K> for EmptyComb<K> {
 	type Id = ();
 	type Case = PredCombCase<(), ()>;
-	type Param = ();
+	type Param = EmptyComb;
 }
 
 impl<'w, R, K> PredCombinator<K> for ResComb<'w, R, K>
@@ -514,7 +514,7 @@ pub trait PredCombinatorCase<P: PredParam<Id = Self::Id> + ?Sized>: Clone {
 	fn into_parts(self) -> (Self::Item, Self::Id);
 }
 
-impl PredCombinatorCase<()> for () {
+impl PredCombinatorCase<EmptyComb> for () {
 	type Item = ();
 	type Id = ();
 	fn is_diff(&self) -> bool {

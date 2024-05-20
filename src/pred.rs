@@ -103,7 +103,7 @@ where
 	}
 }
 
-impl PredParam for () {
+impl PredParam for EmptyComb {
 	type Param = ();
 	type Id = ();
 	type Item<'w> = ();
@@ -426,7 +426,7 @@ where
 /// ...
 pub trait PredItem2<P: PredParam>: PredItem {}
 
-impl PredItem2<()> for () {}
+impl PredItem2<EmptyComb> for () {}
 
 impl<D, F> PredItem2<QueryComb<'static, D, F>> for Fetch<D, F>
 where
@@ -839,7 +839,7 @@ where
 	A: PredParam
 {
 	type Param = A;
-	type Branch = Single<()>;
+	type Branch = Single<EmptyComb>;
 	type Case<T> = PredStateCase<A::Id, T>;
 	type AllParams = A;
 	type Id = A::Id;
