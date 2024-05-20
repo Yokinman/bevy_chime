@@ -199,7 +199,7 @@ where
 {
 	type Id = (A::Id, B::Id);
 	type Case = (A::Case<'w>, B::Case<'w>);
-	type Param = (A, B);
+	type Param = PredPairComb<'static, A, B>;
 }
 
 impl<'w, C, const N: usize, K> PredCombinator<K> for PredArrayComb<'w, C, N, K>
@@ -589,7 +589,7 @@ where
 	}
 }
 
-impl<P, Q, A, B> PredCombinatorCase<(P, Q)> for (A, B)
+impl<P, Q, A, B> PredCombinatorCase<PredPairComb<'static, P, Q>> for (A, B)
 where
 	P: PredParam<Id = A::Id>,
 	Q: PredParam<Id = B::Id>,

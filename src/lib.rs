@@ -256,14 +256,14 @@ where
 	}
 }
 
-impl<F, P, A, B,> PredCaseFn<P, Single<(A, B,)>, ()> for F
+impl<F, P, A, B,> PredCaseFn<P, Single<PredPairComb<'static, A, B>>, ()> for F
 where
 	P: Prediction,
 	A: PredParam,
 	B: PredParam,
 	F: Fn(PredParamItem<A>, PredParamItem<B>,) -> P,
 {
-	fn run<'w, K: CombKind>(&self, input: PredSubState2<'w, P, Single<(A, B,)>, K>)
+	fn run<'w, K: CombKind>(&self, input: PredSubState2<'w, P, Single<PredPairComb<'static, A, B>>, K>)
 	where
 		P: 'w,
 		Single<(A, B,)>: 'w,

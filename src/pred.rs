@@ -138,7 +138,7 @@ where
 	}
 }
 
-impl<A, B> PredParam for (A, B)
+impl<A, B> PredParam for PredPairComb<'static, A, B>
 where
 	A: PredParam,
 	B: PredParam,
@@ -443,7 +443,7 @@ where
 	P: PredParam,
 {}
 
-impl<A, B, P, Q,> PredItem2<(P, Q,)> for (A, B,)
+impl<A, B, P, Q,> PredItem2<PredPairComb<'static, P, Q>> for (A, B,)
 where
 	A: PredItem2<P>,
 	B: PredItem2<Q>,
@@ -723,7 +723,7 @@ where
 	type Param = [A; N];
 	type Branch = B;
 	type Case<T> = (<[A; N] as PredParam>::Id, Node<B::Case<T>>);
-	type AllParams = ([A; N], B::AllParams);
+	type AllParams = PredPairComb<'static, [A; N], B::AllParams>;
 	type Id = NestedPerm<<[A; N] as PredParam>::Id, B::Id>;
 	type Input = NestedPerm<<[A; N] as PredParam>::Input, B::Input>;
 	type CombSplit<'w, K: CombKind> = (
@@ -894,7 +894,7 @@ where
 	type Param = A;
 	type Branch = B;
 	type Case<T> = (A::Id, Node<B::Case<T>>);
-	type AllParams = (A, B::AllParams);
+	type AllParams = PredPairComb<'static, A, B::AllParams>;
 	type Id = Nested<A::Id, B::Id>;
 	type Input = Nested<A::Input, B::Input>;
 	type CombSplit<'w, K: CombKind> = (
@@ -1407,9 +1407,9 @@ mod testing {
 		b_update_list: &[usize],
 	)
 	where
-		<(QueryComb<'static, &'static Test>, QueryComb<'static, &'static TestB>) as PredParam>::Input:
+		<PredPairComb<'static, QueryComb<'static, &'static Test>, QueryComb<'static, &'static TestB>> as PredParam>::Input:
 				Default
-				+ IntoInput<<(QueryComb<'static, &'static Test>, QueryComb<'static, &'static TestB>) as PredParam>::Input>
+				+ IntoInput<<PredPairComb<'static, QueryComb<'static, &'static Test>, QueryComb<'static, &'static TestB>> as PredParam>::Input>
 				+ Send + Sync + 'static,
 	{
 		use crate::*;
@@ -1429,7 +1429,7 @@ mod testing {
 		let update_vec = update_list.to_vec();
 		let b_update_vec = b_update_list.to_vec();
 		app.add_chime_events((move |
-			state: PredState2<DynPred, Single<(QueryComb<'static, &'static Test>, QueryComb<'static, &'static TestB>)>>,
+			state: PredState2<DynPred, Single<PredPairComb<'static, QueryComb<'static, &'static Test>, QueryComb<'static, &'static TestB>>>>,
 			a_query: Query<&Test>,
 			b_query: Query<&TestB>,
 			mut index: system::Local<usize>,
