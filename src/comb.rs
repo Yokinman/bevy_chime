@@ -163,7 +163,7 @@ where
 {
 	type Id = ();
 	type Case = PredCombCase<Res<'w, R>, ()>;
-	type Param = Res<'static, R>;
+	type Param = ResComb<'static, R>;
 }
 
 impl<'w, T, F, K> PredCombinator<K> for QueryComb<'w, T, F, K>

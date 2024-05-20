@@ -84,7 +84,7 @@ where
 	}
 }
 
-impl<R> PredParam for Res<'static, R>
+impl<R> PredParam for ResComb<'static, R>
 where
 	R: Resource
 {
@@ -435,7 +435,7 @@ where
 	for<'w> <D::ItemRef as WorldQuery>::Item<'w>: PredItemRef2,
 {}
 
-impl<T: Resource> PredItem2<Res<'static, T>> for Res<'_, T> {}
+impl<T: Resource> PredItem2<ResComb<'static, T>> for Res<'_, T> {}
 
 impl<A, P,> PredItem2<(P,)> for (A,)
 where
