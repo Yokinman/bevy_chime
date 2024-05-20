@@ -226,7 +226,7 @@ where
 {
 	type Id = I::Item;
 	type Case = PredCombCase<WithId<I::Item>, I::Item>;
-	type Param = WithId<I>;
+	type Param = PredIdComb<I>;
 }
 
 /// Combinator for `PredParam` `()` implementation.

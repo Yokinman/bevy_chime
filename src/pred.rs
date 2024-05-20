@@ -200,7 +200,7 @@ where
 // 	}
 // }
 
-impl<I> PredParam for WithId<I>
+impl<I> PredParam for PredIdComb<I>
 where
 	I: IntoIterator + Clone,
 	I::Item: PredId,
@@ -458,7 +458,7 @@ where
 	P::Id: Ord,
 {}
 
-impl<T> PredItem2<WithId<T>> for WithId<T::Item>
+impl<T> PredItem2<PredIdComb<T>> for WithId<T::Item>
 where
 	T: IntoIterator + Clone,
 	T::Item : PredId,
