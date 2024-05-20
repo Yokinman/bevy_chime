@@ -419,6 +419,53 @@ where
 	}
 }
 
+/// ...
+pub trait PredItem2<P: PredParam>: PredItem {}
+
+impl PredItem2<()> for () {}
+
+impl<D, F> PredItem2<Query<'static, 'static, D, F>> for Fetch<D, F>
+where
+	D: Copy + PredParamQueryData + 'static,
+	F: ArchetypeFilter + 'static,
+	for<'w> <D::ItemRef as WorldQuery>::Item<'w>: PredItemRef,
+	for<'w> Fetch<<<D::ItemRef as WorldQuery>::Item<'w> as PredItemRef>::Item, F>: PredItem,
+{}
+
+impl<T: Resource> PredItem2<Res<'static, T>> for Res<'_, T> {}
+
+impl<A, P,> PredItem2<(P,)> for (A,)
+where
+	A: PredItem2<P>,
+	P: PredParam,
+{}
+
+impl<A, B, P, Q,> PredItem2<(P, Q,)> for (A, B,)
+where
+	A: PredItem2<P>,
+	B: PredItem2<Q>,
+	P: PredParam,
+	Q: PredParam,
+{}
+
+impl<T, P, const N: usize> PredItem2<[P; N]> for [T; N]
+where
+	T: PredItem2<P>,
+	P: PredParam,
+	P::Id: Ord,
+{}
+
+impl<T> PredItem2<WithId<T>> for WithId<T::Item>
+where
+	T: IntoIterator + Clone,
+	T::Item : PredId,
+{}
+
+impl<T> PredItem2<Misc<T>> for Misc<PredParamItem<'_, T>>
+where
+	T: PredParam,
+{}
+
 /// [`PredItem`] with updated state.
 pub trait PredItemRef {
 	type Item: PredItem;
