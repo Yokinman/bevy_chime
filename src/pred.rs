@@ -36,8 +36,7 @@ where
 {}
 
 /// Shortcut for accessing `PredParam::Comb::Case::Item`.
-pub type PredParamItem<'w, P>
-	= <<P as PredParam>::Case<'w> as PredCombinatorCase<P>>::Item;
+pub type PredParamItem<'w, P> = <P as PredParam>::Item<'w>;
 
 /// A set of [`PredItem`] values used to predict & schedule events.
 pub trait PredParam {
@@ -46,7 +45,8 @@ pub trait PredParam {
 	
 	/// Unique identifier for each of [`Self::Param`]'s items.
 	type Id: PredId;
-	type Case<'w>: PredCombinatorCase<Self, Id=Self::Id>;
+	type Item<'w>: PredItem;
+	type Case<'w>: PredCombinatorCase<Self, Id=Self::Id, Item=Self::Item<'w>>;
 	
 	/// ...
 	type Input: Clone;
@@ -72,10 +72,8 @@ where
 {
 	type Param = Query<'static, 'static, (T::ItemRef, Entity), F>;
 	type Id = Entity;
-	type Case<'w> = PredCombCase<
-		Fetch<<<T::ItemRef as WorldQuery>::Item<'w> as PredItemRef>::Item, F>,
-		Entity,
-	>;
+	type Item<'w> = Fetch<<<T::ItemRef as WorldQuery>::Item<'w> as PredItemRef>::Item, F>;
+	type Case<'w> = PredCombCase<Self::Item<'w>, Self::Id>;
 	type Input = ();
 	type Comb<'w, K: CombKind> = QueryComb<'w, T, F, K>;
 	fn comb<'w, K: CombKind>(
@@ -93,7 +91,8 @@ where
 {
 	type Param = Res<'static, R>;
 	type Id = ();
-	type Case<'w> = PredCombCase<Res<'w, R>, ()>;
+	type Item<'w> = Res<'w, R>;
+	type Case<'w> = PredCombCase<Self::Item<'w>, Self::Id>;
 	type Input = ();
 	type Comb<'w, K: CombKind> = ResComb<'w, R, K>;
 	fn comb<'w, K: CombKind>(
@@ -108,7 +107,8 @@ where
 impl PredParam for () {
 	type Param = ();
 	type Id = ();
-	type Case<'w> = PredCombCase<(), ()>;
+	type Item<'w> = ();
+	type Case<'w> = PredCombCase<Self::Item<'w>, Self::Id>;
 	type Input = ();
 	type Comb<'w, K: CombKind> = EmptyComb<K>;
 	fn comb<'w, K: CombKind>(
@@ -126,6 +126,7 @@ where
 {
 	type Param = A::Param;
 	type Id = (A::Id,);
+	type Item<'w> = (A::Item<'w>,);
 	type Case<'w> = (A::Case<'w>,);
 	type Input = (A::Input,);
 	type Comb<'w, K: CombKind> = PredSingleComb<'w, A, K>;
@@ -145,6 +146,7 @@ where
 {
 	type Param = (A::Param, B::Param);
 	type Id = (A::Id, B::Id);
+	type Item<'w> = (A::Item<'w>, B::Item<'w>);
 	type Case<'w> = (A::Case<'w>, B::Case<'w>);
 	type Input = (A::Input, B::Input);
 	type Comb<'w, K: CombKind> = PredPairComb<'w, A, B, K>;
@@ -170,6 +172,7 @@ where
 {
 	type Param = P::Param;
 	type Id = [P::Id; N];
+	type Item<'w> = [P::Item<'w>; N];
 	type Case<'w> = [P::Case<'w>; N];
 	type Input = [P::Input; N];
 	type Comb<'w, K: CombKind> = PredArrayComb<'w, P, N, K>;
@@ -206,7 +209,8 @@ where
 	type Param = ();
 	type Input = I;
 	type Id = I::Item;
-	type Case<'w> = PredCombCase<WithId<I::Item>, I::Item>;
+	type Item<'w> = WithId<I::Item>;
+	type Case<'w> = PredCombCase<Self::Item<'w>, Self::Id>;
 	type Comb<'w, K: CombKind> = PredIdComb<I>;
 	fn comb<'w, K: CombKind>(
 		_param: &'w SystemParamItem<Self::Param>,
@@ -224,6 +228,7 @@ where
 	type Param = T::Param;
 	type Input = T::Input;
 	type Id = T::Id;
+	type Item<'w> = Misc<T::Item<'w>>;
 	type Case<'w> = Misc<T::Case<'w>>;
 	type Comb<'w, K: CombKind> = Misc<T::Comb<'w, K>>;
 	fn comb<'w, K: CombKind>(
