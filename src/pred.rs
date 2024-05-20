@@ -67,8 +67,7 @@ impl<T, F> PredParam for Query<'static, 'static, T, F>
 where
 	T: PredParamQueryData + 'static,
 	F: ArchetypeFilter + 'static,
-	for<'w> <T::ItemRef as WorldQuery>::Item<'w>: PredItemRef,
-	for<'w> Fetch<<<T::ItemRef as WorldQuery>::Item<'w> as PredItemRef>::Item, F>: PredItem,
+	for<'w> <T::ItemRef as WorldQuery>::Item<'w>: PredItemRef2,
 {
 	type Param = Query<'static, 'static, (T::ItemRef, Entity), F>;
 	type Id = Entity;
@@ -380,10 +379,10 @@ impl<T> PredItem for &T {
 
 impl<D, F> PredItem for Fetch<D, F>
 where
-	D: Copy
+	D: PredItem
 {
 	fn clone(&self) -> Self {
-		Fetch::new(self.inner)
+		Fetch::new(self.inner.clone())
 	}
 }
 
@@ -431,10 +430,9 @@ impl PredItem2<()> for () {}
 
 impl<D, F> PredItem2<Query<'static, 'static, D, F>> for Fetch<D, F>
 where
-	D: Copy + PredParamQueryData + 'static,
+	D: PredItem + PredParamQueryData + 'static,
 	F: ArchetypeFilter + 'static,
-	for<'w> <D::ItemRef as WorldQuery>::Item<'w>: PredItemRef,
-	for<'w> Fetch<<<D::ItemRef as WorldQuery>::Item<'w> as PredItemRef>::Item, F>: PredItem,
+	for<'w> <D::ItemRef as WorldQuery>::Item<'w>: PredItemRef2,
 {}
 
 impl<T: Resource> PredItem2<Res<'static, T>> for Res<'_, T> {}
@@ -535,6 +533,18 @@ where
 		A::is_updated(a) || B::is_updated(b)
 	}
 }
+
+/// ...
+pub trait PredItemRef2: PredItemRef
+where
+	<Self as PredItemRef>::Item: ReadOnlyQueryData,
+{}
+
+impl<T> PredItemRef2 for T
+where
+	T: PredItemRef,
+	<Self as PredItemRef>::Item: ReadOnlyQueryData,
+{}
 
 /// ...
 #[derive(Copy, Clone)]
