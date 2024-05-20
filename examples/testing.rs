@@ -273,7 +273,7 @@ fn outlier_func_b(query: PredFetch<&mut Pos>, time: Res<Time>) {
 	// 	pos[1].poly(pos[1].base_time())));
 }
 
-fn when_func_c(state: PredState2<DynPred, NestedPerm<[QueryComb<'static, &'static Pos>; 1], Single<[QueryComb<'static, &'static Pos>; 1]>>>) {
+fn when_func_c(state: PredState2<DynPred, NestedPerm<PredArrayComb<'static, QueryComb<'static, &'static Pos>, 1>, Single<PredArrayComb<'static, QueryComb<'static, &'static Pos>, 1>>>>) {
 	// let mut n = 0;
 	// let a_time = Instant::now();
 	for (state, [pos]) in state.into_iter() {

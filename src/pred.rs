@@ -164,7 +164,7 @@ where
 	}
 }
 
-impl<P, const N: usize> PredParam for [P; N]
+impl<P, const N: usize> PredParam for PredArrayComb<'static, P, N>
 where
 	P: PredParam,
 	P::Id: Ord,
@@ -451,7 +451,7 @@ where
 	Q: PredParam,
 {}
 
-impl<T, P, const N: usize> PredItem2<[P; N]> for [T; N]
+impl<T, P, const N: usize> PredItem2<PredArrayComb<'static, P, N>> for [T; N]
 where
 	T: PredItem2<P>,
 	P: PredParam,
@@ -669,7 +669,9 @@ where
 }
 
 /// ...
-pub trait PredPermBranch: PredBranch + std::ops::Index<usize> {
+pub trait PredPermBranch: PredBranch /*+ std::ops::Index<usize>*/ {
+	type Output;
+	
 	fn depth() -> usize;
 	
 	fn sort_unstable(&mut self)
@@ -680,52 +682,55 @@ pub trait PredPermBranch: PredBranch + std::ops::Index<usize> {
 	}
 }
 
-impl<T, const N: usize> PredPermBranch for Single<[T; N]>
+impl<T, const N: usize> PredPermBranch for Single<PredArrayComb<'static, T, N>>
 where
-	[T; N]: PredParam,
+	T: PredParam,
+	PredArrayComb<'static, T, N>: PredParam,
 {
+	type Output = T;
+	
 	fn depth() -> usize {
 		N
 	}
 }
 
-impl<T, const N: usize> std::ops::Index<usize> for Single<[T; N]> {
-	type Output = T;
-	fn index(&self, index: usize) -> &Self::Output {
-		self.0.index(index)
-	}
-}
+// impl<T, const N: usize> std::ops::Index<usize> for Single<[T; N]> {
+// 	type Output = T;
+// 	fn index(&self, index: usize) -> &Self::Output {
+// 		self.0.index(index)
+// 	}
+// }
 
 /// ...
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug, Default)]
 pub struct NestedPerm<A, B>(pub A, pub B);
 
-impl<A, const N: usize, B> std::ops::Index<usize> for NestedPerm<[A; N], B>
-where
-	B: PredPermBranch<Output = A>,
-{
-	type Output = A;
-	fn index(&self, index: usize) -> &Self::Output {
-		if index < N {
-			self.0.index(index)
-		} else {
-			self.1.index(index - N)
-		}
-	}
-}
+// impl<A, const N: usize, B> std::ops::Index<usize> for NestedPerm<[A; N], B>
+// where
+// 	B: PredPermBranch<Output = A>,
+// {
+// 	type Output = A;
+// 	fn index(&self, index: usize) -> &Self::Output {
+// 		if index < N {
+// 			self.0.index(index)
+// 		} else {
+// 			self.1.index(index - N)
+// 		}
+// 	}
+// }
 
-impl<A, const N: usize, B> PredBranch for NestedPerm<[A; N], B>
+impl<A, const N: usize, B> PredBranch for NestedPerm<PredArrayComb<'static, A, N>, B>
 where
 	A: PredParam,
 	A::Id: Ord,
 	B: PredPermBranch<Output = A>,
 {
-	type Param = [A; N];
+	type Param = PredArrayComb<'static, A, N>;
 	type Branch = B;
-	type Case<T> = (<[A; N] as PredParam>::Id, Node<B::Case<T>>);
-	type AllParams = PredPairComb<'static, [A; N], B::AllParams>;
-	type Id = NestedPerm<<[A; N] as PredParam>::Id, B::Id>;
-	type Input = NestedPerm<<[A; N] as PredParam>::Input, B::Input>;
+	type Case<T> = (<PredArrayComb<'static, A, N> as PredParam>::Id, Node<B::Case<T>>);
+	type AllParams = PredPairComb<'static, PredArrayComb<'static, A, N>, B::AllParams>;
+	type Id = NestedPerm<<PredArrayComb<'static, A, N> as PredParam>::Id, B::Id>;
+	type Input = NestedPerm<<PredArrayComb<'static, A, N> as PredParam>::Input, B::Input>;
 	type CombSplit<'w, K: CombKind> = (
 		<Self::Param as PredParam>::Comb<'w, K>,
 		[B::CombSplit<'w, CombBranch<K::Pal, K>>; 2],
@@ -737,7 +742,7 @@ where
 		K: CombKind,
 		Self::Branch: 'p;
 	
-	type Comb<'p, T, K> = NestedPermPredComb2<'p, T, [A; N], B, K>
+	type Comb<'p, T, K> = NestedPermPredComb2<'p, T, PredArrayComb<'static, A, N>, B, K>
 	where
 		T: Prediction + 'p,
 		K: CombKind,
@@ -750,7 +755,7 @@ where
 		NestedPerm(a_input, b_input): Self::Input,
 		kind: K,
 	) -> Self::CombSplit<'w, K> {
-		let mut comb = <[A; N]>::comb(a, kind, a_input);
+		let mut comb = PredArrayComb::<'static, A, N>::comb(a, kind, a_input);
 		comb.is_nested = true;
 		(
 			comb,
@@ -777,12 +782,14 @@ where
 	}
 }
 
-impl<A, const N: usize, B> PredPermBranch for NestedPerm<[A; N], B>
+impl<A, const N: usize, B> PredPermBranch for NestedPerm<PredArrayComb<'static, A, N>, B>
 where
 	A: PredParam,
 	A::Id: Ord,
 	B: PredPermBranch<Output = A>,
 {
+	type Output = A;
+	
 	fn depth() -> usize {
 		N + B::depth()
 	}
@@ -996,13 +1003,13 @@ where
 }
 
 impl<A, const N: usize, B, T> Iterator
-	for NestedPredBranchIter<NestedPerm<[A; N], B>, T>
+	for NestedPredBranchIter<NestedPerm<PredArrayComb<'static, A, N>, B>, T>
 where
 	A: PredParam,
 	A::Id: Ord,
 	B: PredPermBranch<Output = A>,
 {
-	type Item = PredStateCase<NestedPerm<<[A; N] as PredParam>::Id, B::Id>, T>;
+	type Item = PredStateCase<NestedPerm<<PredArrayComb<'static, A, N> as PredParam>::Id, B::Id>, T>;
 	fn next(&mut self) -> Option<Self::Item> {
 		while let Some(iter) = self.sub_iter.as_mut() {
 			if let Some(case) = iter.next() {
@@ -1590,10 +1597,10 @@ mod testing {
 		const S: usize,
 	>(update_list: &[usize])
 	where
-		<[QueryComb<'static, &'static Test>; R] as PredParam>::Input:
-			Default + IntoInput<<[QueryComb<'static, &'static Test>; R] as PredParam>::Input> + Send + Sync + 'static,
-		<[QueryComb<'static, &'static Test>; S] as PredParam>::Input:
-			Default + IntoInput<<[QueryComb<'static, &'static Test>; S] as PredParam>::Input> + Send + Sync + 'static,
+		<PredArrayComb<'static, QueryComb<'static, &'static Test>, R> as PredParam>::Input:
+			Default + IntoInput<<PredArrayComb<'static, QueryComb<'static, &'static Test>, R> as PredParam>::Input> + Send + Sync + 'static,
+		<PredArrayComb<'static, QueryComb<'static, &'static Test>, S> as PredParam>::Input:
+			Default + IntoInput<<PredArrayComb<'static, QueryComb<'static, &'static Test>, S> as PredParam>::Input> + Send + Sync + 'static,
 	{
 		use crate::*;
 		
@@ -1618,7 +1625,7 @@ mod testing {
 		let n_choose_r = choose(N, R);
 		let update_vec = update_list.to_vec();
 		app.add_chime_events((move |
-			state: PredState2<DynPred, Single<[QueryComb<'static, &'static Test>; R]>>,
+			state: PredState2<DynPred, Single<PredArrayComb<'static, QueryComb<'static, &'static Test>, R>>>,
 			query: Query<&Test>,
 			mut index: system::Local<usize>,
 		| {
@@ -1672,7 +1679,7 @@ mod testing {
 		 // Setup [`PredSubState::outer_iter`] Testing:
 		let update_vec = update_list.to_vec();
 		app.add_chime_events((move |
-			state: PredState2<DynPred, NestedPerm<[QueryComb<'static, &'static Test>; 1], Single<[QueryComb<'static, &'static Test>; S]>>>,
+			state: PredState2<DynPred, NestedPerm<PredArrayComb<'static, QueryComb<'static, &'static Test>, 1>, Single<PredArrayComb<'static, QueryComb<'static, &'static Test>, S>>>>,
 			query: Query<Ref<Test>>,
 			mut index: system::Local<usize>,
 		| {

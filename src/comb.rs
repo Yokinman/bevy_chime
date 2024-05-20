@@ -210,7 +210,7 @@ where
 {
 	type Id = [C::Id; N];
 	type Case = [C::Case<'w>; N];
-	type Param = [C; N];
+	type Param = PredArrayComb<'static, C, N>;
 	
 	fn outer_skip(&mut self, index: [usize; 2]) {
 		self.a_index += index[0];
@@ -545,7 +545,7 @@ where
 	}
 }
 
-impl<T, C, const N: usize> PredCombinatorCase<[T; N]> for [C; N]
+impl<T, C, const N: usize> PredCombinatorCase<PredArrayComb<'static, T, N>> for [C; N]
 where
 	T: PredParam<Id = C::Id>,
 	C: PredCombinatorCase<T>,
@@ -1313,14 +1313,14 @@ where
 	count: [usize; 2],
 }
 
-impl<'p, T, A, const N: usize, B, K> NestedPermPredComb2<'p, T, [A; N], B, K>
+impl<'p, T, A, const N: usize, B, K> NestedPermPredComb2<'p, T, PredArrayComb<'static, A, N>, B, K>
 where
 	A: PredParam,
 	A::Id: Ord,
 	B: PredPermBranch<Output = A>,
 	K: CombKind,
 {
-	pub fn new(state: PredSubState2<'p, T, NestedPerm<[A; N], B>, K>) -> Self {
+	pub fn new(state: PredSubState2<'p, T, NestedPerm<PredArrayComb<'static, A, N>, B>, K>) -> Self {
 		let (mut comb, sub_comb) = state.comb;
 		let count = [
 			comb.a_comb.clone().into_iter().count().saturating_sub(B::depth()),
@@ -1340,7 +1340,7 @@ where
 }
 
 impl<'p, T, A, const N: usize, B, K> Iterator
-	for NestedPermPredComb2<'p, T, [A; N], B, K>
+	for NestedPermPredComb2<'p, T, PredArrayComb<'static, A, N>, B, K>
 where
 	A: PredParam,
 	A::Id: Ord,
@@ -1349,7 +1349,7 @@ where
 {
 	type Item = (
 		PredSubState2<'p, T, B, CombBranch<K::Pal, K>>,
-		PredParamItem<'p, [A; N]>,
+		PredParamItem<'p, PredArrayComb<'static, A, N>>,
 	);
 	fn next(&mut self) -> Option<Self::Item> {
 		if let Some(iters) = &self.iter.iters {
