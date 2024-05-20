@@ -63,7 +63,7 @@ pub trait PredParam {
 	) -> Self::Comb<'w, K>;
 }
 
-impl<T, F> PredParam for Query<'static, 'static, T, F>
+impl<T, F> PredParam for QueryComb<'static, T, F>
 where
 	T: PredParamQueryData + 'static,
 	F: ArchetypeFilter + 'static,
@@ -428,7 +428,7 @@ pub trait PredItem2<P: PredParam>: PredItem {}
 
 impl PredItem2<()> for () {}
 
-impl<D, F> PredItem2<Query<'static, 'static, D, F>> for Fetch<D, F>
+impl<D, F> PredItem2<QueryComb<'static, D, F>> for Fetch<D, F>
 where
 	D: PredItem + PredParamQueryData + 'static,
 	F: ArchetypeFilter + 'static,
@@ -1407,10 +1407,10 @@ mod testing {
 		b_update_list: &[usize],
 	)
 	where
-		<(Query<'static, 'static, &'static Test>, Query<'static, 'static, &'static TestB>)
-			as PredParam>::Input:
-				Default + IntoInput<<(Query<'static, 'static, &'static Test>, Query<'static, 'static, &'static TestB>)
-			as PredParam>::Input> + Send + Sync + 'static,
+		<(QueryComb<'static, &'static Test>, QueryComb<'static, &'static TestB>) as PredParam>::Input:
+				Default
+				+ IntoInput<<(QueryComb<'static, &'static Test>, QueryComb<'static, &'static TestB>) as PredParam>::Input>
+				+ Send + Sync + 'static,
 	{
 		use crate::*;
 		
@@ -1429,7 +1429,7 @@ mod testing {
 		let update_vec = update_list.to_vec();
 		let b_update_vec = b_update_list.to_vec();
 		app.add_chime_events((move |
-			state: PredState2<DynPred, Single<(Query<'static, 'static, &'static Test>, Query<'static, 'static, &'static TestB>)>>,
+			state: PredState2<DynPred, Single<(QueryComb<'static, &'static Test>, QueryComb<'static, &'static TestB>)>>,
 			a_query: Query<&Test>,
 			b_query: Query<&TestB>,
 			mut index: system::Local<usize>,
@@ -1487,7 +1487,7 @@ mod testing {
 		let update_vec = update_list.to_vec();
 		let b_update_vec = b_update_list.to_vec();
 		app.add_chime_events((move |
-			state: PredState2<DynPred, Nested<Query<'static, 'static, &'static Test>, Single<Query<'static, 'static, &'static TestB>>>>,
+			state: PredState2<DynPred, Nested<QueryComb<'static, &'static Test>, Single<QueryComb<'static, &'static TestB>>>>,
 			a_query: Query<Ref<Test>>,
 			b_query: Query<Ref<TestB>>,
 			mut index: system::Local<usize>,
@@ -1590,10 +1590,10 @@ mod testing {
 		const S: usize,
 	>(update_list: &[usize])
 	where
-		<[Query<'static, 'static, &'static Test>; R] as PredParam>::Input:
-			Default + IntoInput<<[Query<'static, 'static, &'static Test>; R] as PredParam>::Input> + Send + Sync + 'static,
-		<[Query<'static, 'static, &'static Test>; S] as PredParam>::Input:
-			Default + IntoInput<<[Query<'static, 'static, &'static Test>; S] as PredParam>::Input> + Send + Sync + 'static,
+		<[QueryComb<'static, &'static Test>; R] as PredParam>::Input:
+			Default + IntoInput<<[QueryComb<'static, &'static Test>; R] as PredParam>::Input> + Send + Sync + 'static,
+		<[QueryComb<'static, &'static Test>; S] as PredParam>::Input:
+			Default + IntoInput<<[QueryComb<'static, &'static Test>; S] as PredParam>::Input> + Send + Sync + 'static,
 	{
 		use crate::*;
 		
@@ -1618,7 +1618,7 @@ mod testing {
 		let n_choose_r = choose(N, R);
 		let update_vec = update_list.to_vec();
 		app.add_chime_events((move |
-			state: PredState2<DynPred, Single<[Query<'static, 'static, &'static Test>; R]>>,
+			state: PredState2<DynPred, Single<[QueryComb<'static, &'static Test>; R]>>,
 			query: Query<&Test>,
 			mut index: system::Local<usize>,
 		| {
@@ -1672,7 +1672,7 @@ mod testing {
 		 // Setup [`PredSubState::outer_iter`] Testing:
 		let update_vec = update_list.to_vec();
 		app.add_chime_events((move |
-			state: PredState2<DynPred, NestedPerm<[Query<'static, 'static, &'static Test>; 1], Single<[Query<'static, 'static, &'static Test>; S]>>>,
+			state: PredState2<DynPred, NestedPerm<[QueryComb<'static, &'static Test>; 1], Single<[QueryComb<'static, &'static Test>; S]>>>,
 			query: Query<Ref<Test>>,
 			mut index: system::Local<usize>,
 		| {

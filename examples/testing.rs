@@ -202,7 +202,7 @@ fn add_many_dogs(world: &mut World) {
 	println!("COUNT: {n}");
 }
 
-fn when_func_a(state: PredState2<DynPred, Single<Query<'static, 'static, &'static Pos>>>) {
+fn when_func_a(state: PredState2<DynPred, Single<QueryComb<'static, &'static Pos>>>) {
 	// let a_time = Instant::now();
 	for (state, pos) in state {
 		let pred =
@@ -219,7 +219,7 @@ fn do_func_a(query: PredFetch<&mut Pos>, time: Res<Time>) {
 	pos_x.spd.val *= -1.;
 }
 
-fn when_func_b(state: PredState2<DynPred, Single<Query<'static, 'static, &'static Pos>>>) {
+fn when_func_b(state: PredState2<DynPred, Single<QueryComb<'static, &'static Pos>>>) {
 	// let a_time = Instant::now();
 	// let time = time.elapsed();
 	for (state, pos) in state {
@@ -273,7 +273,7 @@ fn outlier_func_b(query: PredFetch<&mut Pos>, time: Res<Time>) {
 	// 	pos[1].poly(pos[1].base_time())));
 }
 
-fn when_func_c(state: PredState2<DynPred, NestedPerm<[Query<'static, 'static, &'static Pos>; 1], Single<[Query<'static, 'static, &'static Pos>; 1]>>>) {
+fn when_func_c(state: PredState2<DynPred, NestedPerm<[QueryComb<'static, &'static Pos>; 1], Single<[QueryComb<'static, &'static Pos>; 1]>>>) {
 	// let mut n = 0;
 	// let a_time = Instant::now();
 	for (state, [pos]) in state.into_iter() {

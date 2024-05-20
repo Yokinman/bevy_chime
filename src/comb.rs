@@ -178,7 +178,7 @@ where
 		Fetch<<<T::ItemRef as WorldQuery>::Item<'w> as PredItemRef>::Item, F>,
 		Entity,
 	>;
-	type Param = Query<'static, 'static, T, F>;
+	type Param = QueryComb<'static, T, F>;
 }
 
 impl<'w, A, K> PredCombinator<K> for PredSingleComb<'w, A, K>
@@ -299,7 +299,7 @@ where
 }
 
 /// Combinator for `PredParam` `Query` implementation.
-pub enum QueryComb<'w, T, F, K = CombNone>
+pub enum QueryComb<'w, T, F = (), K = CombNone>
 where
 	T: PredParamQueryData,
 	F: ArchetypeFilter + 'static,
