@@ -6,7 +6,7 @@ use bevy_ecs::change_detection::{DetectChanges, Ref, Res};
 use bevy_ecs::component::{Component, Tick};
 use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::{Query, Resource, World};
-use bevy_ecs::query::{ArchetypeFilter, ReadOnlyQueryData, WorldQuery};
+use bevy_ecs::query::{ArchetypeFilter, QueryData, ReadOnlyQueryData, WorldQuery};
 use bevy_ecs::system::{ReadOnlySystemParam, SystemMeta, SystemParam, SystemParamItem};
 use bevy_ecs::world::{Mut, unsafe_world_cell::UnsafeWorldCell};
 use chime::{Flux, MomentRef, MomentRefMut};
@@ -65,13 +65,14 @@ pub trait PredParam {
 
 impl<'w, T, F> PredParam for QueryComb<'w, T, F>
 where
-	T: PredParamQueryData + 'static,
+	T: PredParamQueryData,
 	F: ArchetypeFilter + 'static,
-	<T::ItemRef as WorldQuery>::Item<'w>: PredItemRef2,
+	T::Item<'w>: PredItem,
+	<T::ItemRef as WorldQuery>::Item<'w>: PredItemRef<Item = T::Item<'w>>,
 {
 	type Param = Query<'w, 'w, (T::ItemRef, Entity), F>;
 	type Id = Entity;
-	type Item = Fetch<<<T::ItemRef as WorldQuery>::Item<'w> as PredItemRef2>::Bruh, F>;
+	type Item = Fetch<'w, T, F>;
 	type Case = PredCombCase<Self::Item, Self::Id>;
 	type Input = ();
 	type Comb<K: CombKind> = QueryComb<'w, T, F, K>;
@@ -316,14 +317,14 @@ where
 
 /// ...
 pub trait PredParamQueryData: ReadOnlyQueryData {
-	type ItemRef: ReadOnlyQueryData;
+	type ItemRef: ReadOnlyQueryData + 'static;
 }
 
 impl<'a, T> PredParamQueryData for &'a T
 where
 	T: Component,
 {
-	type ItemRef = Ref<'a, T>;
+	type ItemRef = Ref<'static, T>;
 }
 
 impl<A, B> PredParamQueryData for (A, B)
@@ -337,26 +338,26 @@ where
 /// Unused - may replace the output of `QueryComb` if the concept of
 /// case-by-case prediction closures is implemented.
 #[derive(Debug)]
-pub struct Fetch<D, F> {
-	inner: D,
+pub struct Fetch<'w, D: QueryData, F> {
+	inner: D::Item<'w>,
 	_filter: std::marker::PhantomData<F>,
 }
 
-impl<D, F> Fetch<D, F> {
-	pub(crate) fn new(inner: D) -> Self {
+impl<'w, D: QueryData, F> Fetch<'w, D, F> {
+	pub(crate) fn new(inner: D::Item<'w>) -> Self {
 		Self {
 			inner,
 			_filter: std::marker::PhantomData,
 		}
 	}
 	
-	pub fn into_inner(self) -> D {
+	pub fn into_inner(self) -> D::Item<'w> {
 		self.inner
 	}
 }
 
-impl<D, F> Deref for Fetch<D, F> {
-	type Target = D;
+impl<'w, D: QueryData, F> Deref for Fetch<'w, D, F> {
+	type Target = D::Item<'w>;
 	fn deref(&self) -> &Self::Target {
 		&self.inner
 	}
@@ -377,9 +378,10 @@ impl<T> PredItem for &T {
 	}
 }
 
-impl<D, F> PredItem for Fetch<D, F>
+impl<'w, D, F> PredItem for Fetch<'w, D, F>
 where
-	D: PredItem
+	D: QueryData,
+	D::Item<'w>: PredItem,
 {
 	fn clone(&self) -> Self {
 		Fetch::new(self.inner.clone())
@@ -428,14 +430,15 @@ pub trait PredItem2<P: PredParam>: PredItem {}
 
 impl PredItem2<EmptyComb> for () {}
 
-impl<D, F> PredItem2<QueryComb<'static, D, F>> for Fetch<D, F>
+impl<'w, D, F> PredItem2<QueryComb<'w, D, F>> for Fetch<'w, D, F>
 where
-	D: PredItem + PredParamQueryData + 'static,
+	D: PredParamQueryData,
 	F: ArchetypeFilter + 'static,
-	for<'w> <D::ItemRef as WorldQuery>::Item<'w>: PredItemRef2,
+	D::Item<'w>: PredItem,
+	<D::ItemRef as WorldQuery>::Item<'w>: PredItemRef<Item = D::Item<'w>>,
 {}
 
-impl<T: Resource> PredItem2<ResComb<'static, T>> for Res<'_, T> {}
+impl<'w, T: Resource> PredItem2<ResComb<'w, T>> for Res<'w, T> {}
 
 impl<A, P,> PredItem2<PredSingleComb<P>> for (A,)
 where
@@ -485,16 +488,6 @@ impl<'w, T: 'static> PredItemRef for Ref<'w, T> {
 	}
 	fn is_updated(item: &Self) -> bool {
 		DetectChanges::is_changed(item)
-	}
-}
-
-impl<'w, T: 'static, F> PredItemRef for Fetch<Ref<'w, T>, F> {
-	type Item = &'w T;
-	fn into_item(self) -> Self::Item {
-		self.into_inner().into_inner()
-	}
-	fn is_updated(item: &Self) -> bool {
-		DetectChanges::is_changed(&**item)
 	}
 }
 

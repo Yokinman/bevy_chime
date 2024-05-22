@@ -1,7 +1,7 @@
 use std::rc::Rc;
 use bevy_ecs::change_detection::Res;
 use bevy_ecs::entity::Entity;
-use bevy_ecs::query::{ArchetypeFilter, QueryIter, WorldQuery};
+use bevy_ecs::query::{ArchetypeFilter, QueryFilter, QueryIter, WorldQuery};
 use bevy_ecs::system::{Query, Resource};
 use crate::node::{Node, NodeWriter};
 use crate::pred::*;
@@ -169,15 +169,13 @@ where
 impl<'w, T, F, K> PredCombinator<K> for QueryComb<'w, T, F, K>
 where
 	K: CombKind,
-	T: PredParamQueryData + 'static,
+	T: PredParamQueryData,
 	F: ArchetypeFilter + 'static,
-	<T::ItemRef as WorldQuery>::Item<'w>: PredItemRef2,
+	T::Item<'w>: PredItem,
+	<T::ItemRef as WorldQuery>::Item<'w>: PredItemRef<Item = T::Item<'w>>,
 {
 	type Id = Entity;
-	type Case = PredCombCase<
-		Fetch<<<T::ItemRef as WorldQuery>::Item<'w> as PredItemRef>::Item, F>,
-		Entity,
-	>;
+	type Case = PredCombCase<Fetch<'w, T, F>, Entity>;
 	type Param = QueryComb<'w, T, F>;
 }
 
@@ -302,18 +300,14 @@ where
 pub enum QueryComb<'w, T, F = (), K = CombNone>
 where
 	T: PredParamQueryData,
-	F: ArchetypeFilter + 'static,
-	<T::ItemRef as WorldQuery>::Item<'w>: PredItemRef,
+	F: QueryFilter + 'static,
 {
 	Normal {
 		inner: &'w Query<'w, 'w, (T::ItemRef, Entity), F>,
 		kind: K,
 	},
 	Cached {
-		slice: Rc<[PredCombCase<
-			Fetch<<<T::ItemRef as WorldQuery>::Item<'w> as PredItemRef>::Item, F>,
-			Entity,
-		>]>,
+		slice: Rc<[PredCombCase<Fetch<'w, T, F>, Entity>]>,
 		kind: K,
 	},
 }
@@ -323,8 +317,8 @@ where
 	T: PredParamQueryData,
 	F: ArchetypeFilter + 'static,
 	K: CombKind,
-	<T::ItemRef as WorldQuery>::Item<'w>: PredItemRef,
-	Fetch<<<T::ItemRef as WorldQuery>::Item<'w> as PredItemRef>::Item, F>: PredItem,
+	T::Item<'w>: PredItem,
+	<T::ItemRef as WorldQuery>::Item<'w>: PredItemRef<Item = T::Item<'w>>,
 {
 	pub(crate) fn new(inner: &'w Query<'w, 'w, (T::ItemRef, Entity), F>, kind: K) -> Self {
 		let comb = Self::Normal { inner, kind };
@@ -346,7 +340,6 @@ where
 	T: PredParamQueryData,
 	F: ArchetypeFilter + 'static,
 	K: Clone,
-	<T::ItemRef as WorldQuery>::Item<'w>: PredItemRef,
 {
 	fn clone(&self) -> Self {
 		match self {
@@ -367,8 +360,8 @@ where
 	K: CombKind,
 	T: PredParamQueryData,
 	F: ArchetypeFilter + 'static,
-	<T::ItemRef as WorldQuery>::Item<'w>: PredItemRef,
-	Fetch<<<T::ItemRef as WorldQuery>::Item<'w> as PredItemRef>::Item, F>: PredItem,
+	T::Item<'w>: PredItem,
+	<T::ItemRef as WorldQuery>::Item<'w>: PredItemRef<Item = T::Item<'w>>,
 {
 	type Item = <Self::IntoIter as Iterator>::Item;
 	type IntoIter = QueryCombIter<'w, T, F, K>;
@@ -390,16 +383,12 @@ pub enum QueryCombIter<'w, T, F, K>
 where
 	T: PredParamQueryData,
 	F: ArchetypeFilter,
-	<T::ItemRef as WorldQuery>::Item<'w>: PredItemRef,
 {
 	Normal { 
 		iter: CombIter<QueryIter<'w, 'w, (T::ItemRef, Entity), F>, K>,
 	},
 	Cached {
-		slice: Rc<[PredCombCase<
-			Fetch<<<T::ItemRef as WorldQuery>::Item<'w> as PredItemRef>::Item, F>,
-			Entity,
-		>]>,
+		slice: Rc<[PredCombCase<Fetch<'w, T, F>, Entity>]>,
 		index: usize,
 	},
 }
@@ -409,13 +398,10 @@ where
 	T: PredParamQueryData,
 	F: ArchetypeFilter,
 	K: CombKind,
-	<T::ItemRef as WorldQuery>::Item<'w>: PredItemRef,
-	Fetch<<<T::ItemRef as WorldQuery>::Item<'w> as PredItemRef>::Item, F>: PredItem,
+	T::Item<'w>: PredItem,
+	<T::ItemRef as WorldQuery>::Item<'w>: PredItemRef<Item = T::Item<'w>>,
 {
-	type Item = PredCombCase<
-		Fetch<<<T::ItemRef as WorldQuery>::Item<'w> as PredItemRef>::Item, F>,
-		Entity,
-	>;
+	type Item = PredCombCase<Fetch<'w, T, F>, Entity>;
 	fn next(&mut self) -> Option<Self::Item> {
 		match self {
 			Self::Normal { iter } => iter.next().map(|x| match x {
