@@ -45,7 +45,7 @@ pub trait PredParam {
 	
 	/// Unique identifier for each of [`Self::Param`]'s items.
 	type Id: PredId;
-	type Item: PredItem;
+	type Item: PredItem2<Self>;
 	type Case: PredCombinatorCase<Self, Id=Self::Id, Item=Self::Item>;
 	
 	/// ...
@@ -426,7 +426,7 @@ where
 }
 
 /// ...
-pub trait PredItem2<P: PredParam>: PredItem {}
+pub trait PredItem2<P: PredParam + ?Sized>: PredItem {}
 
 impl PredItem2<EmptyComb> for () {}
 
