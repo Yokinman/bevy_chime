@@ -36,69 +36,69 @@ where
 {}
 
 /// Shortcut for accessing `PredParam::Comb::Case::Item`.
-pub type PredParamItem<'w, P> = <P as PredParam>::Item<'w>;
+pub type PredParamItem<P> = <P as PredParam>::Item;
 
 /// A set of [`PredItem`] values used to predict & schedule events.
 pub trait PredParam {
 	/// The equivalent [`bevy_ecs::system::SystemParam`].
-	type Param: ReadOnlySystemParam + 'static;
+	type Param: ReadOnlySystemParam;
 	
 	/// Unique identifier for each of [`Self::Param`]'s items.
 	type Id: PredId;
-	type Item<'w>: PredItem;
-	type Case<'w>: PredCombinatorCase<Self, Id=Self::Id, Item=Self::Item<'w>>;
+	type Item: PredItem;
+	type Case: PredCombinatorCase<Self, Id=Self::Id, Item=Self::Item>;
 	
 	/// ...
 	type Input: Clone;
 	
 	/// Creates combinator iterators over [`Self::Param`]'s items.
-	type Comb<'w, K: CombKind>:
-		PredCombinator<K, Case=Self::Case<'w>, Id=Self::Id, Param=Self>;
+	type Comb<K: CombKind>:
+		PredCombinator<K, Case=Self::Case, Id=Self::Id, Param=Self>;
 	
 	/// Produces [`Self::Comb`].
-	fn comb<'w, K: CombKind>(
-		param: &'w SystemParamItem<Self::Param>,
+	fn comb<K: CombKind>(
+		param: &'static SystemParamItem<Self::Param>,
 		kind: K,
 		input: Self::Input,
-	) -> Self::Comb<'w, K>;
+	) -> Self::Comb<K>;
 }
 
-impl<T, F> PredParam for QueryComb<'static, T, F>
+impl<'w, T, F> PredParam for QueryComb<'w, T, F>
 where
 	T: PredParamQueryData + 'static,
 	F: ArchetypeFilter + 'static,
-	for<'w> <T::ItemRef as WorldQuery>::Item<'w>: PredItemRef2,
+	<T::ItemRef as WorldQuery>::Item<'w>: PredItemRef2,
 {
-	type Param = Query<'static, 'static, (T::ItemRef, Entity), F>;
+	type Param = Query<'w, 'w, (T::ItemRef, Entity), F>;
 	type Id = Entity;
-	type Item<'w> = Fetch<<<T::ItemRef as WorldQuery>::Item<'w> as PredItemRef>::Item, F>;
-	type Case<'w> = PredCombCase<Self::Item<'w>, Self::Id>;
+	type Item = Fetch<<<T::ItemRef as WorldQuery>::Item<'w> as PredItemRef2>::Bruh, F>;
+	type Case = PredCombCase<Self::Item, Self::Id>;
 	type Input = ();
-	type Comb<'w, K: CombKind> = QueryComb<'w, T, F, K>;
-	fn comb<'w, K: CombKind>(
-		param: &'w SystemParamItem<Self::Param>,
+	type Comb<K: CombKind> = QueryComb<'w, T, F, K>;
+	fn comb<K: CombKind>(
+		param: &'static SystemParamItem<Self::Param>,
 		kind: K,
 		_input: Self::Input,
-	) -> Self::Comb<'w, K> {
+	) -> Self::Comb<K> {
 		QueryComb::new(param, kind)
 	}
 }
 
-impl<R> PredParam for ResComb<'static, R>
+impl<'w, R> PredParam for ResComb<'w, R>
 where
 	R: Resource
 {
-	type Param = Res<'static, R>;
+	type Param = Res<'w, R>;
 	type Id = ();
-	type Item<'w> = Res<'w, R>;
-	type Case<'w> = PredCombCase<Self::Item<'w>, Self::Id>;
+	type Item = Res<'w, R>;
+	type Case = PredCombCase<Self::Item, Self::Id>;
 	type Input = ();
-	type Comb<'w, K: CombKind> = ResComb<'w, R, K>;
-	fn comb<'w, K: CombKind>(
-		param: &'w SystemParamItem<Self::Param>,
+	type Comb<K: CombKind> = ResComb<'w, R, K>;
+	fn comb<K: CombKind>(
+		param: &'static SystemParamItem<Self::Param>,
 		kind: K,
 		_input: Self::Input,
-	) -> Self::Comb<'w, K> {
+	) -> Self::Comb<K> {
 		ResComb::new(Res::clone(param), kind)
 	}
 }
@@ -106,54 +106,54 @@ where
 impl PredParam for EmptyComb {
 	type Param = ();
 	type Id = ();
-	type Item<'w> = ();
-	type Case<'w> = PredCombCase<Self::Item<'w>, Self::Id>;
+	type Item = ();
+	type Case = PredCombCase<Self::Item, Self::Id>;
 	type Input = ();
-	type Comb<'w, K: CombKind> = EmptyComb<K>;
-	fn comb<'w, K: CombKind>(
-		_param: &'w SystemParamItem<Self::Param>,
+	type Comb<K: CombKind> = EmptyComb<K>;
+	fn comb<K: CombKind>(
+		_param: &'static SystemParamItem<Self::Param>,
 		kind: K,
 		_input: Self::Input,
-	) -> Self::Comb<'w, K> {
+	) -> Self::Comb<K> {
 		EmptyComb::new(kind)
 	}
 }
 
-impl<A> PredParam for PredSingleComb<'static, A>
+impl<A> PredParam for PredSingleComb<A>
 where
 	A: PredParam,
 {
 	type Param = A::Param;
 	type Id = (A::Id,);
-	type Item<'w> = (A::Item<'w>,);
-	type Case<'w> = (A::Case<'w>,);
+	type Item = (A::Item,);
+	type Case = (A::Case,);
 	type Input = (A::Input,);
-	type Comb<'w, K: CombKind> = PredSingleComb<'w, A, K>;
-	fn comb<'w, K: CombKind>(
-		param: &'w SystemParamItem<Self::Param>,
+	type Comb<K: CombKind> = PredSingleComb<A, K>;
+	fn comb<K: CombKind>(
+		param: &'static SystemParamItem<Self::Param>,
 		kind: K,
 		(input,): Self::Input,
-	) -> Self::Comb<'w, K> {
+	) -> Self::Comb<K> {
 		PredSingleComb::new(A::comb(param, kind, input))
 	}
 }
 
-impl<A, B> PredParam for PredPairComb<'static, A, B>
+impl<A, B> PredParam for PredPairComb<A, B>
 where
 	A: PredParam,
 	B: PredParam,
 {
 	type Param = (A::Param, B::Param);
 	type Id = (A::Id, B::Id);
-	type Item<'w> = (A::Item<'w>, B::Item<'w>);
-	type Case<'w> = (A::Case<'w>, B::Case<'w>);
+	type Item = (A::Item, B::Item);
+	type Case = (A::Case, B::Case);
 	type Input = (A::Input, B::Input);
-	type Comb<'w, K: CombKind> = PredPairComb<'w, A, B, K>;
-	fn comb<'w, K: CombKind>(
-		(a, b): &'w SystemParamItem<Self::Param>,
+	type Comb<K: CombKind> = PredPairComb<A, B, K>;
+	fn comb<K: CombKind>(
+		(a, b): &'static SystemParamItem<Self::Param>,
 		kind: K,
 		(a_in, b_in): Self::Input,
-	) -> Self::Comb<'w, K> {
+	) -> Self::Comb<K> {
 		PredPairComb::new(
 			A::comb(a, kind, a_in.clone()),
 			B::comb(b, kind.pal(), b_in.clone()),
@@ -164,22 +164,22 @@ where
 	}
 }
 
-impl<P, const N: usize> PredParam for PredArrayComb<'static, P, N>
+impl<P, const N: usize> PredParam for PredArrayComb<P, N>
 where
 	P: PredParam,
 	P::Id: Ord,
 {
 	type Param = P::Param;
 	type Id = [P::Id; N];
-	type Item<'w> = [P::Item<'w>; N];
-	type Case<'w> = [P::Case<'w>; N];
+	type Item = [P::Item; N];
+	type Case = [P::Case; N];
 	type Input = [P::Input; N];
-	type Comb<'w, K: CombKind> = PredArrayComb<'w, P, N, K>;
-	fn comb<'w, K: CombKind>(
-		param: &'w SystemParamItem<Self::Param>,
+	type Comb<K: CombKind> = PredArrayComb<P, N, K>;
+	fn comb<K: CombKind>(
+		param: &'static SystemParamItem<Self::Param>,
 		kind: K,
 		input: Self::Input,
-	) -> Self::Comb<'w, K> {
+	) -> Self::Comb<K> {
 		PredArrayComb::new(
 			P::comb(param, CombBranch::A(kind.pal()), input[0].clone()),
 			P::comb(param, CombBranch::B(kind), input[0].clone()),
@@ -208,14 +208,14 @@ where
 	type Param = ();
 	type Input = I;
 	type Id = I::Item;
-	type Item<'w> = WithId<I::Item>;
-	type Case<'w> = PredCombCase<Self::Item<'w>, Self::Id>;
-	type Comb<'w, K: CombKind> = PredIdComb<I>;
-	fn comb<'w, K: CombKind>(
-		_param: &'w SystemParamItem<Self::Param>,
+	type Item = WithId<I::Item>;
+	type Case = PredCombCase<Self::Item, Self::Id>;
+	type Comb<K: CombKind> = PredIdComb<I>;
+	fn comb<K: CombKind>(
+		_param: &'static SystemParamItem<Self::Param>,
 		_kind: K,
 		input: Self::Input,
-	) -> Self::Comb<'w, K> {
+	) -> Self::Comb<K> {
 		PredIdComb::new(input)
 	}
 }
@@ -227,14 +227,14 @@ where
 	type Param = T::Param;
 	type Input = T::Input;
 	type Id = T::Id;
-	type Item<'w> = Misc<T::Item<'w>>;
-	type Case<'w> = Misc<T::Case<'w>>;
-	type Comb<'w, K: CombKind> = Misc<T::Comb<'w, K>>;
-	fn comb<'w, K: CombKind>(
-		param: &'w SystemParamItem<Self::Param>,
+	type Item = Misc<T::Item>;
+	type Case = Misc<T::Case>;
+	type Comb<K: CombKind> = Misc<T::Comb<K>>;
+	fn comb<K: CombKind>(
+		param: &'static SystemParamItem<Self::Param>,
 		kind: K,
 		input: Self::Input,
-	) -> Self::Comb<'w, K> {
+	) -> Self::Comb<K> {
 		Misc(T::comb(param, kind, input))
 	}
 }
@@ -437,13 +437,13 @@ where
 
 impl<T: Resource> PredItem2<ResComb<'static, T>> for Res<'_, T> {}
 
-impl<A, P,> PredItem2<PredSingleComb<'static, P>> for (A,)
+impl<A, P,> PredItem2<PredSingleComb<P>> for (A,)
 where
 	A: PredItem2<P>,
 	P: PredParam,
 {}
 
-impl<A, B, P, Q,> PredItem2<PredPairComb<'static, P, Q>> for (A, B,)
+impl<A, B, P, Q,> PredItem2<PredPairComb<P, Q>> for (A, B,)
 where
 	A: PredItem2<P>,
 	B: PredItem2<Q>,
@@ -451,7 +451,7 @@ where
 	Q: PredParam,
 {}
 
-impl<T, P, const N: usize> PredItem2<PredArrayComb<'static, P, N>> for [T; N]
+impl<T, P, const N: usize> PredItem2<PredArrayComb<P, N>> for [T; N]
 where
 	T: PredItem2<P>,
 	P: PredParam,
@@ -464,7 +464,7 @@ where
 	T::Item : PredId,
 {}
 
-impl<T> PredItem2<Misc<T>> for Misc<PredParamItem<'_, T>>
+impl<T> PredItem2<Misc<T>> for Misc<PredParamItem<T>>
 where
 	T: PredParam,
 {}
@@ -535,16 +535,17 @@ where
 }
 
 /// ...
-pub trait PredItemRef2: PredItemRef
-where
-	<Self as PredItemRef>::Item: ReadOnlyQueryData,
-{}
+pub trait PredItemRef2: PredItemRef<Item = Self::Bruh> {
+	type Bruh: PredItem + ReadOnlyQueryData;
+}
 
 impl<T> PredItemRef2 for T
 where
 	T: PredItemRef,
-	<Self as PredItemRef>::Item: ReadOnlyQueryData,
-{}
+	T::Item: ReadOnlyQueryData,
+{
+	type Bruh = T::Item;
+}
 
 /// ...
 #[derive(Copy, Clone)]
@@ -565,7 +566,7 @@ where
 	P: PredBranch + ?Sized,
 	K: CombKind,
 {
-	pub(crate) comb: P::CombSplit<'p, K>,
+	pub(crate) comb: P::CombSplit<K>,
 	pub(crate) node: &'p mut Node<P::Case<T>>,
 	pub(crate) kind: K,
 	pub(crate) index: [usize; 2],
@@ -577,7 +578,7 @@ where
 	K: CombKind,
 {
 	pub(crate) fn new(
-		comb: P::CombSplit<'p, K>,
+		comb: P::CombSplit<K>,
 		node: &'p mut Node<P::Case<T>>,
 		kind: K,
 	) -> Self {
@@ -618,7 +619,7 @@ where
 	P: PredBranch,
 {
 	pub(crate) fn new(
-		comb: P::CombSplit<'p, CombAnyTrue>,
+		comb: P::CombSplit<CombAnyTrue>,
 		node: &'p mut Node<P::Case<T>>,
 	) -> Self {
 		Self {
@@ -682,10 +683,10 @@ pub trait PredPermBranch: PredBranch /*+ std::ops::Index<usize>*/ {
 	}
 }
 
-impl<T, const N: usize> PredPermBranch for Single<PredArrayComb<'static, T, N>>
+impl<T, const N: usize> PredPermBranch for Single<PredArrayComb<T, N>>
 where
 	T: PredParam,
-	PredArrayComb<'static, T, N>: PredParam,
+	PredArrayComb<T, N>: PredParam,
 {
 	type Output = T;
 	
@@ -719,21 +720,21 @@ pub struct NestedPerm<A, B>(pub A, pub B);
 // 	}
 // }
 
-impl<A, const N: usize, B> PredBranch for NestedPerm<PredArrayComb<'static, A, N>, B>
+impl<A, const N: usize, B> PredBranch for NestedPerm<PredArrayComb<A, N>, B>
 where
 	A: PredParam,
 	A::Id: Ord,
 	B: PredPermBranch<Output = A>,
 {
-	type Param = PredArrayComb<'static, A, N>;
+	type Param = PredArrayComb<A, N>;
 	type Branch = B;
-	type Case<T> = (<PredArrayComb<'static, A, N> as PredParam>::Id, Node<B::Case<T>>);
-	type AllParams = PredPairComb<'static, PredArrayComb<'static, A, N>, B::AllParams>;
-	type Id = NestedPerm<<PredArrayComb<'static, A, N> as PredParam>::Id, B::Id>;
-	type Input = NestedPerm<<PredArrayComb<'static, A, N> as PredParam>::Input, B::Input>;
-	type CombSplit<'w, K: CombKind> = (
-		<Self::Param as PredParam>::Comb<'w, K>,
-		[B::CombSplit<'w, CombBranch<K::Pal, K>>; 2],
+	type Case<T> = (<PredArrayComb<A, N> as PredParam>::Id, Node<B::Case<T>>);
+	type AllParams = PredPairComb<PredArrayComb<A, N>, B::AllParams>;
+	type Id = NestedPerm<<PredArrayComb<A, N> as PredParam>::Id, B::Id>;
+	type Input = NestedPerm<<PredArrayComb<A, N> as PredParam>::Input, B::Input>;
+	type CombSplit<K: CombKind> = (
+		<Self::Param as PredParam>::Comb<K>,
+		[B::CombSplit<CombBranch<K::Pal, K>>; 2],
 	);
 	
 	type Item<'p, T, K> = PredSubState2<'p, T, B, CombBranch<K::Pal, K>>
@@ -742,7 +743,7 @@ where
 		K: CombKind,
 		Self::Branch: 'p;
 	
-	type Comb<'p, T, K> = NestedPermPredComb2<'p, T, PredArrayComb<'static, A, N>, B, K>
+	type Comb<'p, T, K> = NestedPermPredComb2<'p, T, PredArrayComb<A, N>, B, K>
 	where
 		T: Prediction + 'p,
 		K: CombKind,
@@ -750,12 +751,12 @@ where
 	
 	type CaseIter<T> = NestedPredBranchIter<Self, T>;
 	
-	fn comb_split<'w, K: CombKind>(
-		(a, b): &'w SystemParamItem<<Self::AllParams as PredParam>::Param>,
+	fn comb_split<K: CombKind>(
+		(a, b): &'static SystemParamItem<<Self::AllParams as PredParam>::Param>,
 		NestedPerm(a_input, b_input): Self::Input,
 		kind: K,
-	) -> Self::CombSplit<'w, K> {
-		let mut comb = PredArrayComb::<'static, A, N>::comb(a, kind, a_input);
+	) -> Self::CombSplit<K> {
+		let mut comb = PredArrayComb::<A, N>::comb(a, kind, a_input);
 		comb.is_nested = true;
 		(
 			comb,
@@ -782,7 +783,7 @@ where
 	}
 }
 
-impl<A, const N: usize, B> PredPermBranch for NestedPerm<PredArrayComb<'static, A, N>, B>
+impl<A, const N: usize, B> PredPermBranch for NestedPerm<PredArrayComb<A, N>, B>
 where
 	A: PredParam,
 	A::Id: Ord,
@@ -803,7 +804,7 @@ pub trait PredBranch {
 	type AllParams: PredParam;
 	type Id: PredId;
 	type Input: Clone;
-	type CombSplit<'w, K: CombKind>: Clone;
+	type CombSplit<K: CombKind>: Clone;
 	
 	type Item<'p, T, K>
 	where
@@ -813,7 +814,7 @@ pub trait PredBranch {
 	
 	type Comb<'p, T, K>: Iterator<Item = (
 		Self::Item<'p, T, K>,
-		PredParamItem<'p, Self::Param>,
+		PredParamItem<Self::Param>,
 	)>
 	where
 		T: Prediction + 'p,
@@ -822,11 +823,11 @@ pub trait PredBranch {
 	
 	type CaseIter<T>: Iterator<Item = PredStateCase<Self::Id, T>>;
 	
-	fn comb_split<'w, K: CombKind>(
-		params: &'w SystemParamItem<<Self::AllParams as PredParam>::Param>,
+	fn comb_split<K: CombKind>(
+		params: &'static SystemParamItem<<Self::AllParams as PredParam>::Param>,
 		input: Self::Input,
 		kind: K,
-	) -> Self::CombSplit<'w, K>;
+	) -> Self::CombSplit<K>;
 	
 	fn case_iter<T>(case: Self::Case<T>) -> Self::CaseIter<T>;
 	
@@ -851,7 +852,7 @@ where
 	type AllParams = A;
 	type Id = A::Id;
 	type Input = Single<A::Input>;
-	type CombSplit<'w, K: CombKind> = A::Comb<'w, K>;
+	type CombSplit<K: CombKind> = A::Comb<K>;
 	
 	type Item<'p, T, K> = &'p mut Self::Case<T>
 	where
@@ -867,11 +868,11 @@ where
 	
 	type CaseIter<T> = std::iter::Once<PredStateCase<A::Id, T>>;
 	
-	fn comb_split<'w, K: CombKind>(
-		params: &'w SystemParamItem<<Self::AllParams as PredParam>::Param>,
+	fn comb_split<K: CombKind>(
+		params: &'static SystemParamItem<<Self::AllParams as PredParam>::Param>,
 		Single(input): Self::Input,
 		kind: K,
-	) -> Self::CombSplit<'w, K> {
+	) -> Self::CombSplit<K> {
 		A::comb(params, kind, input)
 	}
 	
@@ -901,12 +902,12 @@ where
 	type Param = A;
 	type Branch = B;
 	type Case<T> = (A::Id, Node<B::Case<T>>);
-	type AllParams = PredPairComb<'static, A, B::AllParams>;
+	type AllParams = PredPairComb<A, B::AllParams>;
 	type Id = Nested<A::Id, B::Id>;
 	type Input = Nested<A::Input, B::Input>;
-	type CombSplit<'w, K: CombKind> = (
-		<Self::Param as PredParam>::Comb<'w, K::Pal>,
-		[B::CombSplit<'w, CombBranch<K::Pal, K>>; 2],
+	type CombSplit<K: CombKind> = (
+		<Self::Param as PredParam>::Comb<K::Pal>,
+		[B::CombSplit<CombBranch<K::Pal, K>>; 2],
 	);
 	
 	type Item<'p, T, K> = PredSubState2<'p, T, B, CombBranch<K::Pal, K>>
@@ -923,11 +924,11 @@ where
 	
 	type CaseIter<T> = NestedPredBranchIter<Self, T>;
 	
-	fn comb_split<'w, K: CombKind>(
-		(a, b): &'w SystemParamItem<<Self::AllParams as PredParam>::Param>,
+	fn comb_split<K: CombKind>(
+		(a, b): &'static SystemParamItem<<Self::AllParams as PredParam>::Param>,
 		Nested(a_input, b_input): Self::Input,
 		kind: K,
-	) -> Self::CombSplit<'w, K> {
+	) -> Self::CombSplit<K> {
 		(
 			A::comb(a, kind.pal(), a_input),
 			[
@@ -1003,13 +1004,13 @@ where
 }
 
 impl<A, const N: usize, B, T> Iterator
-	for NestedPredBranchIter<NestedPerm<PredArrayComb<'static, A, N>, B>, T>
+	for NestedPredBranchIter<NestedPerm<PredArrayComb<A, N>, B>, T>
 where
 	A: PredParam,
 	A::Id: Ord,
 	B: PredPermBranch<Output = A>,
 {
-	type Item = PredStateCase<NestedPerm<<PredArrayComb<'static, A, N> as PredParam>::Id, B::Id>, T>;
+	type Item = PredStateCase<NestedPerm<<PredArrayComb<A, N> as PredParam>::Id, B::Id>, T>;
 	fn next(&mut self) -> Option<Self::Item> {
 		while let Some(iter) = self.sub_iter.as_mut() {
 			if let Some(case) = iter.next() {
@@ -1414,10 +1415,10 @@ mod testing {
 		b_update_list: &[usize],
 	)
 	where
-		<PredPairComb<'static, QueryComb<'static, &'static Test>, QueryComb<'static, &'static TestB>> as PredParam>::Input:
-				Default
-				+ IntoInput<<PredPairComb<'static, QueryComb<'static, &'static Test>, QueryComb<'static, &'static TestB>> as PredParam>::Input>
-				+ Send + Sync + 'static,
+		for<'w> <PredPairComb<QueryComb<'w, &'static Test>, QueryComb<'w, &'static TestB>> as PredParam>::Input:
+			Default
+			+ IntoInput<<PredPairComb<QueryComb<'w, &'static Test>, QueryComb<'w, &'static TestB>> as PredParam>::Input>
+			+ Send + Sync + 'static,
 	{
 		use crate::*;
 		
@@ -1436,7 +1437,7 @@ mod testing {
 		let update_vec = update_list.to_vec();
 		let b_update_vec = b_update_list.to_vec();
 		app.add_chime_events((move |
-			state: PredState2<DynPred, Single<PredPairComb<'static, QueryComb<'static, &'static Test>, QueryComb<'static, &'static TestB>>>>,
+			state: PredState2<DynPred, Single<PredPairComb<QueryComb<&'static Test>, QueryComb<&'static TestB>>>>,
 			a_query: Query<&Test>,
 			b_query: Query<&TestB>,
 			mut index: system::Local<usize>,
@@ -1494,7 +1495,7 @@ mod testing {
 		let update_vec = update_list.to_vec();
 		let b_update_vec = b_update_list.to_vec();
 		app.add_chime_events((move |
-			state: PredState2<DynPred, Nested<QueryComb<'static, &'static Test>, Single<QueryComb<'static, &'static TestB>>>>,
+			state: PredState2<DynPred, Nested<QueryComb<&'static Test>, Single<QueryComb<&'static TestB>>>>,
 			a_query: Query<Ref<Test>>,
 			b_query: Query<Ref<TestB>>,
 			mut index: system::Local<usize>,
@@ -1597,10 +1598,10 @@ mod testing {
 		const S: usize,
 	>(update_list: &[usize])
 	where
-		<PredArrayComb<'static, QueryComb<'static, &'static Test>, R> as PredParam>::Input:
-			Default + IntoInput<<PredArrayComb<'static, QueryComb<'static, &'static Test>, R> as PredParam>::Input> + Send + Sync + 'static,
-		<PredArrayComb<'static, QueryComb<'static, &'static Test>, S> as PredParam>::Input:
-			Default + IntoInput<<PredArrayComb<'static, QueryComb<'static, &'static Test>, S> as PredParam>::Input> + Send + Sync + 'static,
+		for<'w> <PredArrayComb<QueryComb<'w, &'static Test>, R> as PredParam>::Input:
+			Default + IntoInput<<PredArrayComb<QueryComb<'w, &'static Test>, R> as PredParam>::Input> + Send + Sync + 'static,
+		for<'w> <PredArrayComb<QueryComb<'w, &'static Test>, S> as PredParam>::Input:
+			Default + IntoInput<<PredArrayComb<QueryComb<'w, &'static Test>, S> as PredParam>::Input> + Send + Sync + 'static,
 	{
 		use crate::*;
 		
@@ -1625,7 +1626,7 @@ mod testing {
 		let n_choose_r = choose(N, R);
 		let update_vec = update_list.to_vec();
 		app.add_chime_events((move |
-			state: PredState2<DynPred, Single<PredArrayComb<'static, QueryComb<'static, &'static Test>, R>>>,
+			state: PredState2<DynPred, Single<PredArrayComb<QueryComb<&'static Test>, R>>>,
 			query: Query<&Test>,
 			mut index: system::Local<usize>,
 		| {
@@ -1678,8 +1679,9 @@ mod testing {
 		
 		 // Setup [`PredSubState::outer_iter`] Testing:
 		let update_vec = update_list.to_vec();
+		type Param<'w, const S: usize> = NestedPerm<PredArrayComb<QueryComb<'w, &'static Test>, 1>, Single<PredArrayComb<QueryComb<'w, &'static Test>, S>>>;
 		app.add_chime_events((move |
-			state: PredState2<DynPred, NestedPerm<PredArrayComb<'static, QueryComb<'static, &'static Test>, 1>, Single<PredArrayComb<'static, QueryComb<'static, &'static Test>, S>>>>,
+			state: PredState2<DynPred, Param<'_, S>>,
 			query: Query<Ref<Test>>,
 			mut index: system::Local<usize>,
 		| {

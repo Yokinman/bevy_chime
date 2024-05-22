@@ -13,7 +13,7 @@ use comb::*;
 use pred::*;
 
 pub use pred::{In, PredState2, PredFetch, WithId, Single, Nested, NestedPerm, Misc};
-pub use comb::{QueryComb, PredArrayComb};
+pub use comb::{QueryComb, PredArrayComb, PredSingleComb, PredPairComb, ResComb, PredIdComb};
 
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, btree_map, BTreeMap, HashMap};
@@ -87,7 +87,7 @@ impl AddChimeEvent for App {
 				let (state, misc) = state.get(world);
 				pred_sys(
 					PredState2::new(
-						P::comb_split(&state, input.clone().into_input(), CombAnyTrue),
+						P::comb_split(unsafe { std::mem::transmute(&state) }, input.clone().into_input(), CombAnyTrue),
 						&mut node,
 					),
 					misc
@@ -238,13 +238,13 @@ pub trait PredCaseFn<P, B: PredBranch, M> {
 	}
 }
 
-impl<F, P, A,> PredCaseFn<P, Single<PredSingleComb<'static, A>>, ()> for F
+impl<F, P, A,> PredCaseFn<P, Single<PredSingleComb<A>>, ()> for F
 where
 	P: Prediction,
 	A: PredParam,
 	F: Fn(PredParamItem<A>,) -> P,
 {
-	fn run<'w, K: CombKind>(&self, input: PredSubState2<'w, P, Single<PredSingleComb<'static, A>>, K>)
+	fn run<'w, K: CombKind>(&self, input: PredSubState2<'w, P, Single<PredSingleComb<A>>, K>)
 	where
 		P: 'w,
 		Single<(A,)>: 'w,
@@ -256,14 +256,14 @@ where
 	}
 }
 
-impl<F, P, A, B,> PredCaseFn<P, Single<PredPairComb<'static, A, B>>, ()> for F
+impl<F, P, A, B,> PredCaseFn<P, Single<PredPairComb<A, B>>, ()> for F
 where
 	P: Prediction,
 	A: PredParam,
 	B: PredParam,
 	F: Fn(PredParamItem<A>, PredParamItem<B>,) -> P,
 {
-	fn run<'w, K: CombKind>(&self, input: PredSubState2<'w, P, Single<PredPairComb<'static, A, B>>, K>)
+	fn run<'w, K: CombKind>(&self, input: PredSubState2<'w, P, Single<PredPairComb<A, B>>, K>)
 	where
 		P: 'w,
 		Single<(A, B,)>: 'w,
@@ -275,7 +275,7 @@ where
 	}
 }
 
-impl<F, P, O, A, T, M> PredCaseFn<P, Nested<PredSingleComb<'static, A>, T>, (O, M)> for F
+impl<F, P, O, A, T, M> PredCaseFn<P, Nested<PredSingleComb<A>, T>, (O, M)> for F
 where
 	P: Prediction,
 	A: PredParam,
@@ -283,7 +283,7 @@ where
 	O: PredCaseFn<P, T, M>,
 	F: Fn(PredParamItem<A>,) -> O,
 {
-	fn run<'w, K: CombKind>(&self, input: PredSubState2<'w, P, Nested<PredSingleComb<'static, A>, T>, K>)
+	fn run<'w, K: CombKind>(&self, input: PredSubState2<'w, P, Nested<PredSingleComb<A>, T>, K>)
 	where
 		P: 'w,
 		Nested<(A,), T>: 'w,
