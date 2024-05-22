@@ -217,16 +217,12 @@ impl_into_pred_fn!(@all
 
 /// ...
 pub trait PredCaseFn<P, B: PredBranch, M> {
-	fn run<'w, K: CombKind>(&self, input: PredSubState2<'w, P, B, K>)
-	where
-		P: 'w,
-		B: 'w;
+	fn run<K: CombKind>(&self, input: PredSubState2<P, B, K>);
 	
 	fn into_events(self) -> ChimeEventBuilder<P, B, (), <B as PredBranch>::Input, impl PredFn<P, B, ()>>
 	where
 		Self: Sized,
 		P: 'static,
-		B: 'static,
 		<B as PredBranch>::Input: Default + Send + Sync,
 	{
 		ChimeEventBuilder::new(
@@ -244,11 +240,7 @@ where
 	A: PredParam,
 	F: Fn(PredParamItem<A>,) -> P,
 {
-	fn run<'w, K: CombKind>(&self, input: PredSubState2<'w, P, Single<PredSingleComb<A>>, K>)
-	where
-		P: 'w,
-		Single<(A,)>: 'w,
-	{
+	fn run<K: CombKind>(&self, input: PredSubState2<P, Single<PredSingleComb<A>>, K>) {
 		for (case, (a,)) in input {
 			let pred = self(a,);
 			case.set(pred)
@@ -263,11 +255,7 @@ where
 	B: PredParam,
 	F: Fn(PredParamItem<A>, PredParamItem<B>,) -> P,
 {
-	fn run<'w, K: CombKind>(&self, input: PredSubState2<'w, P, Single<PredPairComb<A, B>>, K>)
-	where
-		P: 'w,
-		Single<(A, B,)>: 'w,
-	{
+	fn run<K: CombKind>(&self, input: PredSubState2<P, Single<PredPairComb<A, B>>, K>) {
 		for (case, (a, b,)) in input {
 			let pred = self(a, b,);
 			case.set(pred);
@@ -283,11 +271,7 @@ where
 	O: PredCaseFn<P, T, M>,
 	F: Fn(PredParamItem<A>,) -> O,
 {
-	fn run<'w, K: CombKind>(&self, input: PredSubState2<'w, P, Nested<PredSingleComb<A>, T>, K>)
-	where
-		P: 'w,
-		Nested<(A,), T>: 'w,
-	{
+	fn run<K: CombKind>(&self, input: PredSubState2<P, Nested<PredSingleComb<A>, T>, K>) {
 		for (state, (a,)) in input {
 			let x = self(a,);
 			x.run(state);
