@@ -528,19 +528,6 @@ where
 }
 
 /// ...
-pub trait PredItemRef2: PredItemRef<Item = Self::Bruh> {
-	type Bruh: PredItem + ReadOnlyQueryData;
-}
-
-impl<T> PredItemRef2 for T
-where
-	T: PredItemRef,
-	T::Item: ReadOnlyQueryData,
-{
-	type Bruh = T::Item;
-}
-
-/// ...
 #[derive(Copy, Clone)]
 pub struct WithId<I>(pub I);
 
