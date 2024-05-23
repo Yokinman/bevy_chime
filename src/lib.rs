@@ -233,11 +233,13 @@ pub trait PredCaseFn<P, B: PredBranch, M> {
 	}
 }
 
-impl<F, P, A,> PredCaseFn<P, Single<PredSingleComb<A>>, ()> for F
+impl<F, P, A, T> PredCaseFn<P, Single<PredSingleComb<A>>, ()> for F
 where
+	// Specifying `A::Item` as a separate parameter permits type elision.
 	P: Prediction,
-	A: PredParam,
-	F: Fn(PredParamItem<A>,) -> P,
+	A: PredParam<Item = T>,
+	T: PredItem2<A>,
+	F: Fn(T,) -> P,
 {
 	fn run<K: CombKind>(&self, input: PredSubState2<P, Single<PredSingleComb<A>>, K>) {
 		for (case, (a,)) in input {
@@ -247,12 +249,15 @@ where
 	}
 }
 
-impl<F, P, A, B,> PredCaseFn<P, Single<PredPairComb<A, B>>, ()> for F
+impl<F, P, A, B, T, U,> PredCaseFn<P, Single<PredPairComb<A, B>>, ()> for F
 where
+	// Specifying `A::Item` et al. as separate parameters permits type elision.
 	P: Prediction,
-	A: PredParam,
-	B: PredParam,
-	F: Fn(PredParamItem<A>, PredParamItem<B>,) -> P,
+	A: PredParam<Item = T>,
+	B: PredParam<Item = U>,
+	T: PredItem2<A>,
+	U: PredItem2<B>,
+	F: Fn(T, U,) -> P,
 {
 	fn run<K: CombKind>(&self, input: PredSubState2<P, Single<PredPairComb<A, B>>, K>) {
 		for (case, (a, b,)) in input {
@@ -262,15 +267,17 @@ where
 	}
 }
 
-impl<F, P, O, A, T, M> PredCaseFn<P, Nested<PredSingleComb<A>, T>, (O, M)> for F
+impl<F, P, A, T, M, SubF, SubA> PredCaseFn<P, Nested<PredSingleComb<A>, SubA>, (SubF, M)> for F
 where
+	// Specifying `A::Item` as a separate parameter permits type elision.
 	P: Prediction,
-	A: PredParam,
-	T: PredBranch,
-	O: PredCaseFn<P, T, M>,
-	F: Fn(PredParamItem<A>,) -> O,
+	A: PredParam<Item =T>,
+	T: PredItem2<A>,
+	SubA: PredBranch,
+	SubF: PredCaseFn<P, SubA, M>,
+	F: Fn(T,) -> SubF,
 {
-	fn run<K: CombKind>(&self, input: PredSubState2<P, Nested<PredSingleComb<A>, T>, K>) {
+	fn run<K: CombKind>(&self, input: PredSubState2<P, Nested<PredSingleComb<A>, SubA>, K>) {
 		for (state, (a,)) in input {
 			let x = self(a,);
 			x.run(state);
