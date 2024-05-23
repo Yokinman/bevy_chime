@@ -40,7 +40,7 @@ pub trait AddChimeEvent {
 	where
 		T: Prediction,
 		T::TimeRanges: Send + Sync + 'static,
-		P: PredBranch + 'static,
+		P: PredBranch,
 		A: ReadOnlySystemParam + 'static,
 		I: IntoInput<P::Input> + Clone + Send + Sync + 'static,
 		F: PredFn<T, P, A> + Send + Sync + 'static;
@@ -54,7 +54,7 @@ impl AddChimeEvent for App {
 	where
 		T: Prediction,
 		T::TimeRanges: Send + Sync + 'static,
-		P: PredBranch + 'static,
+		P: PredBranch,
 		A: ReadOnlySystemParam + 'static,
 		I: IntoInput<P::Input> + Clone + Send + Sync + 'static,
 		F: PredFn<T, P, A> + Send + Sync + 'static,
