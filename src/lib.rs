@@ -219,10 +219,9 @@ impl_into_pred_fn!(@all
 pub trait PredCaseFn<P, B: PredBranch, M> {
 	fn run<K: CombKind>(&self, input: PredSubState2<P, B, K>);
 	
-	fn into_events(self) -> ChimeEventBuilder<P, B, (), <B as PredBranch>::Input, impl PredFn<P, B, ()>>
+	fn into_events(self) -> ChimeEventBuilder<P, B, (), B::Input, impl PredFn<P, B, ()>>
 	where
 		Self: Sized,
-		P: 'static,
 		<B as PredBranch>::Input: Default + Send + Sync,
 	{
 		ChimeEventBuilder::new(
