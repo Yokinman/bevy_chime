@@ -338,7 +338,7 @@ where
 /// Unused - may replace the output of `QueryComb` if the concept of
 /// case-by-case prediction closures is implemented.
 #[derive(Debug)]
-pub struct Fetch<'w, D: QueryData, F> {
+pub struct Fetch<'w, D: QueryData, F = ()> {
 	inner: D::Item<'w>,
 	_filter: std::marker::PhantomData<F>,
 }
