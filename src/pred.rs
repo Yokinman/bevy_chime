@@ -270,7 +270,7 @@ where
 
 impl<P, T> PredCombinatorCase<Misc<P>> for Misc<T>
 where
-	P: PredParam<Id = T::Id>,
+	P: PredParam<Item = T::Item, Id = T::Id>,
 	T: PredCombinatorCase<P>,
 {
 	type Id = T::Id;
@@ -426,7 +426,7 @@ where
 }
 
 /// ...
-pub trait PredItem2<P: PredParam + ?Sized>: PredItem {}
+pub trait PredItem2<P: PredParam<Item = Self> + ?Sized>: PredItem {}
 
 impl PredItem2<EmptyComb> for () {}
 
@@ -443,21 +443,21 @@ impl<'w, T: Resource> PredItem2<ResComb<'w, T>> for Res<'w, T> {}
 impl<A, P,> PredItem2<PredSingleComb<P>> for (A,)
 where
 	A: PredItem2<P>,
-	P: PredParam,
+	P: PredParam<Item = A>,
 {}
 
 impl<A, B, P, Q,> PredItem2<PredPairComb<P, Q>> for (A, B,)
 where
 	A: PredItem2<P>,
 	B: PredItem2<Q>,
-	P: PredParam,
-	Q: PredParam,
+	P: PredParam<Item = A>,
+	Q: PredParam<Item = B>,
 {}
 
 impl<T, P, const N: usize> PredItem2<PredArrayComb<P, N>> for [T; N]
 where
 	T: PredItem2<P>,
-	P: PredParam,
+	P: PredParam<Item = T>,
 	P::Id: Ord,
 {}
 
