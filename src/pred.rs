@@ -41,7 +41,7 @@ pub type PredParamItem<P> = <P as PredParam>::Item;
 /// A set of [`PredItem`] values used to predict & schedule events.
 pub trait PredParam {
 	/// The equivalent [`bevy_ecs::system::SystemParam`].
-	type Param: ReadOnlySystemParam;
+	type Param: ReadOnlySystemParam + 'static;
 	
 	/// Unique identifier for each of [`Self::Param`]'s items.
 	type Id: PredId;
@@ -70,7 +70,7 @@ where
 	T::Item<'w>: PredItem,
 	<T::ItemRef as WorldQuery>::Item<'w>: PredItemRef<Item = T::Item<'w>>,
 {
-	type Param = Query<'w, 'w, (T::ItemRef, Entity), F>;
+	type Param = Query<'static, 'static, (T::ItemRef, Entity), F>;
 	type Id = Entity;
 	type Item = Fetch<'w, T, F>;
 	type Case = PredCombCase<Self::Item, Self::Id>;
@@ -89,7 +89,7 @@ impl<'w, R> PredParam for ResComb<'w, R>
 where
 	R: Resource
 {
-	type Param = Res<'w, R>;
+	type Param = Res<'static, R>;
 	type Id = ();
 	type Item = Res<'w, R>;
 	type Case = PredCombCase<Self::Item, Self::Id>;
