@@ -231,6 +231,19 @@ pub trait PredCaseFn<P, B: PredBranch, M> {
 			B::Input::default(),
 		)
 	}
+	
+	fn into_events_with_input<I>(self, input: I)
+		-> ChimeEventBuilder<P, B, (), I, impl PredFn<P, B, ()>>
+	where
+		Self: Sized,
+	{
+		ChimeEventBuilder::new(
+			move |state: PredState2<P, B>, _misc: ()| {
+				self.run(state.inner);
+			},
+			input,
+		)
+	}
 }
 
 impl<F, P, A, T> PredCaseFn<P, Single<PredSingleComb<A>>, ()> for F
