@@ -202,15 +202,11 @@ fn add_many_dogs(world: &mut World) {
 	println!("COUNT: {n}");
 }
 
-fn when_func_a(state: PredState2<DynPred, Single<QueryComb<&'static Pos>>>) {
-	// let a_time = Instant::now();
-	for (state, pos) in state {
-		let pred =
-			(pos[0].when_eq(&((RIGHT - pos.radius) as f64))/* & pos[0].spd.when(Ordering::Greater, &0.)*/) |
-			(pos[0].when_eq(&((LEFT  + pos.radius) as f64))/* & pos[0].spd.when(Ordering::Less, &0.)*/);
-		state.set(DynPred::new(pred.pre()));
-	}
-	// println!("  when_func_a: {:?}", Instant::now().duration_since(a_time));
+fn when_func_a(pos: Fetch<&Pos>) -> DynPred {
+	let pred =
+		(pos[0].when_eq(&((RIGHT - pos.radius) as f64))/* & pos[0].spd.when(Ordering::Greater, &0.)*/) |
+		(pos[0].when_eq(&((LEFT  + pos.radius) as f64))/* & pos[0].spd.when(Ordering::Less, &0.)*/);
+	DynPred::new(pred.pre())
 }
 
 fn do_func_a(query: PredFetch<&mut Pos>, time: Res<Time>) {
@@ -219,24 +215,19 @@ fn do_func_a(query: PredFetch<&mut Pos>, time: Res<Time>) {
 	pos_x.spd.val *= -1.;
 }
 
-fn when_func_b(state: PredState2<DynPred, Single<QueryComb<&'static Pos>>>) {
-	// let a_time = Instant::now();
-	// let time = time.elapsed();
-	for (state, pos) in state {
-		let/* mut*/ pred =
-			(pos[1].when_eq(&((TOP    - pos.radius) as f64)) /*& pos[1].spd.when(Ordering::Greater, &0.)*/) |
-			(pos[1].when_eq(&((BOTTOM + pos.radius) as f64)) /*& pos[1].spd.when(Ordering::Less, &0.)*/);
-		state.set(DynPred::new(pred.pre()/*.clone()*/));
-		// if pred.find(|t| *t > time).is_none() && pos[1].at(time).spd.acc.val != 0. {
-		// 	println!("Wow! {time:?}, {:?}, {:?}\n  {:?}, spd: {:?}",
-		// 		(pos[1].poly(time) - chime::Constant::from((BOTTOM + pos.radius) as f64).into()),
-		// 		(pos[1].poly(time) - chime::Constant::from((BOTTOM + pos.radius) as f64).into()).real_roots().collect::<Vec<_>>(),
-		// 		pos[1].when_eq(&chime::Constant::from((BOTTOM + pos.radius) as f64)).collect::<Vec<_>>(),
-		// 		pos[1].spd.when(Ordering::Less, &chime::Constant::from(0.)).collect::<Vec<_>>()
-		// 	);
-		// }
-	}
-	// println!("  when_func_b: {:?}", Instant::now().duration_since(a_time));
+fn when_func_b(pos: Fetch<&Pos>) -> DynPred {
+	let/* mut*/ pred =
+		(pos[1].when_eq(&((TOP    - pos.radius) as f64)) /*& pos[1].spd.when(Ordering::Greater, &0.)*/) |
+		(pos[1].when_eq(&((BOTTOM + pos.radius) as f64)) /*& pos[1].spd.when(Ordering::Less, &0.)*/);
+	DynPred::new(pred.pre()/*.clone()*/)
+	// if pred.find(|t| *t > time).is_none() && pos[1].at(time).spd.acc.val != 0. {
+	// 	println!("Wow! {time:?}, {:?}, {:?}\n  {:?}, spd: {:?}",
+	// 		(pos[1].poly(time) - chime::Constant::from((BOTTOM + pos.radius) as f64).into()),
+	// 		(pos[1].poly(time) - chime::Constant::from((BOTTOM + pos.radius) as f64).into()).real_roots().collect::<Vec<_>>(),
+	// 		pos[1].when_eq(&chime::Constant::from((BOTTOM + pos.radius) as f64)).collect::<Vec<_>>(),
+	// 		pos[1].spd.when(Ordering::Less, &chime::Constant::from(0.)).collect::<Vec<_>>()
+	// 	);
+	// }
 }
 
 fn do_func_b(query: PredFetch<&mut Pos>, time: Res<Time>) {
