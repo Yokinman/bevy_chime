@@ -467,9 +467,10 @@ where
 	T::Item : PredId,
 {}
 
-impl<T> PredItem2<Misc<T>> for Misc<PredParamItem<T>>
+impl<T, I> PredItem2<Misc<T>> for Misc<I>
 where
-	T: PredParam,
+	T: PredParam<Item = I>,
+	I: PredItem2<T>,
 {}
 
 /// [`PredItem`] with updated state.
