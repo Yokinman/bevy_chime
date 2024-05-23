@@ -12,7 +12,7 @@ mod node;
 use comb::*;
 use pred::*;
 
-pub use pred::{In, PredState2, PredFetch, WithId, Single, Nested, NestedPerm, Misc};
+pub use pred::{Fetch, In, PredState2, PredFetch, WithId, Single, Nested, NestedPerm, Misc};
 pub use comb::{QueryComb, PredArrayComb, PredSingleComb, PredPairComb, ResComb, PredIdComb};
 
 use std::cmp::Reverse;
