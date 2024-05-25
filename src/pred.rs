@@ -1116,6 +1116,14 @@ impl<C: Component, const N: usize> PredFetchData for [&mut C; N] {
 	}
 }
 
+impl<A: PredFetchData> PredFetchData for (A,) {
+	type Id = (A::Id,);
+	type Output<'w> = (A::Output<'w>,);
+	unsafe fn get_inner(world: UnsafeWorldCell, (a,): Self::Id) -> Self::Output<'_> {
+		(A::get_inner(world, a),)
+	}
+}
+
 impl<A: PredFetchData, B: PredFetchData> PredFetchData for (A, B) {
 	type Id = (A::Id, B::Id);
 	type Output<'w> = (A::Output<'w>, B::Output<'w>);
