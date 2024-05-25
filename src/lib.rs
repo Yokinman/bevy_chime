@@ -284,7 +284,7 @@ impl<F, P, A, T, M, SubF, SubA> PredCaseFn<P, Nested<PredSingleComb<A>, SubA>, (
 where
 	// Specifying `A::Item` as a separate parameter permits type elision.
 	P: Prediction,
-	A: PredParam<Item =T>,
+	A: PredParam<Item = T>,
 	T: PredItem2<A>,
 	SubA: PredBranch,
 	SubF: PredCaseFn<P, SubA, M>,
@@ -293,6 +293,26 @@ where
 	fn run<K: CombKind>(&self, input: PredSubState2<P, Nested<PredSingleComb<A>, SubA>, K>) {
 		for (state, (a,)) in input {
 			let x = self(a,);
+			x.run(state);
+		}
+	}
+}
+
+impl<F, P, A, B, T, U, M, SubF, SubA> PredCaseFn<P, Nested<PredPairComb<A, B>, SubA>, (SubF, M)> for F
+where
+	// Specifying `A::Item` et al. as separate parameters permits type elision.
+	P: Prediction,
+	A: PredParam<Item = T>,
+	B: PredParam<Item = U>,
+	T: PredItem2<A>,
+	U: PredItem2<B>,
+	SubA: PredBranch,
+	SubF: PredCaseFn<P, SubA, M>,
+	F: Fn(T, U,) -> SubF,
+{
+	fn run<K: CombKind>(&self, input: PredSubState2<P, Nested<PredPairComb<A, B>, SubA>, K>) {
+		for (state, (a, b,)) in input {
+			let x = self(a, b,);
 			x.run(state);
 		}
 	}
