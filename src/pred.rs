@@ -1214,8 +1214,9 @@ unsafe impl<D: PredFetchData> SystemParam for PredFetch<'_, D> {
 				(*id, Arc::clone(time))
 			} else {
 				panic!(
-					"!!! parameter is for wrong ID type. got {:?}",
-					std::any::type_name::<D::Id>()
+					"!!! parameter is for wrong ID type. got {:?} in {:?}",
+					std::any::type_name::<D::Id>(),
+					system_meta.name(),
 				);
 			}
 		} else {
