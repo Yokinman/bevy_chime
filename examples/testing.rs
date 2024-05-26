@@ -8,6 +8,7 @@ use chime::*;
 use chime::pred::{DynPred, Prediction, WhenDisEq, /*WhenDis, WhenEq, When*/};
 
 use std::time::{Duration, /*Instant*/};
+use chime::time::TimeRanges;
 
 #[derive(PartialOrd, PartialEq)]
 #[flux(
@@ -202,11 +203,10 @@ fn add_many_dogs(world: &mut World) {
 	println!("COUNT: {n}");
 }
 
-fn when_func_a(pos: Fetch<&Pos>) -> DynPred {
-	let pred =
-		(pos[0].when_eq(&((RIGHT - pos.radius) as f64))/* & pos[0].spd.when(Ordering::Greater, &0.)*/) |
-		(pos[0].when_eq(&((LEFT  + pos.radius) as f64))/* & pos[0].spd.when(Ordering::Less, &0.)*/);
-	DynPred::new(pred.pre())
+fn when_func_a(pos: Fetch<&Pos>) -> impl Prediction<TimeRanges = impl TimeRanges + Send + Sync + 'static> {
+	let pred = pos[0].when_eq(&((RIGHT - pos.radius) as f64))
+		| pos[0].when_eq(&((LEFT  + pos.radius) as f64));
+	pred.pre()
 }
 
 fn do_func_a(query: PredFetch<&mut Pos>, time: Res<Time>) {
@@ -215,11 +215,10 @@ fn do_func_a(query: PredFetch<&mut Pos>, time: Res<Time>) {
 	pos_x.spd.val *= -1.;
 }
 
-fn when_func_b(pos: Fetch<&Pos>) -> DynPred {
-	let/* mut*/ pred =
-		(pos[1].when_eq(&((TOP    - pos.radius) as f64)) /*& pos[1].spd.when(Ordering::Greater, &0.)*/) |
-		(pos[1].when_eq(&((BOTTOM + pos.radius) as f64)) /*& pos[1].spd.when(Ordering::Less, &0.)*/);
-	DynPred::new(pred.pre()/*.clone()*/)
+fn when_func_b(pos: Fetch<&Pos>) -> impl Prediction<TimeRanges = impl TimeRanges + Send + Sync + 'static> {
+	let pred = pos[1].when_eq(&((TOP    - pos.radius) as f64))
+		| pos[1].when_eq(&((BOTTOM + pos.radius) as f64));
+	pred.pre()
 	// if pred.find(|t| *t > time).is_none() && pos[1].at(time).spd.acc.val != 0. {
 	// 	println!("Wow! {time:?}, {:?}, {:?}\n  {:?}, spd: {:?}",
 	// 		(pos[1].poly(time) - chime::Constant::from((BOTTOM + pos.radius) as f64).into()),
