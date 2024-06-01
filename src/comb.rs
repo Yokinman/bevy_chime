@@ -1348,7 +1348,7 @@ where
 			}
 			self.iter.next().map(|case| {
 				let kind;
-				let sub_comb;
+				let mut sub_comb;
 				let index;
 				if self.kind.has_state(case.is_diff()) {
 					kind = CombBranch::A(self.kind.pal());
@@ -1359,10 +1359,10 @@ where
 					sub_comb = self.sub_comb[1].clone();
 					index = ind;
 				};
+				B::outer_skip(&mut sub_comb, index);
 				let (item, id) = case.into_parts();
 				let (_, node) = self.node.write((id, Node::default()));
-				let mut sub_state = PredSubState2::new(sub_comb, node, kind);
-				sub_state.index = index;
+				let sub_state = PredSubState2::new(sub_comb, node, kind);
 				(sub_state, item)
 			})
 		} else {

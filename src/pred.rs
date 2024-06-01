@@ -662,17 +662,30 @@ pub trait PredPermBranch: PredBranch /*+ std::ops::Index<usize>*/ {
 	{
 		todo!()
 	}
+	
+	fn outer_skip<K: CombKind>(
+		comb: &mut <Self as PredBranch>::CombSplit<K>,
+		index: [usize; 2],
+	);
 }
 
 impl<T, const N: usize> PredPermBranch for Single<PredArrayComb<T, N>>
 where
 	T: PredParam,
-	PredArrayComb<T, N>: PredParam,
+	T::Id: Ord,
 {
 	type Output = T;
 	
 	fn depth() -> usize {
 		N
+	}
+
+	fn outer_skip<K: CombKind>(
+		comb: &mut <Self as PredBranch>::CombSplit<K>,
+		index: [usize; 2],
+	) {
+		comb.a_index += index[0];
+		comb.b_index += index[1];
 	}
 }
 
@@ -774,6 +787,16 @@ where
 	
 	fn depth() -> usize {
 		N + B::depth()
+	}
+
+	fn outer_skip<K: CombKind>(
+		(outer, _inner): &mut <Self as PredBranch>::CombSplit<K>,
+		index: [usize; 2],
+	) {
+		outer.a_index += index[0];
+		outer.b_index += index[1];
+		// B::outer_skip(&mut inner[0], index);
+		// B::outer_skip(&mut inner[1], index);
 	}
 }
 
