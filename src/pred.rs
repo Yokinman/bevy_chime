@@ -546,7 +546,6 @@ where
 	pub(crate) comb: P::CombSplit<K>,
 	pub(crate) node: &'p mut Node<P::Case<T>>,
 	pub(crate) kind: K,
-	pub(crate) index: [usize; 2],
 }
 
 impl<'p, T, P, K> PredSubState2<'p, T, P, K>
@@ -563,7 +562,6 @@ where
 			comb,
 			node,
 			kind,
-			index: [0; 2],
 		}
 	}
 }
