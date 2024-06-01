@@ -45,7 +45,7 @@ pub trait PredParam: Clone + IntoIterator<Item=Self::Case> {
 	
 	/// Unique identifier for each of [`Self::Param`]'s items.
 	type Id: PredId;
-	type Item_: PredItem2<Self>;
+	type Item_: PredItem;
 	type Case: PredCombinatorCase<Self, Id=Self::Id, Item=Self::Item_>;
 	
 	/// ...
