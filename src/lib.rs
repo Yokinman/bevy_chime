@@ -250,7 +250,7 @@ impl<F, P, A, T> PredCaseFn<P, Single<PredSingleComb<A>>, ()> for F
 where
 	// Specifying `A::Item` as a separate parameter permits type elision.
 	P: Prediction,
-	A: PredParam<Item = T>,
+	A: PredParam<Item_= T>,
 	T: PredItem2<A>,
 	F: Fn(T,) -> P,
 {
@@ -266,8 +266,8 @@ impl<F, P, A, B, T, U,> PredCaseFn<P, Single<PredPairComb<A, B>>, ()> for F
 where
 	// Specifying `A::Item` et al. as separate parameters permits type elision.
 	P: Prediction,
-	A: PredParam<Item = T>,
-	B: PredParam<Item = U>,
+	A: PredParam<Item_= T>,
+	B: PredParam<Item_= U>,
 	T: PredItem2<A>,
 	U: PredItem2<B>,
 	F: Fn(T, U,) -> P,
@@ -284,7 +284,7 @@ impl<F, P, A, T, M, SubF, SubA> PredCaseFn<P, Nested<PredSingleComb<A>, SubA>, (
 where
 	// Specifying `A::Item` as a separate parameter permits type elision.
 	P: Prediction,
-	A: PredParam<Item = T>,
+	A: PredParam<Item_= T>,
 	T: PredItem2<A>,
 	SubA: PredBranch,
 	SubF: PredCaseFn<P, SubA, M>,
@@ -302,8 +302,8 @@ impl<F, P, A, B, T, U, M, SubF, SubA> PredCaseFn<P, Nested<PredPairComb<A, B>, S
 where
 	// Specifying `A::Item` et al. as separate parameters permits type elision.
 	P: Prediction,
-	A: PredParam<Item = T>,
-	B: PredParam<Item = U>,
+	A: PredParam<Item_= T>,
+	B: PredParam<Item_= U>,
 	T: PredItem2<A>,
 	U: PredItem2<B>,
 	SubA: PredBranch,

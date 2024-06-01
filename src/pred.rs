@@ -36,7 +36,7 @@ where
 {}
 
 /// Shortcut for accessing `PredParam::Comb::Case::Item`.
-pub type PredParamItem<P> = <P as PredParam>::Item;
+pub type PredParamItem<P> = <P as PredParam>::Item_;
 
 /// A set of [`PredItem`] values used to predict & schedule events.
 pub trait PredParam {
@@ -45,8 +45,8 @@ pub trait PredParam {
 	
 	/// Unique identifier for each of [`Self::Param`]'s items.
 	type Id: PredId;
-	type Item: PredItem2<Self>;
-	type Case: PredCombinatorCase<Self, Id=Self::Id, Item=Self::Item>;
+	type Item_: PredItem2<Self>;
+	type Case: PredCombinatorCase<Self, Id=Self::Id, Item=Self::Item_>;
 	
 	/// ...
 	type Input: Clone;
@@ -72,8 +72,8 @@ where
 {
 	type Param = Query<'static, 'static, (T::ItemRef, Entity), F>;
 	type Id = Entity;
-	type Item = Fetch<'w, T, F>;
-	type Case = PredCombCase<Self::Item, Self::Id>;
+	type Item_ = Fetch<'w, T, F>;
+	type Case = PredCombCase<Self::Item_, Self::Id>;
 	type Input = ();
 	type Comb<K: CombKind> = QueryComb<'w, T, F, K>;
 	fn comb<K: CombKind>(
@@ -91,8 +91,8 @@ where
 {
 	type Param = Res<'static, R>;
 	type Id = ();
-	type Item = Res<'w, R>;
-	type Case = PredCombCase<Self::Item, Self::Id>;
+	type Item_ = Res<'w, R>;
+	type Case = PredCombCase<Self::Item_, Self::Id>;
 	type Input = ();
 	type Comb<K: CombKind> = ResComb<'w, R, K>;
 	fn comb<K: CombKind>(
@@ -107,8 +107,8 @@ where
 impl PredParam for EmptyComb {
 	type Param = ();
 	type Id = ();
-	type Item = ();
-	type Case = PredCombCase<Self::Item, Self::Id>;
+	type Item_ = ();
+	type Case = PredCombCase<Self::Item_, Self::Id>;
 	type Input = ();
 	type Comb<K: CombKind> = EmptyComb<K>;
 	fn comb<K: CombKind>(
@@ -126,7 +126,7 @@ where
 {
 	type Param = A::Param;
 	type Id = (A::Id,);
-	type Item = (A::Item,);
+	type Item_ = (A::Item_,);
 	type Case = (A::Case,);
 	type Input = (A::Input,);
 	type Comb<K: CombKind> = PredSingleComb<A, K>;
@@ -146,7 +146,7 @@ where
 {
 	type Param = (A::Param, B::Param);
 	type Id = (A::Id, B::Id);
-	type Item = (A::Item, B::Item);
+	type Item_ = (A::Item_, B::Item_);
 	type Case = (A::Case, B::Case);
 	type Input = (A::Input, B::Input);
 	type Comb<K: CombKind> = PredPairComb<A, B, K>;
@@ -172,7 +172,7 @@ where
 {
 	type Param = P::Param;
 	type Id = [P::Id; N];
-	type Item = [P::Item; N];
+	type Item_ = [P::Item_; N];
 	type Case = [P::Case; N];
 	type Input = [P::Input; N];
 	type Comb<K: CombKind> = PredArrayComb<P, N, K>;
@@ -209,8 +209,8 @@ where
 	type Param = ();
 	type Input = I;
 	type Id = I::Item;
-	type Item = WithId<I::Item>;
-	type Case = PredCombCase<Self::Item, Self::Id>;
+	type Item_ = WithId<I::Item>;
+	type Case = PredCombCase<Self::Item_, Self::Id>;
 	type Comb<K: CombKind> = PredIdComb<I>;
 	fn comb<K: CombKind>(
 		_param: &'static SystemParamItem<Self::Param>,
@@ -228,7 +228,7 @@ where
 	type Param = T::Param;
 	type Input = T::Input;
 	type Id = T::Id;
-	type Item = Misc<T::Item>;
+	type Item_ = Misc<T::Item_>;
 	type Case = Misc<T::Case>;
 	type Comb<K: CombKind> = Misc<T::Comb<K>>;
 	fn comb<K: CombKind>(
@@ -265,7 +265,7 @@ where
 
 impl<P, T> PredCombinatorCase<Misc<P>> for Misc<T>
 where
-	P: PredParam<Item = T::Item, Id = T::Id>,
+	P: PredParam<Item_= T::Item, Id = T::Id>,
 	T: PredCombinatorCase<P>,
 {
 	type Id = T::Id;
@@ -421,7 +421,7 @@ where
 }
 
 /// ...
-pub trait PredItem2<P: PredParam<Item = Self> + ?Sized>: PredItem {}
+pub trait PredItem2<P: PredParam<Item_= Self> + ?Sized>: PredItem {}
 
 impl PredItem2<EmptyComb> for () {}
 
@@ -438,21 +438,21 @@ impl<'w, T: Resource> PredItem2<ResComb<'w, T>> for Res<'w, T> {}
 impl<A, P,> PredItem2<PredSingleComb<P>> for (A,)
 where
 	A: PredItem2<P>,
-	P: PredParam<Item = A>,
+	P: PredParam<Item_= A>,
 {}
 
 impl<A, B, P, Q,> PredItem2<PredPairComb<P, Q>> for (A, B,)
 where
 	A: PredItem2<P>,
 	B: PredItem2<Q>,
-	P: PredParam<Item = A>,
-	Q: PredParam<Item = B>,
+	P: PredParam<Item_= A>,
+	Q: PredParam<Item_= B>,
 {}
 
 impl<T, P, const N: usize> PredItem2<PredArrayComb<P, N>> for [T; N]
 where
 	T: PredItem2<P>,
-	P: PredParam<Item = T>,
+	P: PredParam<Item_= T>,
 	P::Id: Ord,
 {}
 
@@ -464,7 +464,7 @@ where
 
 impl<T, I> PredItem2<Misc<T>> for Misc<I>
 where
-	T: PredParam<Item = I>,
+	T: PredParam<Item_= I>,
 	I: PredItem2<T>,
 {}
 
