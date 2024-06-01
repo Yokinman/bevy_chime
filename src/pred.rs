@@ -39,7 +39,7 @@ where
 pub type PredParamItem<P> = <P as PredParam>::Item_;
 
 /// A set of [`PredItem`] values used to predict & schedule events.
-pub trait PredParam {
+pub trait PredParam: Clone + IntoIterator<Item=Self::Case> {
 	/// The equivalent [`bevy_ecs::system::SystemParam`].
 	type Param: ReadOnlySystemParam + 'static;
 	
