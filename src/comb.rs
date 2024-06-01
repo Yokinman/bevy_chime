@@ -138,7 +138,7 @@ where
 }
 
 /// Combinator type produced by `PredParam::comb`.
-pub trait PredCombinator<K: CombKind = CombNone>:
+pub trait PredCombinator:
 	Clone + IntoIterator<Item=Self::Case>
 {
 	type Id: PredId;
@@ -149,13 +149,13 @@ pub trait PredCombinator<K: CombKind = CombNone>:
 	type Param: PredParam<Id = Self::Id>;
 }
 
-impl<K: CombKind> PredCombinator<K> for EmptyComb<K> {
+impl<K: CombKind> PredCombinator for EmptyComb<K> {
 	type Id = ();
 	type Case = PredCombCase<(), ()>;
 	type Param = EmptyComb;
 }
 
-impl<'w, R, K> PredCombinator<K> for ResComb<'w, R, K>
+impl<'w, R, K> PredCombinator for ResComb<'w, R, K>
 where
 	K: CombKind,
 	R: Resource,
@@ -165,7 +165,7 @@ where
 	type Param = ResComb<'w, R>;
 }
 
-impl<'w, T, F, K> PredCombinator<K> for QueryComb<'w, T, F, K>
+impl<'w, T, F, K> PredCombinator for QueryComb<'w, T, F, K>
 where
 	K: CombKind,
 	T: PredParamQueryData,
@@ -178,7 +178,7 @@ where
 	type Param = QueryComb<'w, T, F>;
 }
 
-impl<'w, A, K> PredCombinator<K> for PredSingleComb<A, K>
+impl<'w, A, K> PredCombinator for PredSingleComb<A, K>
 where
 	K: CombKind,
 	A: PredParam,
@@ -188,7 +188,7 @@ where
 	type Param = PredSingleComb<A>;
 }
 
-impl<A, B, K> PredCombinator<K> for PredPairComb<A, B, K>
+impl<A, B, K> PredCombinator for PredPairComb<A, B, K>
 where
 	K: CombKind,
 	A: PredParam,
@@ -199,7 +199,7 @@ where
 	type Param = PredPairComb<A, B>;
 }
 
-impl<C, const N: usize, K> PredCombinator<K> for PredArrayComb<C, N, K>
+impl<C, const N: usize, K> PredCombinator for PredArrayComb<C, N, K>
 where
 	K: CombKind,
 	C: PredParam,
@@ -210,11 +210,10 @@ where
 	type Param = PredArrayComb<C, N>;
 }
 
-impl<I, K> PredCombinator<K> for PredIdComb<I>
+impl<I> PredCombinator for PredIdComb<I>
 where
 	I: IntoIterator + Clone,
 	I::Item: PredId,
-	K: CombKind,
 {
 	type Id = I::Item;
 	type Case = PredCombCase<WithId<I::Item>, I::Item>;
@@ -667,7 +666,7 @@ where
 	A: PredParam,
 	K: CombKind,
 {
-	type Item = <PredSingleComb<A, K> as PredCombinator<K>>::Case;
+	type Item = <PredSingleComb<A, K> as PredCombinator>::Case;
 	fn next(&mut self) -> Option<Self::Item> {
 		self.iter.next().map(|x| (x,))
 	}
@@ -815,7 +814,7 @@ where
 	B: PredParam,
 	K: CombKind,
 {
-	type Item = <PredPairComb<A, B, K> as PredCombinator<K>>::Case;
+	type Item = <PredPairComb<A, B, K> as PredCombinator>::Case;
 	fn next(&mut self) -> Option<Self::Item> {
 		// !!! Put A/B in order of ascending size to reduce redundancy.
 		match std::mem::replace(self, Self::Empty) {
@@ -1065,7 +1064,7 @@ where
 	C: PredParam,
 	C::Id: Ord,
 {
-	type Item = <PredArrayComb<C, N, K> as PredCombinator<K>>::Case;
+	type Item = <PredArrayComb<C, N, K> as PredCombinator>::Case;
 	fn next(&mut self) -> Option<Self::Item> {
 		if let Some(iters) = &self.iters {
 			let case = std::array::from_fn(|i| iters[i].1.clone());

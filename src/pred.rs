@@ -53,7 +53,7 @@ pub trait PredParam {
 	
 	/// Creates combinator iterators over [`Self::Param`]'s items.
 	type Comb<K: CombKind>:
-		PredCombinator<K, Case=Self::Case, Id=Self::Id, Param=Self>;
+		PredCombinator<Case=Self::Case, Id=Self::Id, Param=Self>;
 	
 	/// Produces [`Self::Comb`].
 	fn comb<K: CombKind>(
@@ -254,10 +254,9 @@ where
 	}
 }
 
-impl<T, K> PredCombinator<K> for Misc<T>
+impl<T> PredCombinator for Misc<T>
 where
-	T: PredCombinator<K>,
-	K: CombKind,
+	T: PredCombinator,
 {
 	type Id = T::Id;
 	type Case = Misc<T::Case>;
