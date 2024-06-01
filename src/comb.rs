@@ -142,17 +142,12 @@ pub trait PredCombinator:
 	Clone + IntoIterator<Item=Self::Case>
 {
 	type Id: PredId;
-	type Case: PredCombinatorCase<Self::Param,
-		Item = <Self::Param as PredParam>::Item_,
-		Id = Self::Id,
-	>;
-	type Param: PredParam<Id = Self::Id>;
+	type Case: PredCombinatorCase<Id = Self::Id>;
 }
 
 impl<K: CombKind> PredCombinator for EmptyComb<K> {
 	type Id = ();
 	type Case = PredCombCase<(), ()>;
-	type Param = EmptyComb;
 }
 
 impl<'w, R, K> PredCombinator for ResComb<'w, R, K>
@@ -162,7 +157,6 @@ where
 {
 	type Id = ();
 	type Case = PredCombCase<Res<'w, R>, ()>;
-	type Param = ResComb<'w, R>;
 }
 
 impl<'w, T, F, K> PredCombinator for QueryComb<'w, T, F, K>
@@ -175,7 +169,6 @@ where
 {
 	type Id = Entity;
 	type Case = PredCombCase<Fetch<'w, T, F>, Entity>;
-	type Param = QueryComb<'w, T, F>;
 }
 
 impl<'w, A, K> PredCombinator for PredSingleComb<A, K>
@@ -185,7 +178,6 @@ where
 {
 	type Id = (A::Id,);
 	type Case = (A::Case,);
-	type Param = PredSingleComb<A>;
 }
 
 impl<A, B, K> PredCombinator for PredPairComb<A, B, K>
@@ -196,7 +188,6 @@ where
 {
 	type Id = (A::Id, B::Id);
 	type Case = (A::Case, B::Case);
-	type Param = PredPairComb<A, B>;
 }
 
 impl<C, const N: usize, K> PredCombinator for PredArrayComb<C, N, K>
@@ -207,7 +198,6 @@ where
 {
 	type Id = [C::Id; N];
 	type Case = [C::Case; N];
-	type Param = PredArrayComb<C, N>;
 }
 
 impl<I> PredCombinator for PredIdComb<I>
@@ -217,7 +207,6 @@ where
 {
 	type Id = I::Item;
 	type Case = PredCombCase<WithId<I::Item>, I::Item>;
-	type Param = PredIdComb<I>;
 }
 
 /// Combinator for `PredParam` `()` implementation.
@@ -486,14 +475,14 @@ where
 }
 
 /// Item of a [`PredCombinator`]'s iterator.
-pub trait PredCombinatorCase<P: PredParam<Item_= Self::Item, Id = Self::Id> + ?Sized>: Clone {
-	type Item: PredItem2<P>;
+pub trait PredCombinatorCase: Clone {
+	type Item: PredItem;
 	type Id: PredId;
 	fn is_diff(&self) -> bool;
 	fn into_parts(self) -> (Self::Item, Self::Id);
 }
 
-impl PredCombinatorCase<EmptyComb> for () {
+impl PredCombinatorCase for () {
 	type Item = ();
 	type Id = ();
 	fn is_diff(&self) -> bool {
@@ -504,10 +493,9 @@ impl PredCombinatorCase<EmptyComb> for () {
 	}
 }
 
-impl<T, P, I> PredCombinatorCase<T> for PredCombCase<P, I>
+impl<P, I> PredCombinatorCase for PredCombCase<P, I>
 where
-	T: PredParam<Item_= P, Id = I>,
-	P: PredItem2<T>,
+	P: PredItem,
 	I: PredId,
 {
 	type Item = P;
@@ -524,10 +512,9 @@ where
 	}
 }
 
-impl<T, C, const N: usize> PredCombinatorCase<PredArrayComb<T, N>> for [C; N]
+impl<C, const N: usize> PredCombinatorCase for [C; N]
 where
-	T: PredParam<Item_= C::Item, Id = C::Id>,
-	C: PredCombinatorCase<T>,
+	C: PredCombinatorCase,
 	C::Id: Ord
 {
 	type Item = [C::Item; N];
@@ -551,10 +538,9 @@ where
 	}
 }
 
-impl<P, A> PredCombinatorCase<PredSingleComb<P>> for (A,)
+impl<A> PredCombinatorCase for (A,)
 where
-	P: PredParam<Item_= A::Item, Id = A::Id>,
-	A: PredCombinatorCase<P>,
+	A: PredCombinatorCase,
 {
 	type Item = (A::Item,);
 	type Id = (A::Id,);
@@ -568,12 +554,10 @@ where
 	}
 }
 
-impl<P, Q, A, B> PredCombinatorCase<PredPairComb<P, Q>> for (A, B)
+impl<A, B> PredCombinatorCase for (A, B)
 where
-	P: PredParam<Item_= A::Item, Id = A::Id>,
-	Q: PredParam<Item_= B::Item, Id = B::Id>,
-	A: PredCombinatorCase<P>,
-	B: PredCombinatorCase<Q>,
+	A: PredCombinatorCase,
+	B: PredCombinatorCase,
 {
 	type Item = (A::Item, B::Item);
 	type Id = (A::Id, B::Id);

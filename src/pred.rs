@@ -46,14 +46,14 @@ pub trait PredParam: Clone + IntoIterator<Item=Self::Case> {
 	/// Unique identifier for each of [`Self::Param`]'s items.
 	type Id: PredId;
 	type Item_: PredItem;
-	type Case: PredCombinatorCase<Self, Id=Self::Id, Item=Self::Item_>;
+	type Case: PredCombinatorCase<Id=Self::Id, Item=Self::Item_>;
 	
 	/// ...
 	type Input: Clone;
 	
 	/// Creates combinator iterators over [`Self::Param`]'s items.
 	type Comb<K: CombKind>:
-		PredCombinator<Case=Self::Case, Id=Self::Id, Param=Self>;
+		PredCombinator<Case=Self::Case, Id=Self::Id>;
 	
 	/// Produces [`Self::Comb`].
 	fn comb<K: CombKind>(
@@ -260,13 +260,11 @@ where
 {
 	type Id = T::Id;
 	type Case = Misc<T::Case>;
-	type Param = Misc<T::Param>;
 }
 
-impl<P, T> PredCombinatorCase<Misc<P>> for Misc<T>
+impl<T> PredCombinatorCase for Misc<T>
 where
-	P: PredParam<Item_= T::Item, Id = T::Id>,
-	T: PredCombinatorCase<P>,
+	T: PredCombinatorCase,
 {
 	type Id = T::Id;
 	type Item = Misc<T::Item>;
