@@ -262,14 +262,6 @@ where
 	}
 }
 
-impl<T> PredCombinator for Misc<T>
-where
-	T: PredCombinator,
-{
-	type Id = T::Id;
-	type Case = Misc<T::Case>;
-}
-
 impl<T> PredCombinatorCase for Misc<T>
 where
 	T: PredCombinatorCase,

@@ -137,78 +137,6 @@ where
 	}
 }
 
-/// Combinator type produced by `PredParam::comb`.
-pub trait PredCombinator:
-	Clone + IntoIterator<Item=Self::Case>
-{
-	type Id: PredId;
-	type Case: PredCombinatorCase<Id = Self::Id>;
-}
-
-impl<K: CombKind> PredCombinator for EmptyComb<K> {
-	type Id = ();
-	type Case = PredCombCase<(), ()>;
-}
-
-impl<'w, R, K> PredCombinator for ResComb<'w, R, K>
-where
-	K: CombKind,
-	R: Resource,
-{
-	type Id = ();
-	type Case = PredCombCase<Res<'w, R>, ()>;
-}
-
-impl<'w, T, F, K> PredCombinator for QueryComb<'w, T, F, K>
-where
-	K: CombKind,
-	T: PredParamQueryData,
-	F: ArchetypeFilter + 'static,
-	T::Item<'w>: PredItem,
-	<T::ItemRef as WorldQuery>::Item<'w>: PredItemRef<Item = T::Item<'w>>,
-{
-	type Id = Entity;
-	type Case = PredCombCase<Fetch<'w, T, F>, Entity>;
-}
-
-impl<'w, A, K> PredCombinator for PredSingleComb<A, K>
-where
-	K: CombKind,
-	A: PredParam,
-{
-	type Id = (A::Id,);
-	type Case = (A::Case,);
-}
-
-impl<A, B, K> PredCombinator for PredPairComb<A, B, K>
-where
-	K: CombKind,
-	A: PredParam,
-	B: PredParam,
-{
-	type Id = (A::Id, B::Id);
-	type Case = (A::Case, B::Case);
-}
-
-impl<C, const N: usize, K> PredCombinator for PredArrayComb<C, N, K>
-where
-	K: CombKind,
-	C: PredParam,
-	C::Id: Ord,
-{
-	type Id = [C::Id; N];
-	type Case = [C::Case; N];
-}
-
-impl<I> PredCombinator for PredIdComb<I>
-where
-	I: IntoIterator + Clone,
-	I::Item: PredId,
-{
-	type Id = I::Item;
-	type Case = PredCombCase<WithId<I::Item>, I::Item>;
-}
-
 /// Combinator for `PredParam` `()` implementation.
 #[derive(Clone)]
 pub struct EmptyComb<K = CombNone> {
@@ -650,7 +578,7 @@ where
 	A: PredParam,
 	K: CombKind,
 {
-	type Item = <PredSingleComb<A, K> as PredCombinator>::Case;
+	type Item = <PredSingleComb<A, K> as PredParam>::Case;
 	fn next(&mut self) -> Option<Self::Item> {
 		self.iter.next().map(|x| (x,))
 	}
@@ -798,7 +726,7 @@ where
 	B: PredParam,
 	K: CombKind,
 {
-	type Item = <PredPairComb<A, B, K> as PredCombinator>::Case;
+	type Item = <PredPairComb<A, B, K> as PredParam>::Case;
 	fn next(&mut self) -> Option<Self::Item> {
 		// !!! Put A/B in order of ascending size to reduce redundancy.
 		match std::mem::replace(self, Self::Empty) {
@@ -1048,7 +976,7 @@ where
 	C: PredParam,
 	C::Id: Ord,
 {
-	type Item = <PredArrayComb<C, N, K> as PredCombinator>::Case;
+	type Item = <PredArrayComb<C, N, K> as PredParam>::Case;
 	fn next(&mut self) -> Option<Self::Item> {
 		if let Some(iters) = &self.iters {
 			let case = std::array::from_fn(|i| iters[i].1.clone());
