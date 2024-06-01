@@ -53,7 +53,7 @@ pub trait PredParam: Clone + IntoIterator<Item=Self::Case> {
 	
 	/// Creates combinator iterators over [`Self::Param`]'s items.
 	type Comb<K: CombKind>:
-		PredCombinator<Case=Self::Case, Id=Self::Id>;
+		PredParam<Case=Self::Case, Id=Self::Id>;
 	
 	/// Produces [`Self::Comb`].
 	fn comb<K: CombKind>(
@@ -63,12 +63,13 @@ pub trait PredParam: Clone + IntoIterator<Item=Self::Case> {
 	) -> Self::Comb<K>;
 }
 
-impl<'w, T, F> PredParam for QueryComb<'w, T, F>
+impl<'w, T, F, Kind> PredParam for QueryComb<'w, T, F, Kind>
 where
 	T: PredParamQueryData,
 	F: ArchetypeFilter + 'static,
 	T::Item<'w>: PredItem,
 	<T::ItemRef as WorldQuery>::Item<'w>: PredItemRef<Item = T::Item<'w>>,
+	Kind: CombKind,
 {
 	type Param = Query<'static, 'static, (T::ItemRef, Entity), F>;
 	type Id = Entity;
@@ -85,9 +86,10 @@ where
 	}
 }
 
-impl<'w, R> PredParam for ResComb<'w, R>
+impl<'w, R, Kind> PredParam for ResComb<'w, R, Kind>
 where
-	R: Resource
+	R: Resource,
+	Kind: CombKind,
 {
 	type Param = Res<'static, R>;
 	type Id = ();
@@ -104,7 +106,10 @@ where
 	}
 }
 
-impl PredParam for EmptyComb {
+impl<Kind> PredParam for EmptyComb<Kind>
+where
+	Kind: CombKind,
+{
 	type Param = ();
 	type Id = ();
 	type Item_ = ();
@@ -120,9 +125,10 @@ impl PredParam for EmptyComb {
 	}
 }
 
-impl<A> PredParam for PredSingleComb<A>
+impl<A, Kind> PredParam for PredSingleComb<A, Kind>
 where
 	A: PredParam,
+	Kind: CombKind,
 {
 	type Param = A::Param;
 	type Id = (A::Id,);
@@ -139,10 +145,11 @@ where
 	}
 }
 
-impl<A, B> PredParam for PredPairComb<A, B>
+impl<A, B, Kind> PredParam for PredPairComb<A, B, Kind>
 where
 	A: PredParam,
 	B: PredParam,
+	Kind: CombKind,
 {
 	type Param = (A::Param, B::Param);
 	type Id = (A::Id, B::Id);
@@ -165,10 +172,11 @@ where
 	}
 }
 
-impl<P, const N: usize> PredParam for PredArrayComb<P, N>
+impl<P, const N: usize, Kind> PredParam for PredArrayComb<P, N, Kind>
 where
 	P: PredParam,
 	P::Id: Ord,
+	Kind: CombKind,
 {
 	type Param = P::Param;
 	type Id = [P::Id; N];
