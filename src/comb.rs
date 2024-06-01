@@ -522,7 +522,7 @@ where
 /// ...
 pub struct PredSingleComb<A, K = CombNone>
 where
-	A: PredParam,
+	A: PredCombinator,
 	K: CombKind,
 {
 	comb: A::Comb<K>,
@@ -530,7 +530,7 @@ where
 
 impl<A, K> PredSingleComb<A, K>
 where
-	A: PredParam,
+	A: PredCombinator,
 	K: CombKind,
 {
 	pub(crate) fn new(comb: A::Comb<K>) -> Self {
@@ -540,7 +540,7 @@ where
 
 impl<A, K> Clone for PredSingleComb<A, K>
 where
-	A: PredParam,
+	A: PredCombinator,
 	K: CombKind,
 {
 	fn clone(&self) -> Self {
@@ -552,7 +552,7 @@ where
 
 impl<'w, A, K> IntoIterator for PredSingleComb<A, K>
 where
-	A: PredParam,
+	A: PredCombinator,
 	K: CombKind,
 {
 	type Item = <Self::IntoIter as Iterator>::Item;
@@ -567,7 +567,7 @@ where
 /// ...
 pub struct PredSingleCombIter<A, K>
 where
-	A: PredParam,
+	A: PredCombinator,
 	K: CombKind,
 {
 	iter: <A::Comb<K> as IntoIterator>::IntoIter,
@@ -575,10 +575,10 @@ where
 
 impl<'w, A, K> Iterator for PredSingleCombIter<A, K>
 where
-	A: PredParam,
+	A: PredCombinator,
 	K: CombKind,
 {
-	type Item = <PredSingleComb<A, K> as PredParam>::Case;
+	type Item = <PredSingleComb<A, K> as PredCombinator>::Case;
 	fn next(&mut self) -> Option<Self::Item> {
 		self.iter.next().map(|x| (x,))
 	}
@@ -590,8 +590,8 @@ where
 /// Combinator for `PredParam` tuple implementation.
 pub struct PredPairComb<A, B, K = CombNone>
 where
-	A: PredParam,
-	B: PredParam,
+	A: PredCombinator,
+	B: PredCombinator,
 	K: CombKind,
 {
 	a_comb: A::Comb<K>,
@@ -603,8 +603,8 @@ where
 
 impl<A, B, K> Clone for PredPairComb<A, B, K>
 where
-	A: PredParam,
-	B: PredParam,
+	A: PredCombinator,
+	B: PredCombinator,
 	K: CombKind,
 {
 	fn clone(&self) -> Self {
@@ -620,8 +620,8 @@ where
 
 impl<A, B, K> PredPairComb<A, B, K>
 where
-	A: PredParam,
-	B: PredParam,
+	A: PredCombinator,
+	B: PredCombinator,
 	K: CombKind,
 {
 	pub(crate) fn new(
@@ -643,8 +643,8 @@ where
 
 impl<A, B, K> IntoIterator for PredPairComb<A, B, K>
 where
-	A: PredParam,
-	B: PredParam,
+	A: PredCombinator,
+	B: PredCombinator,
 	K: CombKind,
 {
 	type Item = <Self::IntoIter as Iterator>::Item;
@@ -659,11 +659,11 @@ where
 	}
 }
 
-/// Iterator for 2-tuple [`PredParam`] types.
+/// Iterator for 2-tuple [`PredCombinator`] types.
 pub enum PredPairCombIter<A, B, K>
 where
-	A: PredParam,
-	B: PredParam,
+	A: PredCombinator,
+	B: PredCombinator,
 	K: CombKind,
 {
 	Empty,
@@ -685,8 +685,8 @@ where
 
 impl<A, B, K> PredPairCombIter<A, B, K>
 where
-	A: PredParam,
-	B: PredParam,
+	A: PredCombinator,
+	B: PredCombinator,
 	K: CombKind,
 {
 	fn primary_next(
@@ -722,11 +722,11 @@ where
 
 impl<A, B, K> Iterator for PredPairCombIter<A, B, K>
 where
-	A: PredParam,
-	B: PredParam,
+	A: PredCombinator,
+	B: PredCombinator,
 	K: CombKind,
 {
-	type Item = <PredPairComb<A, B, K> as PredParam>::Case;
+	type Item = <PredPairComb<A, B, K> as PredCombinator>::Case;
 	fn next(&mut self) -> Option<Self::Item> {
 		// !!! Put A/B in order of ascending size to reduce redundancy.
 		match std::mem::replace(self, Self::Empty) {
@@ -787,7 +787,7 @@ where
 /// Combinator for `PredParam` array implementation.
 pub struct PredArrayComb<C, const N: usize, K = CombNone>
 where
-	C: PredParam,
+	C: PredCombinator,
 	K: CombKind,
 {
 	a_comb: C::Comb<CombBranch<K::Pal, K>>,
@@ -800,7 +800,7 @@ where
 
 impl<C, const N: usize, K> Clone for PredArrayComb<C, N, K>
 where
-	C: PredParam,
+	C: PredCombinator,
 	K: CombKind,
 {
 	fn clone(&self) -> Self {
@@ -817,7 +817,7 @@ where
 
 impl<C, const N: usize, K> PredArrayComb<C, N, K>
 where
-	C: PredParam,
+	C: PredCombinator,
 	C::Id: Ord,
 	K: CombKind,
 {
@@ -839,7 +839,7 @@ where
 
 impl<C, const N: usize, K> IntoIterator for PredArrayComb<C, N, K>
 where
-	C: PredParam,
+	C: PredCombinator,
 	C::Id: Ord,
 	K: CombKind,
 {
@@ -894,10 +894,10 @@ where
 	}
 }
 
-/// Iterator for array of [`PredParam`] type.
+/// Iterator for array of [`PredCombinator`] type.
 pub struct PredArrayCombIter<C, const N: usize, K>
 where
-	C: PredParam,
+	C: PredCombinator,
 	K: CombKind,
 {
 	a_comb: C::Comb<CombBranch<K::Pal, K>>,
@@ -914,7 +914,7 @@ where
 
 impl<C, const N: usize, K> PredArrayCombIter<C, N, K>
 where
-	C: PredParam,
+	C: PredCombinator,
 	C::Id: Ord,
 	K: CombKind,
 {
@@ -973,10 +973,10 @@ where
 impl<C, const N: usize, K> Iterator for PredArrayCombIter<C, N, K>
 where
 	K: CombKind,
-	C: PredParam,
+	C: PredCombinator,
 	C::Id: Ord,
 {
-	type Item = <PredArrayComb<C, N, K> as PredParam>::Case;
+	type Item = <PredArrayComb<C, N, K> as PredCombinator>::Case;
 	fn next(&mut self) -> Option<Self::Item> {
 		if let Some(iters) = &self.iters {
 			let case = std::array::from_fn(|i| iters[i].1.clone());
@@ -1081,7 +1081,7 @@ where
 /// ...
 pub struct SinglePredComb2<'p, T, P, K>
 where
-	P: PredParam,
+	P: PredCombinator,
 	K: CombKind,
 {
 	iter: <P::Comb<K> as IntoIterator>::IntoIter,
@@ -1090,7 +1090,7 @@ where
 
 impl<'p, T, P, K> SinglePredComb2<'p, T, P, K>
 where
-	P: PredParam,
+	P: PredCombinator,
 	K: CombKind,
 {
 	pub fn new(state: PredSubState2<'p, T, Single<P>, K>) -> Self {
@@ -1106,7 +1106,7 @@ where
 
 impl<'p, T, P, K> Iterator for SinglePredComb2<'p, T, P, K>
 where
-	P: PredParam,
+	P: PredCombinator,
 	K: CombKind,
 {
 	type Item = (
@@ -1128,19 +1128,19 @@ where
 /// ...
 pub struct NestedPredComb2<'p, T, A, B, K>
 where
-	A: PredParam,
+	A: PredCombinator,
 	B: PredBranch,
 	K: CombKind,
 {
 	iter: <A::Comb<K::Pal> as IntoIterator>::IntoIter,
 	sub_comb: [B::CombSplit<CombBranch<K::Pal, K>>; 2],
-	node: NodeWriter<'p, (<A as PredParam>::Id, Node<B::Case<T>>)>,
+	node: NodeWriter<'p, (<A as PredCombinator>::Id, Node<B::Case<T>>)>,
 	kind: K,
 }
 
 impl<'p, T, A, B, K> NestedPredComb2<'p, T, A, B, K>
 where
-	A: PredParam,
+	A: PredCombinator,
 	B: PredBranch,
 	K: CombKind,
 {
@@ -1159,7 +1159,7 @@ where
 
 impl<'p, T, A, B, K> Iterator for NestedPredComb2<'p, T, A, B, K>
 where
-	A: PredParam,
+	A: PredCombinator,
 	B: PredBranch,
 	K: CombKind,
 {
@@ -1191,20 +1191,20 @@ where
 /// ...
 pub struct NestedPermPredComb2<'p, T, A, B, K>
 where
-	A: PredParam,
+	A: PredCombinator,
 	B: PredPermBranch,
 	K: CombKind,
 {
 	iter: <A::Comb<K> as IntoIterator>::IntoIter,
 	sub_comb: [B::CombSplit<CombBranch<K::Pal, K>>; 2],
-	node: NodeWriter<'p, (<A as PredParam>::Id, Node<B::Case<T>>)>,
+	node: NodeWriter<'p, (<A as PredCombinator>::Id, Node<B::Case<T>>)>,
 	kind: K,
 	count: [usize; 2],
 }
 
 impl<'p, T, A, const N: usize, B, K> NestedPermPredComb2<'p, T, PredArrayComb<A, N>, B, K>
 where
-	A: PredParam,
+	A: PredCombinator,
 	A::Id: Ord,
 	B: PredPermBranch<Output = A>,
 	K: CombKind,
@@ -1230,7 +1230,7 @@ where
 impl<'p, T, A, const N: usize, B, K> Iterator
 	for NestedPermPredComb2<'p, T, PredArrayComb<A, N>, B, K>
 where
-	A: PredParam,
+	A: PredCombinator,
 	A::Id: Ord,
 	B: PredPermBranch<Output = A>,
 	K: CombKind,
