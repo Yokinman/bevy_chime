@@ -147,10 +147,6 @@ pub trait PredCombinator<K: CombKind = CombNone>:
 		Id = Self::Id,
 	>;
 	type Param: PredParam<Id = Self::Id>;
-	
-	fn outer_skip(&mut self, _n: [usize; 2]) {
-		// !!! This kinda sucks.
-	}
 }
 
 impl<K: CombKind> PredCombinator<K> for EmptyComb<K> {
@@ -212,11 +208,6 @@ where
 	type Id = [C::Id; N];
 	type Case = [C::Case; N];
 	type Param = PredArrayComb<C, N>;
-	
-	fn outer_skip(&mut self, index: [usize; 2]) {
-		self.a_index += index[0];
-		self.b_index += index[1];
-	}
 }
 
 impl<I, K> PredCombinator<K> for PredIdComb<I>
@@ -1193,7 +1184,6 @@ where
 {
 	pub fn new(state: PredSubState2<'p, T, Single<P>, K>) -> Self {
 		let mut comb = state.comb;
-		comb.outer_skip(state.index);
 		let iter = comb.into_iter();
 		state.node.reserve(4 * iter.size_hint().0.max(1));
 		Self {
@@ -1245,7 +1235,6 @@ where
 {
 	pub fn new(state: PredSubState2<'p, T, Nested<A, B>, K>) -> Self {
 		let (mut comb, sub_comb) = state.comb;
-		comb.outer_skip(state.index);
 		let iter = comb.into_iter();
 		state.node.reserve(4 * iter.size_hint().0.max(1));
 		Self {
@@ -1315,7 +1304,6 @@ where
 			comb.a_comb.clone().into_iter().count().saturating_sub(B::depth()),
 			comb.b_comb.clone().into_iter().count(),
 		];
-		comb.outer_skip(state.index);
 		let iter = comb.into_iter();
 		state.node.reserve(4 * iter.size_hint().0.max(1));
 		Self {
