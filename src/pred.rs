@@ -795,13 +795,16 @@ impl<P: PredBranch, T> Iterator for PredNodeIter2<P, T> {
 }
 
 /// ...
+pub struct PredFetch2<T>(T);
+
+/// ...
 pub trait ChimeSystemParam<'a, I: PredId> {
 	type Param: SystemParam;
 	fn fetch_param(param: &'a mut Option<Self::Param>, id: I) -> Self;
 }
 
 mod _pred_param_impls {
-	use super::{ChimeSystemParam, PredId};
+	use super::{ChimeSystemParam, PredFetch2, PredFetchData2, PredId};
 	use bevy_ecs::system::SystemParam;
 	
 	impl<I, T> ChimeSystemParam<'_, I> for T
@@ -813,6 +816,20 @@ mod _pred_param_impls {
 		fn fetch_param(param: &'_ mut Option<Self::Param>, _id: I) -> Self {
 			std::mem::take(param)
 				.expect("should exist")
+		}
+	}
+	
+	impl<'a, I, T> ChimeSystemParam<'a, I> for PredFetch2<T>
+	where
+		I: PredId,
+		T: PredFetchData2<'a, I>,
+	{
+		type Param = T::Param;
+		fn fetch_param(param: &'a mut Option<Self::Param>, id: I) -> Self {
+			PredFetch2(T::fetch_item(
+				param.as_mut().expect("should exist"),
+				id,
+			))
 		}
 	}
 }
