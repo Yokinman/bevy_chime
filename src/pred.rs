@@ -9,7 +9,7 @@ use bevy_ecs::prelude::{Resource, World};
 use bevy_ecs::query::{ArchetypeFilter, QueryData, ReadOnlyQueryData, WorldQuery};
 use bevy_ecs::system::{SystemMeta, SystemParam, SystemParamItem};
 use bevy_ecs::world::{Mut, unsafe_world_cell::UnsafeWorldCell};
-use chime::{Flux, MomentRef, MomentRefMut};
+use chime::{Flux, MomentRef, MomentMut};
 use chime::pred::Prediction;
 use crate::node::*;
 use crate::comb::*;
@@ -911,13 +911,13 @@ mod _pred_fetch_data_impls {
 		}
 	}
 	
-	impl<T> PredFetchData for MomentRefMut<'_, T>
+	impl<T> PredFetchData for MomentMut<'_, T>
 	where
 		T: chime::Moment,
 		T::Flux: Component + Clone,
 	{
 		type Id = Entity;
-		type Output<'w> = MomentRefMut<'w, T>;
+		type Output<'w> = MomentMut<'w, T>;
 		unsafe fn get_inner(world: UnsafeWorldCell, id: Self::Id) -> Self::Output<'_> {
 			// SAFETY: The caller should ensure that there isn't conflicting access
 			// to the given entity's component and the `Time<Chime>` resource.
@@ -984,7 +984,7 @@ mod _pred_fetch_impls {
 		
 		/// ...
 		pub fn moment_mut(&mut self)
-			-> MomentRefMut<<<D::Output<'w> as Deref>::Target as Flux>::Moment>
+			-> MomentMut<<<D::Output<'w> as Deref>::Target as Flux>::Moment>
 		where
 			D::Output<'w>: DerefMut,
 		{
