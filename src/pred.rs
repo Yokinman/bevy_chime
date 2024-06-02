@@ -387,72 +387,6 @@ where
 }
 
 /// ...
-pub trait PredPermBranch: PredBranch /*+ std::ops::Index<usize>*/ {
-	type Output;
-	
-	fn depth() -> usize;
-	
-	fn sort_unstable(&mut self)
-	where
-		Self: Ord
-	{
-		todo!()
-	}
-	
-	fn outer_skip<K: CombKind>(
-		comb: &mut <Self as PredBranch>::CombSplit<K>,
-		index: [usize; 2],
-	);
-}
-
-mod _pred_perm_branch_impls {
-	use super::*;
-	
-	impl<T, const N: usize> PredPermBranch for Single<PredArrayComb<T, N>>
-	where
-		T: PredCombinator,
-		T::Id: Ord,
-	{
-		type Output = T;
-		
-		fn depth() -> usize {
-			N
-		}
-	
-		fn outer_skip<K: CombKind>(
-			comb: &mut <Self as PredBranch>::CombSplit<K>,
-			index: [usize; 2],
-		) {
-			comb.a_index += index[0];
-			comb.b_index += index[1];
-		}
-	}
-	
-	impl<A, const N: usize, B> PredPermBranch for NestedPerm<PredArrayComb<A, N>, B>
-	where
-		A: PredCombinator,
-		A::Id: Ord,
-		B: PredPermBranch<Output = A>,
-	{
-		type Output = A;
-		
-		fn depth() -> usize {
-			N + B::depth()
-		}
-	
-		fn outer_skip<K: CombKind>(
-			(outer, _inner): &mut <Self as PredBranch>::CombSplit<K>,
-			index: [usize; 2],
-		) {
-			outer.a_index += index[0];
-			outer.b_index += index[1];
-			// B::outer_skip(&mut inner[0], index);
-			// B::outer_skip(&mut inner[1], index);
-		}
-	}
-}
-
-/// ...
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug, Default)]
 pub struct Single<T>(pub T);
 
@@ -677,6 +611,72 @@ mod _pred_branch_impls {
 			Self::Branch: 'p,
 		{
 			NestedPermPredComb2::new(state)
+		}
+	}
+}
+
+/// ...
+pub trait PredPermBranch: PredBranch /*+ std::ops::Index<usize>*/ {
+	type Output;
+	
+	fn depth() -> usize;
+	
+	fn sort_unstable(&mut self)
+	where
+		Self: Ord
+	{
+		todo!()
+	}
+	
+	fn outer_skip<K: CombKind>(
+		comb: &mut <Self as PredBranch>::CombSplit<K>,
+		index: [usize; 2],
+	);
+}
+
+mod _pred_perm_branch_impls {
+	use super::*;
+	
+	impl<T, const N: usize> PredPermBranch for Single<PredArrayComb<T, N>>
+	where
+		T: PredCombinator,
+		T::Id: Ord,
+	{
+		type Output = T;
+		
+		fn depth() -> usize {
+			N
+		}
+	
+		fn outer_skip<K: CombKind>(
+			comb: &mut <Self as PredBranch>::CombSplit<K>,
+			index: [usize; 2],
+		) {
+			comb.a_index += index[0];
+			comb.b_index += index[1];
+		}
+	}
+	
+	impl<A, const N: usize, B> PredPermBranch for NestedPerm<PredArrayComb<A, N>, B>
+	where
+		A: PredCombinator,
+		A::Id: Ord,
+		B: PredPermBranch<Output = A>,
+	{
+		type Output = A;
+		
+		fn depth() -> usize {
+			N + B::depth()
+		}
+	
+		fn outer_skip<K: CombKind>(
+			(outer, _inner): &mut <Self as PredBranch>::CombSplit<K>,
+			index: [usize; 2],
+		) {
+			outer.a_index += index[0];
+			outer.b_index += index[1];
+			// B::outer_skip(&mut inner[0], index);
+			// B::outer_skip(&mut inner[1], index);
 		}
 	}
 }
