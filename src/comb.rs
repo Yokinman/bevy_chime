@@ -294,6 +294,51 @@ where
 }
 
 /// ...
+pub struct PredSingleComb<A, K = CombNone>
+where
+	A: PredCombinator,
+	K: CombKind,
+{
+	comb: A::Comb<K>,
+}
+
+impl<A, K> PredSingleComb<A, K>
+where
+	A: PredCombinator,
+	K: CombKind,
+{
+	pub(crate) fn new(comb: A::Comb<K>) -> Self {
+		Self { comb }
+	}
+}
+
+impl<A, K> Clone for PredSingleComb<A, K>
+where
+	A: PredCombinator,
+	K: CombKind,
+{
+	fn clone(&self) -> Self {
+		Self {
+			comb: self.comb.clone(),
+		}
+	}
+}
+
+impl<A, K> IntoIterator for PredSingleComb<A, K>
+where
+	A: PredCombinator,
+	K: CombKind,
+{
+	type Item = <Self::IntoIter as Iterator>::Item;
+	type IntoIter = PredSingleCombIter<A, K>;
+	fn into_iter(self) -> Self::IntoIter {
+		PredSingleCombIter {
+			iter: self.comb.into_iter(),
+		}
+	}
+}
+
+/// ...
 pub enum QueryCombIter<'w, T, F, K>
 where
 	T: PredParamQueryData,
@@ -404,6 +449,29 @@ where
 			[true, true] => self.iter.size_hint(),
 			_ => (0, self.iter.size_hint().1)
 		}
+	}
+}
+
+/// ...
+pub struct PredSingleCombIter<A, K>
+where
+	A: PredCombinator,
+	K: CombKind,
+{
+	iter: <A::Comb<K> as IntoIterator>::IntoIter,
+}
+
+impl<A, K> Iterator for PredSingleCombIter<A, K>
+where
+	A: PredCombinator,
+	K: CombKind,
+{
+	type Item = <PredSingleComb<A, K> as PredCombinator>::Case;
+	fn next(&mut self) -> Option<Self::Item> {
+		self.iter.next().map(|x| (x,))
+	}
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		self.iter.size_hint()
 	}
 }
 
@@ -525,74 +593,6 @@ where
 			Self::Diff(item, id) => Self::Diff(item.clone(), *id),
 			Self::Same(item, id) => Self::Same(item.clone(), *id),
 		}
-	}
-}
-
-/// ...
-pub struct PredSingleComb<A, K = CombNone>
-where
-	A: PredCombinator,
-	K: CombKind,
-{
-	comb: A::Comb<K>,
-}
-
-impl<A, K> PredSingleComb<A, K>
-where
-	A: PredCombinator,
-	K: CombKind,
-{
-	pub(crate) fn new(comb: A::Comb<K>) -> Self {
-		Self { comb }
-	}
-}
-
-impl<A, K> Clone for PredSingleComb<A, K>
-where
-	A: PredCombinator,
-	K: CombKind,
-{
-	fn clone(&self) -> Self {
-		Self {
-			comb: self.comb.clone(),
-		}
-	}
-}
-
-impl<A, K> IntoIterator for PredSingleComb<A, K>
-where
-	A: PredCombinator,
-	K: CombKind,
-{
-	type Item = <Self::IntoIter as Iterator>::Item;
-	type IntoIter = PredSingleCombIter<A, K>;
-	fn into_iter(self) -> Self::IntoIter {
-		PredSingleCombIter {
-			iter: self.comb.into_iter(),
-		}
-	}
-}
-
-/// ...
-pub struct PredSingleCombIter<A, K>
-where
-	A: PredCombinator,
-	K: CombKind,
-{
-	iter: <A::Comb<K> as IntoIterator>::IntoIter,
-}
-
-impl<A, K> Iterator for PredSingleCombIter<A, K>
-where
-	A: PredCombinator,
-	K: CombKind,
-{
-	type Item = <PredSingleComb<A, K> as PredCombinator>::Case;
-	fn next(&mut self) -> Option<Self::Item> {
-		self.iter.next().map(|x| (x,))
-	}
-	fn size_hint(&self) -> (usize, Option<usize>) {
-		self.iter.size_hint()
 	}
 }
 
