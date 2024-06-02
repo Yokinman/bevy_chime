@@ -1094,7 +1094,7 @@ where
 	K: CombKind,
 {
 	pub fn new(state: PredSubState2<'p, T, Single<P>, K>) -> Self {
-		let mut comb = state.comb;
+		let comb = state.comb;
 		let iter = comb.into_iter();
 		state.node.reserve(4 * iter.size_hint().0.max(1));
 		Self {
@@ -1145,7 +1145,7 @@ where
 	K: CombKind,
 {
 	pub fn new(state: PredSubState2<'p, T, Nested<A, B>, K>) -> Self {
-		let (mut comb, sub_comb) = state.comb;
+		let (comb, sub_comb) = state.comb;
 		let iter = comb.into_iter();
 		state.node.reserve(4 * iter.size_hint().0.max(1));
 		Self {
@@ -1210,7 +1210,7 @@ where
 	K: CombKind,
 {
 	pub fn new(state: PredSubState2<'p, T, NestedPerm<PredArrayComb<A, N>, B>, K>) -> Self {
-		let (mut comb, sub_comb) = state.comb;
+		let (comb, sub_comb) = state.comb;
 		let count = [
 			comb.a_comb.clone().into_iter().count().saturating_sub(B::depth()),
 			comb.b_comb.clone().into_iter().count(),
