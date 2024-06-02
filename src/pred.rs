@@ -14,10 +14,6 @@ use chime::pred::Prediction;
 use crate::node::*;
 use crate::comb::*;
 
-/// For input to [`crate::AddChimeEvent::add_chime_events`].
-#[derive(Copy, Clone, Default)]
-pub struct In<T>(pub T);
-
 /// Resource for passing an event's unique ID to its system parameters. 
 #[derive(Resource)]
 pub(crate) struct PredSystemInput {
@@ -991,6 +987,10 @@ mod _pred_fetch_impls {
 		}
 	}
 }
+
+/// For input to [`crate::AddChimeEvent::add_chime_events`].
+#[derive(Copy, Clone, Default)]
+pub struct In<T>(pub T);
 
 /// ...
 /// 
