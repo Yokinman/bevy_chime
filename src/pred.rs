@@ -365,60 +365,73 @@ pub trait PredItem {
 	fn clone(&self) -> Self;
 }
 
-impl PredItem for () {
-	fn clone(&self) -> Self {}
-}
-
-impl<T> PredItem for &T {
-	fn clone(&self) -> Self {
-		self
+mod _pred_item_impls {
+	use super::*;
+	
+	impl PredItem for () {
+		fn clone(&self) -> Self {}
 	}
-}
-
-impl<'w, D, F> PredItem for Fetch<'w, D, F>
-where
-	D: QueryData,
-	D::Item<'w>: PredItem,
-{
-	fn clone(&self) -> Self {
-		Fetch::new(self.inner.clone())
+	
+	impl<T> PredItem for &T {
+		fn clone(&self) -> Self {
+			self
+		}
 	}
-}
-
-impl<T: Resource> PredItem for Res<'_, T> {
-	fn clone(&self) -> Self {
-		Res::clone(self) // GGGRRAAAAAAHHHHH!!!!!!!!!
+	
+	impl<'w, D, F> PredItem for Fetch<'w, D, F>
+	where
+		D: QueryData,
+		D::Item<'w>: PredItem,
+	{
+		fn clone(&self) -> Self {
+			Fetch::new(self.inner.clone())
+		}
 	}
-}
-
-impl<A,> PredItem for (A,)
-where
-	A: PredItem,
-{
-	fn clone(&self) -> Self {
-		let (a,) = self;
-		(a.clone(),)
+	
+	impl<T: Resource> PredItem for Res<'_, T> {
+		fn clone(&self) -> Self {
+			Res::clone(self) // GGGRRAAAAAAHHHHH!!!!!!!!!
+		}
 	}
-}
-
-impl<A, B> PredItem for (A, B)
-where
-	A: PredItem,
-	B: PredItem,
-{
-	fn clone(&self) -> Self {
-		let (a, b) = self;
-		(a.clone(), b.clone())
+	
+	impl<A,> PredItem for (A,)
+	where
+		A: PredItem,
+	{
+		fn clone(&self) -> Self {
+			let (a,) = self;
+			(a.clone(),)
+		}
 	}
-}
-
-impl<T, const N: usize> PredItem for [T; N]
-where
-	T: PredItem
-{
-	fn clone(&self) -> Self {
-		self.each_ref()
-			.map(T::clone)
+	
+	impl<A, B> PredItem for (A, B)
+	where
+		A: PredItem,
+		B: PredItem,
+	{
+		fn clone(&self) -> Self {
+			let (a, b) = self;
+			(a.clone(), b.clone())
+		}
+	}
+	
+	impl<T, const N: usize> PredItem for [T; N]
+	where
+		T: PredItem
+	{
+		fn clone(&self) -> Self {
+			self.each_ref()
+				.map(T::clone)
+		}
+	}
+	
+	impl<I> PredItem for WithId<I>
+	where
+		I: PredId
+	{
+		fn clone(&self) -> Self {
+			*self
+		}
 	}
 }
 
@@ -536,15 +549,6 @@ mod _pred_item_ref_impls {
 /// ...
 #[derive(Copy, Clone)]
 pub struct WithId<I>(pub I);
-
-impl<I> PredItem for WithId<I>
-where
-	I: PredId
-{
-	fn clone(&self) -> Self {
-		*self
-	}
-}
 
 /// ...
 pub struct PredSubState2<'p, T, P, K>
