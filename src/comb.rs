@@ -338,6 +338,78 @@ where
 	}
 }
 
+/// Combinator for `PredParam` tuple implementation.
+pub struct PredPairComb<A, B, K = CombNone>
+where
+	A: PredCombinator,
+	B: PredCombinator,
+	K: CombKind,
+{
+	a_comb: A::Comb<K>,
+	b_comb: B::Comb<K::Pal>,
+	a_inv_comb: A::Comb<K::Inv>,
+	b_inv_comb: B::Comb<<<K::Inv as CombKind>::Pal as CombKind>::Inv>,
+	kind: K,
+}
+
+impl<A, B, K> Clone for PredPairComb<A, B, K>
+where
+	A: PredCombinator,
+	B: PredCombinator,
+	K: CombKind,
+{
+	fn clone(&self) -> Self {
+		Self {
+			a_comb: self.a_comb.clone(),
+			b_comb: self.b_comb.clone(),
+			a_inv_comb: self.a_inv_comb.clone(),
+			b_inv_comb: self.b_inv_comb.clone(),
+			kind: self.kind,
+		}
+	}
+}
+
+impl<A, B, K> PredPairComb<A, B, K>
+where
+	A: PredCombinator,
+	B: PredCombinator,
+	K: CombKind,
+{
+	pub(crate) fn new(
+		a_comb: A::Comb<K>,
+		b_comb: B::Comb<K::Pal>,
+		a_inv_comb: A::Comb<K::Inv>,
+		b_inv_comb: B::Comb<<<K::Inv as CombKind>::Pal as CombKind>::Inv>,
+		kind: K,
+	) -> Self {
+		Self {
+			a_comb,
+			b_comb,
+			a_inv_comb,
+			b_inv_comb,
+			kind,
+		}
+	}
+}
+
+impl<A, B, K> IntoIterator for PredPairComb<A, B, K>
+where
+	A: PredCombinator,
+	B: PredCombinator,
+	K: CombKind,
+{
+	type Item = <Self::IntoIter as Iterator>::Item;
+	type IntoIter = PredPairCombIter<A, B, K>;
+	fn into_iter(self) -> Self::IntoIter {
+		PredPairCombIter::primary_next(
+			self.a_comb.into_iter(),
+			self.b_comb,
+			self.a_inv_comb,
+			self.b_inv_comb,
+		)
+	}
+}
+
 /// ...
 pub enum QueryCombIter<'w, T, F, K>
 where
@@ -475,199 +547,6 @@ where
 	}
 }
 
-/// Item of a [`PredCombinator`]'s iterator.
-pub trait PredCombinatorCase: Clone {
-	type Item: PredItem;
-	type Id: PredId;
-	fn is_diff(&self) -> bool;
-	fn into_parts(self) -> (Self::Item, Self::Id);
-}
-
-mod _pred_combinator_case_impls {
-	use super::*;
-	
-	impl PredCombinatorCase for () {
-		type Item = ();
-		type Id = ();
-		fn is_diff(&self) -> bool {
-			true
-		}
-		fn into_parts(self) -> (Self::Item, Self::Id) {
-			((), ())
-		}
-	}
-	
-	impl<P, I> PredCombinatorCase for PredCombCase<P, I>
-	where
-		P: PredItem,
-		I: PredId,
-	{
-		type Item = P;
-		type Id = I;
-		fn is_diff(&self) -> bool {
-			match self {
-				PredCombCase::Diff(..) => true,
-				PredCombCase::Same(..) => false,
-			}
-		}
-		fn into_parts(self) -> (Self::Item, Self::Id) {
-			let (PredCombCase::Diff(item, id) | PredCombCase::Same(item, id)) = self;
-			(item, id)
-		}
-	}
-	
-	impl<C, const N: usize> PredCombinatorCase for [C; N]
-	where
-		C: PredCombinatorCase,
-		C::Id: Ord
-	{
-		type Item = [C::Item; N];
-		type Id = [C::Id; N];
-		fn is_diff(&self) -> bool {
-			self.iter().any(C::is_diff)
-		}
-		fn into_parts(self) -> (Self::Item, Self::Id) {
-			let mut ids = [None; N];
-			let mut iter = self.into_iter();
-			let items = std::array::from_fn(|i| {
-				let (item, id) = iter.next()
-					.expect("should exist")
-					.into_parts();
-				ids[i] = Some(id);
-				item
-			});
-			let mut ids = ids.map(Option::unwrap);
-			ids.sort_unstable();
-			(items, ids)
-		}
-	}
-	
-	impl<A> PredCombinatorCase for (A,)
-	where
-		A: PredCombinatorCase,
-	{
-		type Item = (A::Item,);
-		type Id = (A::Id,);
-		fn is_diff(&self) -> bool {
-			self.0.is_diff()
-		}
-		fn into_parts(self) -> (Self::Item, Self::Id) {
-			let (a,) = self;
-			let (a_item, a_id) = a.into_parts();
-			((a_item,), (a_id,))
-		}
-	}
-	
-	impl<A, B> PredCombinatorCase for (A, B)
-	where
-		A: PredCombinatorCase,
-		B: PredCombinatorCase,
-	{
-		type Item = (A::Item, B::Item);
-		type Id = (A::Id, B::Id);
-		fn is_diff(&self) -> bool {
-			self.0.is_diff() || self.1.is_diff()
-		}
-		fn into_parts(self) -> (Self::Item, Self::Id) {
-			let (a, b) = self;
-			let (a_item, a_id) = a.into_parts();
-			let (b_item, b_id) = b.into_parts();
-			((a_item, b_item), (a_id, b_id))
-		}
-	}
-}
-
-/// An item & ID pair of a `PredParam`, with their updated state.
-pub enum PredCombCase<P, I> {
-	Diff(P, I),
-	Same(P, I),
-}
-
-impl<P, I> Clone for PredCombCase<P, I>
-where
-	P: PredItem,
-	I: PredId,
-{
-	fn clone(&self) -> Self {
-		match self {
-			Self::Diff(item, id) => Self::Diff(item.clone(), *id),
-			Self::Same(item, id) => Self::Same(item.clone(), *id),
-		}
-	}
-}
-
-/// Combinator for `PredParam` tuple implementation.
-pub struct PredPairComb<A, B, K = CombNone>
-where
-	A: PredCombinator,
-	B: PredCombinator,
-	K: CombKind,
-{
-	a_comb: A::Comb<K>,
-	b_comb: B::Comb<K::Pal>,
-	a_inv_comb: A::Comb<K::Inv>,
-	b_inv_comb: B::Comb<<<K::Inv as CombKind>::Pal as CombKind>::Inv>,
-	kind: K,
-}
-
-impl<A, B, K> Clone for PredPairComb<A, B, K>
-where
-	A: PredCombinator,
-	B: PredCombinator,
-	K: CombKind,
-{
-	fn clone(&self) -> Self {
-		Self {
-			a_comb: self.a_comb.clone(),
-			b_comb: self.b_comb.clone(),
-			a_inv_comb: self.a_inv_comb.clone(),
-			b_inv_comb: self.b_inv_comb.clone(),
-			kind: self.kind,
-		}
-	}
-}
-
-impl<A, B, K> PredPairComb<A, B, K>
-where
-	A: PredCombinator,
-	B: PredCombinator,
-	K: CombKind,
-{
-	pub(crate) fn new(
-		a_comb: A::Comb<K>,
-		b_comb: B::Comb<K::Pal>,
-		a_inv_comb: A::Comb<K::Inv>,
-		b_inv_comb: B::Comb<<<K::Inv as CombKind>::Pal as CombKind>::Inv>,
-		kind: K,
-	) -> Self {
-		Self {
-			a_comb,
-			b_comb,
-			a_inv_comb,
-			b_inv_comb,
-			kind,
-		}
-	}
-}
-
-impl<A, B, K> IntoIterator for PredPairComb<A, B, K>
-where
-	A: PredCombinator,
-	B: PredCombinator,
-	K: CombKind,
-{
-	type Item = <Self::IntoIter as Iterator>::Item;
-	type IntoIter = PredPairCombIter<A, B, K>;
-	fn into_iter(self) -> Self::IntoIter {
-		PredPairCombIter::primary_next(
-			self.a_comb.into_iter(),
-			self.b_comb,
-			self.a_inv_comb,
-			self.b_inv_comb,
-		)
-	}
-}
-
 /// Iterator for 2-tuple [`PredCombinator`] types.
 pub enum PredPairCombIter<A, B, K>
 where
@@ -789,6 +668,127 @@ where
 				});
 				(min, max)
 			},
+		}
+	}
+}
+
+/// Item of a [`PredCombinator`]'s iterator.
+pub trait PredCombinatorCase: Clone {
+	type Item: PredItem;
+	type Id: PredId;
+	fn is_diff(&self) -> bool;
+	fn into_parts(self) -> (Self::Item, Self::Id);
+}
+
+mod _pred_combinator_case_impls {
+	use super::*;
+	
+	impl PredCombinatorCase for () {
+		type Item = ();
+		type Id = ();
+		fn is_diff(&self) -> bool {
+			true
+		}
+		fn into_parts(self) -> (Self::Item, Self::Id) {
+			((), ())
+		}
+	}
+	
+	impl<P, I> PredCombinatorCase for PredCombCase<P, I>
+	where
+		P: PredItem,
+		I: PredId,
+	{
+		type Item = P;
+		type Id = I;
+		fn is_diff(&self) -> bool {
+			match self {
+				PredCombCase::Diff(..) => true,
+				PredCombCase::Same(..) => false,
+			}
+		}
+		fn into_parts(self) -> (Self::Item, Self::Id) {
+			let (PredCombCase::Diff(item, id) | PredCombCase::Same(item, id)) = self;
+			(item, id)
+		}
+	}
+	
+	impl<C, const N: usize> PredCombinatorCase for [C; N]
+	where
+		C: PredCombinatorCase,
+		C::Id: Ord
+	{
+		type Item = [C::Item; N];
+		type Id = [C::Id; N];
+		fn is_diff(&self) -> bool {
+			self.iter().any(C::is_diff)
+		}
+		fn into_parts(self) -> (Self::Item, Self::Id) {
+			let mut ids = [None; N];
+			let mut iter = self.into_iter();
+			let items = std::array::from_fn(|i| {
+				let (item, id) = iter.next()
+					.expect("should exist")
+					.into_parts();
+				ids[i] = Some(id);
+				item
+			});
+			let mut ids = ids.map(Option::unwrap);
+			ids.sort_unstable();
+			(items, ids)
+		}
+	}
+	
+	impl<A> PredCombinatorCase for (A,)
+	where
+		A: PredCombinatorCase,
+	{
+		type Item = (A::Item,);
+		type Id = (A::Id,);
+		fn is_diff(&self) -> bool {
+			self.0.is_diff()
+		}
+		fn into_parts(self) -> (Self::Item, Self::Id) {
+			let (a,) = self;
+			let (a_item, a_id) = a.into_parts();
+			((a_item,), (a_id,))
+		}
+	}
+	
+	impl<A, B> PredCombinatorCase for (A, B)
+	where
+		A: PredCombinatorCase,
+		B: PredCombinatorCase,
+	{
+		type Item = (A::Item, B::Item);
+		type Id = (A::Id, B::Id);
+		fn is_diff(&self) -> bool {
+			self.0.is_diff() || self.1.is_diff()
+		}
+		fn into_parts(self) -> (Self::Item, Self::Id) {
+			let (a, b) = self;
+			let (a_item, a_id) = a.into_parts();
+			let (b_item, b_id) = b.into_parts();
+			((a_item, b_item), (a_id, b_id))
+		}
+	}
+}
+
+/// An item & ID pair of a `PredParam`, with their updated state.
+pub enum PredCombCase<P, I> {
+	Diff(P, I),
+	Same(P, I),
+}
+
+impl<P, I> Clone for PredCombCase<P, I>
+where
+	P: PredItem,
+	I: PredId,
+{
+	fn clone(&self) -> Self {
+		match self {
+			Self::Diff(item, id) => Self::Diff(item.clone(), *id),
+			Self::Same(item, id) => Self::Same(item.clone(), *id),
 		}
 	}
 }
