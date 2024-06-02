@@ -5,9 +5,9 @@ use std::time::Duration;
 use bevy_ecs::change_detection::{DetectChanges, Ref, Res};
 use bevy_ecs::component::{Component, Tick};
 use bevy_ecs::entity::Entity;
-use bevy_ecs::prelude::{Query, Resource, World};
+use bevy_ecs::prelude::{Resource, World};
 use bevy_ecs::query::{ArchetypeFilter, QueryData, ReadOnlyQueryData, WorldQuery};
-use bevy_ecs::system::{ReadOnlySystemParam, SystemMeta, SystemParam, SystemParamItem};
+use bevy_ecs::system::{SystemMeta, SystemParam, SystemParamItem};
 use bevy_ecs::world::{Mut, unsafe_world_cell::UnsafeWorldCell};
 use chime::{Flux, MomentRef, MomentRefMut};
 use chime::pred::Prediction;
@@ -1155,6 +1155,7 @@ mod _into_input_impls {
 mod testing {
 	use super::*;
 	use chime::pred::DynPred;
+	use bevy::prelude::Query;
 	
 	#[derive(Component, Copy, Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
 	struct Test(usize);

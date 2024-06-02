@@ -7,8 +7,6 @@ use crate::node::{Node, NodeWriter};
 use crate::pred::*;
 
 mod kind {
-	use super::*;
-	
 	/// Unit types that filter what `PredParam::comb` iterates over.
 	/// 
 	/// ```text
