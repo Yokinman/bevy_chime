@@ -732,6 +732,14 @@ mod _pred_perm_branch_impls {
 
 /// ...
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug, Default)]
+pub struct Single<T>(pub T);
+
+/// ...
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug, Default)]
+pub struct Nested<A, B>(pub A, pub B);
+
+/// ...
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug, Default)]
 pub struct NestedPerm<A, B>(pub A, pub B);
 
 // impl<A, const N: usize, B> std::ops::Index<usize> for NestedPerm<[A; N], B>
@@ -747,69 +755,6 @@ pub struct NestedPerm<A, B>(pub A, pub B);
 // 		}
 // 	}
 // }
-
-impl<A, const N: usize, B> PredBranch for NestedPerm<PredArrayComb<A, N>, B>
-where
-	A: PredCombinator,
-	A::Id: Ord,
-	B: PredPermBranch<Output = A>,
-{
-	type Param = PredArrayComb<A, N>;
-	type Branch = B;
-	type Case<T> = (<PredArrayComb<A, N> as PredCombinator>::Id, Node<B::Case<T>>);
-	type AllParams = PredPairComb<PredArrayComb<A, N>, B::AllParams>;
-	type Id = NestedPerm<<PredArrayComb<A, N> as PredCombinator>::Id, B::Id>;
-	type Input = NestedPerm<<PredArrayComb<A, N> as PredCombinator>::Input, B::Input>;
-	type CombSplit<K: CombKind> = (
-		<Self::Param as PredCombinator>::Comb<K>,
-		[B::CombSplit<CombBranch<K::Pal, K>>; 2],
-	);
-	
-	type Item<'p, T, K> = PredSubState2<'p, T, B, CombBranch<K::Pal, K>>
-	where
-		T: Prediction + 'p,
-		K: CombKind,
-		Self::Branch: 'p;
-	
-	type Comb<'p, T, K> = NestedPermPredComb2<'p, T, PredArrayComb<A, N>, B, K>
-	where
-		T: Prediction + 'p,
-		K: CombKind,
-		Self::Branch: 'p;
-	
-	type CaseIter<T> = NestedPredBranchIter<Self, T>;
-	
-	fn comb_split<K: CombKind>(
-		(a, b): &'static SystemParamItem<<Self::AllParams as PredCombinator>::Param>,
-		NestedPerm(a_input, b_input): Self::Input,
-		kind: K,
-	) -> Self::CombSplit<K> {
-		let mut comb = PredArrayComb::<A, N>::comb(a, kind, a_input);
-		comb.is_nested = true;
-		(
-			comb,
-			[
-				B::comb_split(b, b_input.clone(), CombBranch::A(kind.pal())),
-				B::comb_split(b, b_input, CombBranch::B(kind)),
-			]
-		)
-	}
-	
-	fn case_iter<T>((id, node): Self::Case<T>) -> Self::CaseIter<T> {
-		let mut iter = node.into_iter();
-		let sub_iter = iter.next().map(B::case_iter);
-		NestedPredBranchIter { id, iter, sub_iter }
-	}
-	
-	fn new_comb<'p, T, K>(state: PredSubState2<'p, T, Self, K>) -> Self::Comb<'p, T, K>
-	where
-		T: Prediction + 'p,
-		K: CombKind,
-		Self::Branch: 'p,
-	{
-		NestedPermPredComb2::new(state)
-	}
-}
 
 /// ...
 pub trait PredBranch {
@@ -853,119 +798,178 @@ pub trait PredBranch {
 		Self::Branch: 'p;
 }
 
-/// ...
-#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug, Default)]
-pub struct Single<T>(pub T);
-
-impl<A> PredBranch for Single<A>
-where
-	A: PredCombinator
-{
-	type Param = A;
-	type Branch = Single<EmptyComb>;
-	type Case<T> = PredStateCase<A::Id, T>;
-	type AllParams = A;
-	type Id = A::Id;
-	type Input = Single<A::Input>;
-	type CombSplit<K: CombKind> = A::Comb<K>;
+mod _pred_branch_impls {
+	use super::*;
 	
-	type Item<'p, T, K> = &'p mut Self::Case<T>
+	impl<A> PredBranch for Single<A>
 	where
-		T: Prediction + 'p,
-		K: CombKind,
-		Self::Branch: 'p;
-	
-	type Comb<'p, T, K> = SinglePredComb2<'p, T, Self::Param, K>
-	where
-		T: Prediction + 'p,
-		K: CombKind,
-		Self::Branch: 'p;
-	
-	type CaseIter<T> = std::iter::Once<PredStateCase<A::Id, T>>;
-	
-	fn comb_split<K: CombKind>(
-		params: &'static SystemParamItem<<Self::AllParams as PredCombinator>::Param>,
-		Single(input): Self::Input,
-		kind: K,
-	) -> Self::CombSplit<K> {
-		A::comb(params, kind, input)
-	}
-	
-	fn case_iter<T>(case: Self::Case<T>) -> Self::CaseIter<T> {
-		std::iter::once(case)
-	}
-	
-	fn new_comb<'p, T, K>(state: PredSubState2<'p, T, Self, K>) -> Self::Comb<'p, T, K>
-	where
-		T: Prediction + 'p,
-		K: CombKind,
-		Self::Branch: 'p,
+		A: PredCombinator
 	{
-		SinglePredComb2::new(state)
-	}
-}
-
-/// ...
-#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug, Default)]
-pub struct Nested<A, B>(pub A, pub B);
-
-impl<A, B> PredBranch for Nested<A, B>
-where
-	A: PredCombinator,
-	B: PredBranch,
-{
-	type Param = A;
-	type Branch = B;
-	type Case<T> = (A::Id, Node<B::Case<T>>);
-	type AllParams = PredPairComb<A, B::AllParams>;
-	type Id = Nested<A::Id, B::Id>;
-	type Input = Nested<A::Input, B::Input>;
-	type CombSplit<K: CombKind> = (
-		<Self::Param as PredCombinator>::Comb<K::Pal>,
-		[B::CombSplit<CombBranch<K::Pal, K>>; 2],
-	);
-	
-	type Item<'p, T, K> = PredSubState2<'p, T, B, CombBranch<K::Pal, K>>
-	where
-		T: Prediction + 'p,
-		K: CombKind,
-		Self::Branch: 'p;
-	
-	type Comb<'p, T, K> = NestedPredComb2<'p, T, A, B, K>
-	where
-		T: Prediction + 'p,
-		K: CombKind,
-		Self::Branch: 'p;
-	
-	type CaseIter<T> = NestedPredBranchIter<Self, T>;
-	
-	fn comb_split<K: CombKind>(
-		(a, b): &'static SystemParamItem<<Self::AllParams as PredCombinator>::Param>,
-		Nested(a_input, b_input): Self::Input,
-		kind: K,
-	) -> Self::CombSplit<K> {
-		(
-			A::comb(a, kind.pal(), a_input),
-			[
-				B::comb_split(b, b_input.clone(), CombBranch::A(kind.pal())),
-				B::comb_split(b, b_input, CombBranch::B(kind)),
-			]
-		)
+		type Param = A;
+		type Branch = Single<EmptyComb>;
+		type Case<T> = PredStateCase<A::Id, T>;
+		type AllParams = A;
+		type Id = A::Id;
+		type Input = Single<A::Input>;
+		type CombSplit<K: CombKind> = A::Comb<K>;
+		
+		type Item<'p, T, K> = &'p mut Self::Case<T>
+		where
+			T: Prediction + 'p,
+			K: CombKind,
+			Self::Branch: 'p;
+		
+		type Comb<'p, T, K> = SinglePredComb2<'p, T, Self::Param, K>
+		where
+			T: Prediction + 'p,
+			K: CombKind,
+			Self::Branch: 'p;
+		
+		type CaseIter<T> = std::iter::Once<PredStateCase<A::Id, T>>;
+		
+		fn comb_split<K: CombKind>(
+			params: &'static SystemParamItem<<Self::AllParams as PredCombinator>::Param>,
+			Single(input): Self::Input,
+			kind: K,
+		) -> Self::CombSplit<K> {
+			A::comb(params, kind, input)
+		}
+		
+		fn case_iter<T>(case: Self::Case<T>) -> Self::CaseIter<T> {
+			std::iter::once(case)
+		}
+		
+		fn new_comb<'p, T, K>(state: PredSubState2<'p, T, Self, K>) -> Self::Comb<'p, T, K>
+		where
+			T: Prediction + 'p,
+			K: CombKind,
+			Self::Branch: 'p,
+		{
+			SinglePredComb2::new(state)
+		}
 	}
 	
-	fn case_iter<T>((id, node): Self::Case<T>) -> Self::CaseIter<T> {
-		let mut iter = node.into_iter();
-		let sub_iter = iter.next().map(B::case_iter);
-		NestedPredBranchIter { id, iter, sub_iter }
-	}
-	
-	fn new_comb<'p, T, K>(state: PredSubState2<'p, T, Self, K>) -> Self::Comb<'p, T, K>
+	impl<A, B> PredBranch for Nested<A, B>
 	where
-		T: Prediction + 'p,
-		K: CombKind,
-		Self::Branch: 'p,
+		A: PredCombinator,
+		B: PredBranch,
 	{
-		NestedPredComb2::new(state)
+		type Param = A;
+		type Branch = B;
+		type Case<T> = (A::Id, Node<B::Case<T>>);
+		type AllParams = PredPairComb<A, B::AllParams>;
+		type Id = Nested<A::Id, B::Id>;
+		type Input = Nested<A::Input, B::Input>;
+		type CombSplit<K: CombKind> = (
+			<Self::Param as PredCombinator>::Comb<K::Pal>,
+			[B::CombSplit<CombBranch<K::Pal, K>>; 2],
+		);
+		
+		type Item<'p, T, K> = PredSubState2<'p, T, B, CombBranch<K::Pal, K>>
+		where
+			T: Prediction + 'p,
+			K: CombKind,
+			Self::Branch: 'p;
+		
+		type Comb<'p, T, K> = NestedPredComb2<'p, T, A, B, K>
+		where
+			T: Prediction + 'p,
+			K: CombKind,
+			Self::Branch: 'p;
+		
+		type CaseIter<T> = NestedPredBranchIter<Self, T>;
+		
+		fn comb_split<K: CombKind>(
+			(a, b): &'static SystemParamItem<<Self::AllParams as PredCombinator>::Param>,
+			Nested(a_input, b_input): Self::Input,
+			kind: K,
+		) -> Self::CombSplit<K> {
+			(
+				A::comb(a, kind.pal(), a_input),
+				[
+					B::comb_split(b, b_input.clone(), CombBranch::A(kind.pal())),
+					B::comb_split(b, b_input, CombBranch::B(kind)),
+				]
+			)
+		}
+		
+		fn case_iter<T>((id, node): Self::Case<T>) -> Self::CaseIter<T> {
+			let mut iter = node.into_iter();
+			let sub_iter = iter.next().map(B::case_iter);
+			NestedPredBranchIter { id, iter, sub_iter }
+		}
+		
+		fn new_comb<'p, T, K>(state: PredSubState2<'p, T, Self, K>) -> Self::Comb<'p, T, K>
+		where
+			T: Prediction + 'p,
+			K: CombKind,
+			Self::Branch: 'p,
+		{
+			NestedPredComb2::new(state)
+		}
+	}
+	
+	impl<A, const N: usize, B> PredBranch for NestedPerm<PredArrayComb<A, N>, B>
+	where
+		A: PredCombinator,
+		A::Id: Ord,
+		B: PredPermBranch<Output = A>,
+	{
+		type Param = PredArrayComb<A, N>;
+		type Branch = B;
+		type Case<T> = (<PredArrayComb<A, N> as PredCombinator>::Id, Node<B::Case<T>>);
+		type AllParams = PredPairComb<PredArrayComb<A, N>, B::AllParams>;
+		type Id = NestedPerm<<PredArrayComb<A, N> as PredCombinator>::Id, B::Id>;
+		type Input = NestedPerm<<PredArrayComb<A, N> as PredCombinator>::Input, B::Input>;
+		type CombSplit<K: CombKind> = (
+			<Self::Param as PredCombinator>::Comb<K>,
+			[B::CombSplit<CombBranch<K::Pal, K>>; 2],
+		);
+		
+		type Item<'p, T, K> = PredSubState2<'p, T, B, CombBranch<K::Pal, K>>
+		where
+			T: Prediction + 'p,
+			K: CombKind,
+			Self::Branch: 'p;
+		
+		type Comb<'p, T, K> = NestedPermPredComb2<'p, T, PredArrayComb<A, N>, B, K>
+		where
+			T: Prediction + 'p,
+			K: CombKind,
+			Self::Branch: 'p;
+		
+		type CaseIter<T> = NestedPredBranchIter<Self, T>;
+		
+		fn comb_split<K: CombKind>(
+			(a, b): &'static SystemParamItem<<Self::AllParams as PredCombinator>::Param>,
+			NestedPerm(a_input, b_input): Self::Input,
+			kind: K,
+		) -> Self::CombSplit<K> {
+			let mut comb = PredArrayComb::<A, N>::comb(a, kind, a_input);
+			comb.is_nested = true;
+			(
+				comb,
+				[
+					B::comb_split(b, b_input.clone(), CombBranch::A(kind.pal())),
+					B::comb_split(b, b_input, CombBranch::B(kind)),
+				]
+			)
+		}
+		
+		fn case_iter<T>((id, node): Self::Case<T>) -> Self::CaseIter<T> {
+			let mut iter = node.into_iter();
+			let sub_iter = iter.next().map(B::case_iter);
+			NestedPredBranchIter { id, iter, sub_iter }
+		}
+		
+		fn new_comb<'p, T, K>(state: PredSubState2<'p, T, Self, K>) -> Self::Comb<'p, T, K>
+		where
+			T: Prediction + 'p,
+			K: CombKind,
+			Self::Branch: 'p,
+		{
+			NestedPermPredComb2::new(state)
+		}
 	}
 }
 
