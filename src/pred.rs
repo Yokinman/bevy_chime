@@ -1088,113 +1088,117 @@ pub trait PredFetchData {
 	// would allow for query types that accept multiple IDs; support `() -> ()`.
 }
 
-impl PredFetchData for () {
-	type Id = ();
-	type Output<'w> = ();
-	unsafe fn get_inner(_world: UnsafeWorldCell, _id: Self::Id) -> Self::Output<'_> {}
-}
-
-impl<C: Component> PredFetchData for &C {
-	type Id = Entity;
-	type Output<'w> = &'w C;
-	unsafe fn get_inner(world: UnsafeWorldCell, id: Self::Id) -> Self::Output<'_> {
-		// SAFETY: The caller should ensure that there isn't conflicting access
-		// to the given entity's component.
-		world.get_entity(id)
-			.expect("entity should exist")
-			.get::<C>()
-			.expect("component should exist")
+mod _pred_fetch_data_impls {
+	use super::*;
+	
+	impl PredFetchData for () {
+		type Id = ();
+		type Output<'w> = ();
+		unsafe fn get_inner(_world: UnsafeWorldCell, _id: Self::Id) -> Self::Output<'_> {}
 	}
-}
-
-impl<C: Component> PredFetchData for &mut C {
-	type Id = Entity;
-	type Output<'w> = Mut<'w, C>;
-	unsafe fn get_inner(world: UnsafeWorldCell, id: Self::Id) -> Self::Output<'_> {
-		// SAFETY: The caller should ensure that there isn't conflicting access
-		// to the given entity's component.
-		world.get_entity(id)
-			.expect("entity should exist")
-			.get_mut::<C>()
-			.expect("component should exist")
+	
+	impl<C: Component> PredFetchData for &C {
+		type Id = Entity;
+		type Output<'w> = &'w C;
+		unsafe fn get_inner(world: UnsafeWorldCell, id: Self::Id) -> Self::Output<'_> {
+			// SAFETY: The caller should ensure that there isn't conflicting access
+			// to the given entity's component.
+			world.get_entity(id)
+				.expect("entity should exist")
+				.get::<C>()
+				.expect("component should exist")
+		}
 	}
-}
-
-impl<C: Component, const N: usize> PredFetchData for [&C; N] {
-	type Id = [Entity; N];
-	type Output<'w> = [&'w C; N];
-	unsafe fn get_inner(world: UnsafeWorldCell, id: Self::Id) -> Self::Output<'_> {
-		// SAFETY: The caller should ensure that there isn't conflicting access
-		// to the given entity's components.
-		std::array::from_fn(|i| world.get_entity(id[i])
-			.expect("entity should exist")
-			.get::<C>()
-			.expect("component should exist"))
+	
+	impl<C: Component> PredFetchData for &mut C {
+		type Id = Entity;
+		type Output<'w> = Mut<'w, C>;
+		unsafe fn get_inner(world: UnsafeWorldCell, id: Self::Id) -> Self::Output<'_> {
+			// SAFETY: The caller should ensure that there isn't conflicting access
+			// to the given entity's component.
+			world.get_entity(id)
+				.expect("entity should exist")
+				.get_mut::<C>()
+				.expect("component should exist")
+		}
 	}
-}
-
-impl<C: Component, const N: usize> PredFetchData for [&mut C; N] {
-	type Id = [Entity; N];
-	type Output<'w> = [Mut<'w, C>; N];
-	unsafe fn get_inner(world: UnsafeWorldCell, id: Self::Id) -> Self::Output<'_> {
-		// SAFETY: The caller should ensure that there isn't conflicting access
-		// to the given entity's components.
-		std::array::from_fn(|i| world.get_entity(id[i])
-			.expect("entity should exist")
-			.get_mut::<C>()
-			.expect("component should exist"))
+	
+	impl<C: Component, const N: usize> PredFetchData for [&C; N] {
+		type Id = [Entity; N];
+		type Output<'w> = [&'w C; N];
+		unsafe fn get_inner(world: UnsafeWorldCell, id: Self::Id) -> Self::Output<'_> {
+			// SAFETY: The caller should ensure that there isn't conflicting access
+			// to the given entity's components.
+			std::array::from_fn(|i| world.get_entity(id[i])
+				.expect("entity should exist")
+				.get::<C>()
+				.expect("component should exist"))
+		}
 	}
-}
-
-impl<A: PredFetchData> PredFetchData for (A,) {
-	type Id = (A::Id,);
-	type Output<'w> = (A::Output<'w>,);
-	unsafe fn get_inner(world: UnsafeWorldCell, (a,): Self::Id) -> Self::Output<'_> {
-		(A::get_inner(world, a),)
+	
+	impl<C: Component, const N: usize> PredFetchData for [&mut C; N] {
+		type Id = [Entity; N];
+		type Output<'w> = [Mut<'w, C>; N];
+		unsafe fn get_inner(world: UnsafeWorldCell, id: Self::Id) -> Self::Output<'_> {
+			// SAFETY: The caller should ensure that there isn't conflicting access
+			// to the given entity's components.
+			std::array::from_fn(|i| world.get_entity(id[i])
+				.expect("entity should exist")
+				.get_mut::<C>()
+				.expect("component should exist"))
+		}
 	}
-}
-
-impl<A: PredFetchData, B: PredFetchData> PredFetchData for (A, B) {
-	type Id = (A::Id, B::Id);
-	type Output<'w> = (A::Output<'w>, B::Output<'w>);
-	unsafe fn get_inner(world: UnsafeWorldCell, (a, b): Self::Id) -> Self::Output<'_> {
-		(A::get_inner(world, a), B::get_inner(world, b))
+	
+	impl<A: PredFetchData> PredFetchData for (A,) {
+		type Id = (A::Id,);
+		type Output<'w> = (A::Output<'w>,);
+		unsafe fn get_inner(world: UnsafeWorldCell, (a,): Self::Id) -> Self::Output<'_> {
+			(A::get_inner(world, a),)
+		}
 	}
-}
-
-impl<I> PredFetchData for WithId<I>
-where
-	I: PredId
-{
-	type Id = I;
-	type Output<'w> = I;
-	unsafe fn get_inner(_world: UnsafeWorldCell, id: Self::Id) -> Self::Output<'_> {
-		// SAFETY: This doesn't access the world.
-		id
+	
+	impl<A: PredFetchData, B: PredFetchData> PredFetchData for (A, B) {
+		type Id = (A::Id, B::Id);
+		type Output<'w> = (A::Output<'w>, B::Output<'w>);
+		unsafe fn get_inner(world: UnsafeWorldCell, (a, b): Self::Id) -> Self::Output<'_> {
+			(A::get_inner(world, a), B::get_inner(world, b))
+		}
 	}
-}
-
-impl<A, B> PredFetchData for Nested<A, B>
-where
-	A: PredFetchData,
-	B: PredFetchData,
-{
-	type Id = Nested<A::Id, B::Id>;
-	type Output<'w> = Nested<A::Output<'w>, B::Output<'w>>;
-	unsafe fn get_inner(world: UnsafeWorldCell, Nested(a, b): Self::Id) -> Self::Output<'_> {
-		Nested(A::get_inner(world, a), B::get_inner(world, b))
+	
+	impl<I> PredFetchData for WithId<I>
+	where
+		I: PredId
+	{
+		type Id = I;
+		type Output<'w> = I;
+		unsafe fn get_inner(_world: UnsafeWorldCell, id: Self::Id) -> Self::Output<'_> {
+			// SAFETY: This doesn't access the world.
+			id
+		}
 	}
-}
-
-impl<A, B> PredFetchData for NestedPerm<A, B>
-where
-	A: PredFetchData,
-	B: PredFetchData,
-{
-	type Id = NestedPerm<A::Id, B::Id>;
-	type Output<'w> = NestedPerm<A::Output<'w>, B::Output<'w>>;
-	unsafe fn get_inner(world: UnsafeWorldCell, NestedPerm(a, b): Self::Id) -> Self::Output<'_> {
-		NestedPerm(A::get_inner(world, a), B::get_inner(world, b))
+	
+	impl<A, B> PredFetchData for Nested<A, B>
+	where
+		A: PredFetchData,
+		B: PredFetchData,
+	{
+		type Id = Nested<A::Id, B::Id>;
+		type Output<'w> = Nested<A::Output<'w>, B::Output<'w>>;
+		unsafe fn get_inner(world: UnsafeWorldCell, Nested(a, b): Self::Id) -> Self::Output<'_> {
+			Nested(A::get_inner(world, a), B::get_inner(world, b))
+		}
+	}
+	
+	impl<A, B> PredFetchData for NestedPerm<A, B>
+	where
+		A: PredFetchData,
+		B: PredFetchData,
+	{
+		type Id = NestedPerm<A::Id, B::Id>;
+		type Output<'w> = NestedPerm<A::Output<'w>, B::Output<'w>>;
+		unsafe fn get_inner(world: UnsafeWorldCell, NestedPerm(a, b): Self::Id) -> Self::Output<'_> {
+			NestedPerm(A::get_inner(world, a), B::get_inner(world, b))
+		}
 	}
 }
 
