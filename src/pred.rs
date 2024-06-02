@@ -425,50 +425,54 @@ where
 /// ...
 pub trait PredItem2<P: PredCombinator<Item_= Self> + ?Sized>: PredItem {}
 
-impl PredItem2<EmptyComb> for () {}
-
-impl<'w, D, F> PredItem2<QueryComb<'w, D, F>> for Fetch<'w, D, F>
-where
-	D: PredParamQueryData,
-	F: ArchetypeFilter + 'static,
-	D::Item<'w>: PredItem,
-	<D::ItemRef as WorldQuery>::Item<'w>: PredItemRef<Item = D::Item<'w>>,
-{}
-
-impl<'w, T: Resource> PredItem2<ResComb<'w, T>> for Res<'w, T> {}
-
-impl<A, P,> PredItem2<PredSingleComb<P>> for (A,)
-where
-	A: PredItem2<P>,
-	P: PredCombinator<Item_= A>,
-{}
-
-impl<A, B, P, Q,> PredItem2<PredPairComb<P, Q>> for (A, B,)
-where
-	A: PredItem2<P>,
-	B: PredItem2<Q>,
-	P: PredCombinator<Item_= A>,
-	Q: PredCombinator<Item_= B>,
-{}
-
-impl<T, P, const N: usize> PredItem2<PredArrayComb<P, N>> for [T; N]
-where
-	T: PredItem2<P>,
-	P: PredCombinator<Item_= T>,
-	P::Id: Ord,
-{}
-
-impl<T> PredItem2<PredIdComb<T>> for WithId<T::Item>
-where
-	T: IntoIterator + Clone,
-	T::Item : PredId,
-{}
-
-impl<T, I> PredItem2<Misc<T>> for Misc<I>
-where
-	T: PredCombinator<Item_= I>,
-	I: PredItem2<T>,
-{}
+mod _pred_item2_impls {
+	use super::*;
+	
+	impl PredItem2<EmptyComb> for () {}
+	
+	impl<'w, D, F> PredItem2<QueryComb<'w, D, F>> for Fetch<'w, D, F>
+	where
+		D: PredParamQueryData,
+		F: ArchetypeFilter + 'static,
+		D::Item<'w>: PredItem,
+		<D::ItemRef as WorldQuery>::Item<'w>: PredItemRef<Item = D::Item<'w>>,
+	{}
+	
+	impl<'w, T: Resource> PredItem2<ResComb<'w, T>> for Res<'w, T> {}
+	
+	impl<A, P,> PredItem2<PredSingleComb<P>> for (A,)
+	where
+		A: PredItem2<P>,
+		P: PredCombinator<Item_= A>,
+	{}
+	
+	impl<A, B, P, Q,> PredItem2<PredPairComb<P, Q>> for (A, B,)
+	where
+		A: PredItem2<P>,
+		B: PredItem2<Q>,
+		P: PredCombinator<Item_= A>,
+		Q: PredCombinator<Item_= B>,
+	{}
+	
+	impl<T, P, const N: usize> PredItem2<PredArrayComb<P, N>> for [T; N]
+	where
+		T: PredItem2<P>,
+		P: PredCombinator<Item_= T>,
+		P::Id: Ord,
+	{}
+	
+	impl<T> PredItem2<PredIdComb<T>> for WithId<T::Item>
+	where
+		T: IntoIterator + Clone,
+		T::Item : PredId,
+	{}
+	
+	impl<T, I> PredItem2<Misc<T>> for Misc<I>
+	where
+		T: PredCombinator<Item_= I>,
+		I: PredItem2<T>,
+	{}
+}
 
 /// [`PredItem`] with updated state.
 pub trait PredItemRef {
