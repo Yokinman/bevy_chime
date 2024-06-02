@@ -798,13 +798,16 @@ impl<P: PredBranch, T> Iterator for PredNodeIter2<P, T> {
 pub struct PredFetch2<T>(T);
 
 /// ...
+pub(crate) struct ChimeSystemParamNext<A, B>(A, B);
+
+/// ...
 pub trait ChimeSystemParam<'a, I: PredId> {
 	type Param: SystemParam;
 	fn fetch_param(param: &'a mut Option<Self::Param>, id: I) -> Self;
 }
 
 mod _pred_param_impls {
-	use super::{ChimeSystemParam, PredFetch2, PredFetchData2, PredId};
+	use super::{ChimeSystemParam, ChimeSystemParamNext, PredFetch2, PredFetchData2, PredId};
 	use bevy_ecs::system::SystemParam;
 	
 	impl<I, T> ChimeSystemParam<'_, I> for T
@@ -814,7 +817,7 @@ mod _pred_param_impls {
 	{
 		type Param = T;
 		fn fetch_param(param: &'_ mut Option<Self::Param>, _id: I) -> Self {
-			std::mem::take(param)
+			param.take()
 				.expect("should exist")
 		}
 	}
@@ -830,6 +833,28 @@ mod _pred_param_impls {
 				param.as_mut().expect("should exist"),
 				id,
 			))
+		}
+	}
+	
+	impl<'a, I, J, A, B> ChimeSystemParam<'a, (I, J)> for ChimeSystemParamNext<A, B>
+	where
+		I: PredId,
+		J: PredId,
+		A: ChimeSystemParam<'a, I>,
+		B: ChimeSystemParam<'a, J>,
+	{
+		type Param = (A::Param, B::Param);
+		fn fetch_param(param: &'a mut Option<Self::Param>, (i, j): (I, J)) -> Self {
+			let (a, b) = param.take()
+				.expect("should exist");
+			let mut a = Some(a);
+			let mut b = Some(b);
+			unsafe {
+				ChimeSystemParamNext(
+					A::fetch_param(std::mem::transmute(&mut a), i),
+					B::fetch_param(std::mem::transmute(&mut b), j),
+				)
+			}
 		}
 	}
 }
