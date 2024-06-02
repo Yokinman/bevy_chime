@@ -483,49 +483,53 @@ pub trait PredItemRef {
 	fn is_updated(item: &Self) -> bool;
 }
 
-impl<'w, T: 'static> PredItemRef for Ref<'w, T> {
-	type Item = &'w T;
-	fn into_item(self) -> Self::Item {
-		self.into_inner()
+mod _pred_item_ref_impls {
+	use super::*;
+	
+	impl<'w, T: 'static> PredItemRef for Ref<'w, T> {
+		type Item = &'w T;
+		fn into_item(self) -> Self::Item {
+			self.into_inner()
+		}
+		fn is_updated(item: &Self) -> bool {
+			DetectChanges::is_changed(item)
+		}
 	}
-	fn is_updated(item: &Self) -> bool {
-		DetectChanges::is_changed(item)
+	
+	impl<'w, R: Resource> PredItemRef for Res<'w, R> {
+		type Item = Self;
+		fn into_item(self) -> Self::Item {
+			self
+		}
+		fn is_updated(item: &Self) -> bool {
+			DetectChanges::is_changed(item)
+		}
 	}
-}
-
-impl<'w, R: Resource> PredItemRef for Res<'w, R> {
-	type Item = Self;
-	fn into_item(self) -> Self::Item {
-		self
+	
+	impl PredItemRef for () {
+		type Item = ();
+		fn into_item(self) -> Self::Item {
+			self
+		}
+		fn is_updated(_item: &Self) -> bool {
+			true
+		}
 	}
-	fn is_updated(item: &Self) -> bool {
-		DetectChanges::is_changed(item)
-	}
-}
-
-impl PredItemRef for () {
-	type Item = ();
-	fn into_item(self) -> Self::Item {
-		self
-	}
-	fn is_updated(_item: &Self) -> bool {
-		true
-	}
-}
-
-impl<A, B> PredItemRef for (A, B)
-where
-	A: PredItemRef,
-	B: PredItemRef,
-{
-	type Item = (A::Item, B::Item);
-	fn into_item(self) -> Self::Item {
-		let (a, b) = self;
-		(a.into_item(), b.into_item())
-	}
-	fn is_updated(item: &Self) -> bool {
-		let (a, b) = item;
-		A::is_updated(a) || B::is_updated(b)
+	
+	impl<A, B> PredItemRef for (A, B)
+	where
+		A: PredItemRef,
+		B: PredItemRef,
+	{
+		type Item = (A::Item, B::Item);
+		fn into_item(self) -> Self::Item {
+			let (a, b) = self;
+			(a.into_item(), b.into_item())
+		}
+		fn is_updated(item: &Self) -> bool {
+			let (a, b) = item;
+			A::is_updated(a) || B::is_updated(b)
+		}
 	}
 }
 
