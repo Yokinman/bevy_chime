@@ -410,93 +410,97 @@ pub trait PredCombinatorCase: Clone {
 	fn into_parts(self) -> (Self::Item, Self::Id);
 }
 
-impl PredCombinatorCase for () {
-	type Item = ();
-	type Id = ();
-	fn is_diff(&self) -> bool {
-		true
-	}
-	fn into_parts(self) -> (Self::Item, Self::Id) {
-		((), ())
-	}
-}
-
-impl<P, I> PredCombinatorCase for PredCombCase<P, I>
-where
-	P: PredItem,
-	I: PredId,
-{
-	type Item = P;
-	type Id = I;
-	fn is_diff(&self) -> bool {
-		match self {
-			PredCombCase::Diff(..) => true,
-			PredCombCase::Same(..) => false,
+mod _pred_combinator_case_impls {
+	use super::*;
+	
+	impl PredCombinatorCase for () {
+		type Item = ();
+		type Id = ();
+		fn is_diff(&self) -> bool {
+			true
+		}
+		fn into_parts(self) -> (Self::Item, Self::Id) {
+			((), ())
 		}
 	}
-	fn into_parts(self) -> (Self::Item, Self::Id) {
-		let (PredCombCase::Diff(item, id) | PredCombCase::Same(item, id)) = self;
-		(item, id)
+	
+	impl<P, I> PredCombinatorCase for PredCombCase<P, I>
+	where
+		P: PredItem,
+		I: PredId,
+	{
+		type Item = P;
+		type Id = I;
+		fn is_diff(&self) -> bool {
+			match self {
+				PredCombCase::Diff(..) => true,
+				PredCombCase::Same(..) => false,
+			}
+		}
+		fn into_parts(self) -> (Self::Item, Self::Id) {
+			let (PredCombCase::Diff(item, id) | PredCombCase::Same(item, id)) = self;
+			(item, id)
+		}
 	}
-}
-
-impl<C, const N: usize> PredCombinatorCase for [C; N]
-where
-	C: PredCombinatorCase,
-	C::Id: Ord
-{
-	type Item = [C::Item; N];
-	type Id = [C::Id; N];
-	fn is_diff(&self) -> bool {
-		self.iter().any(C::is_diff)
+	
+	impl<C, const N: usize> PredCombinatorCase for [C; N]
+	where
+		C: PredCombinatorCase,
+		C::Id: Ord
+	{
+		type Item = [C::Item; N];
+		type Id = [C::Id; N];
+		fn is_diff(&self) -> bool {
+			self.iter().any(C::is_diff)
+		}
+		fn into_parts(self) -> (Self::Item, Self::Id) {
+			let mut ids = [None; N];
+			let mut iter = self.into_iter();
+			let items = std::array::from_fn(|i| {
+				let (item, id) = iter.next()
+					.expect("should exist")
+					.into_parts();
+				ids[i] = Some(id);
+				item
+			});
+			let mut ids = ids.map(Option::unwrap);
+			ids.sort_unstable();
+			(items, ids)
+		}
 	}
-	fn into_parts(self) -> (Self::Item, Self::Id) {
-		let mut ids = [None; N];
-		let mut iter = self.into_iter();
-		let items = std::array::from_fn(|i| {
-			let (item, id) = iter.next()
-				.expect("should exist")
-				.into_parts();
-			ids[i] = Some(id);
-			item
-		});
-		let mut ids = ids.map(Option::unwrap);
-		ids.sort_unstable();
-		(items, ids)
+	
+	impl<A> PredCombinatorCase for (A,)
+	where
+		A: PredCombinatorCase,
+	{
+		type Item = (A::Item,);
+		type Id = (A::Id,);
+		fn is_diff(&self) -> bool {
+			self.0.is_diff()
+		}
+		fn into_parts(self) -> (Self::Item, Self::Id) {
+			let (a,) = self;
+			let (a_item, a_id) = a.into_parts();
+			((a_item,), (a_id,))
+		}
 	}
-}
-
-impl<A> PredCombinatorCase for (A,)
-where
-	A: PredCombinatorCase,
-{
-	type Item = (A::Item,);
-	type Id = (A::Id,);
-	fn is_diff(&self) -> bool {
-		self.0.is_diff()
-	}
-	fn into_parts(self) -> (Self::Item, Self::Id) {
-		let (a,) = self;
-		let (a_item, a_id) = a.into_parts();
-		((a_item,), (a_id,))
-	}
-}
-
-impl<A, B> PredCombinatorCase for (A, B)
-where
-	A: PredCombinatorCase,
-	B: PredCombinatorCase,
-{
-	type Item = (A::Item, B::Item);
-	type Id = (A::Id, B::Id);
-	fn is_diff(&self) -> bool {
-		self.0.is_diff() || self.1.is_diff()
-	}
-	fn into_parts(self) -> (Self::Item, Self::Id) {
-		let (a, b) = self;
-		let (a_item, a_id) = a.into_parts();
-		let (b_item, b_id) = b.into_parts();
-		((a_item, b_item), (a_id, b_id))
+	
+	impl<A, B> PredCombinatorCase for (A, B)
+	where
+		A: PredCombinatorCase,
+		B: PredCombinatorCase,
+	{
+		type Item = (A::Item, B::Item);
+		type Id = (A::Id, B::Id);
+		fn is_diff(&self) -> bool {
+			self.0.is_diff() || self.1.is_diff()
+		}
+		fn into_parts(self) -> (Self::Item, Self::Id) {
+			let (a, b) = self;
+			let (a_item, a_id) = a.into_parts();
+			let (b_item, b_id) = b.into_parts();
+			((a_item, b_item), (a_id, b_id))
+		}
 	}
 }
 
