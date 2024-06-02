@@ -79,6 +79,10 @@ impl<'w, D: QueryData, F> Deref for Fetch<'w, D, F> {
 	}
 }
 
+/// ...
+#[derive(Copy, Clone)]
+pub struct WithId<I>(pub I);
+
 /// Case of prediction.
 pub trait PredItem {
 	fn clone(&self) -> Self;
@@ -274,10 +278,6 @@ mod _pred_item_ref_impls {
 		}
 	}
 }
-
-/// ...
-#[derive(Copy, Clone)]
-pub struct WithId<I>(pub I);
 
 /// ...
 pub struct PredSubState2<'p, T, P, K>
