@@ -63,188 +63,208 @@ pub trait PredCombinator: Clone + IntoIterator<Item=Self::Case> {
 	) -> Self::Comb<K>;
 }
 
-impl<'w, T, F, Kind> PredCombinator for QueryComb<'w, T, F, Kind>
-where
-	T: PredParamQueryData,
-	F: ArchetypeFilter + 'static,
-	T::Item<'w>: PredItem,
-	<T::ItemRef as WorldQuery>::Item<'w>: PredItemRef<Item = T::Item<'w>>,
-	Kind: CombKind,
-{
-	type Param = Query<'static, 'static, (T::ItemRef, Entity), F>;
-	type Id = Entity;
-	type Item_ = Fetch<'w, T, F>;
-	type Case = PredCombCase<Self::Item_, Self::Id>;
-	type Input = ();
-	type Comb<K: CombKind> = QueryComb<'w, T, F, K>;
-	fn comb<K: CombKind>(
-		param: &'static SystemParamItem<Self::Param>,
-		kind: K,
-		_input: Self::Input,
-	) -> Self::Comb<K> {
-		QueryComb::new(param, kind)
+mod _pred_combinator_impls {
+	use super::*;
+
+	impl<'w, T, F, Kind> PredCombinator for QueryComb<'w, T, F, Kind>
+	where
+		T: PredParamQueryData,
+		F: ArchetypeFilter + 'static,
+		T::Item<'w>: PredItem,
+		<T::ItemRef as WorldQuery>::Item<'w>: PredItemRef<Item = T::Item<'w>>,
+		Kind: CombKind,
+	{
+		type Param = Query<'static, 'static, (T::ItemRef, Entity), F>;
+		type Id = Entity;
+		type Item_ = Fetch<'w, T, F>;
+		type Case = PredCombCase<Self::Item_, Self::Id>;
+		type Input = ();
+		type Comb<K: CombKind> = QueryComb<'w, T, F, K>;
+		fn comb<K: CombKind>(
+			param: &'static SystemParamItem<Self::Param>,
+			kind: K,
+			_input: Self::Input,
+		) -> Self::Comb<K> {
+			QueryComb::new(param, kind)
+		}
 	}
-}
-
-impl<'w, R, Kind> PredCombinator for ResComb<'w, R, Kind>
-where
-	R: Resource,
-	Kind: CombKind,
-{
-	type Param = Res<'static, R>;
-	type Id = ();
-	type Item_ = Res<'w, R>;
-	type Case = PredCombCase<Self::Item_, Self::Id>;
-	type Input = ();
-	type Comb<K: CombKind> = ResComb<'w, R, K>;
-	fn comb<K: CombKind>(
-		param: &'static SystemParamItem<Self::Param>,
-		kind: K,
-		_input: Self::Input,
-	) -> Self::Comb<K> {
-		ResComb::new(Res::clone(param), kind)
+	
+	impl<'w, R, Kind> PredCombinator for ResComb<'w, R, Kind>
+	where
+		R: Resource,
+		Kind: CombKind,
+	{
+		type Param = Res<'static, R>;
+		type Id = ();
+		type Item_ = Res<'w, R>;
+		type Case = PredCombCase<Self::Item_, Self::Id>;
+		type Input = ();
+		type Comb<K: CombKind> = ResComb<'w, R, K>;
+		fn comb<K: CombKind>(
+			param: &'static SystemParamItem<Self::Param>,
+			kind: K,
+			_input: Self::Input,
+		) -> Self::Comb<K> {
+			ResComb::new(Res::clone(param), kind)
+		}
 	}
-}
-
-impl<Kind> PredCombinator for EmptyComb<Kind>
-where
-	Kind: CombKind,
-{
-	type Param = ();
-	type Id = ();
-	type Item_ = ();
-	type Case = PredCombCase<Self::Item_, Self::Id>;
-	type Input = ();
-	type Comb<K: CombKind> = EmptyComb<K>;
-	fn comb<K: CombKind>(
-		_param: &'static SystemParamItem<Self::Param>,
-		kind: K,
-		_input: Self::Input,
-	) -> Self::Comb<K> {
-		EmptyComb::new(kind)
+	
+	impl<Kind> PredCombinator for EmptyComb<Kind>
+	where
+		Kind: CombKind,
+	{
+		type Param = ();
+		type Id = ();
+		type Item_ = ();
+		type Case = PredCombCase<Self::Item_, Self::Id>;
+		type Input = ();
+		type Comb<K: CombKind> = EmptyComb<K>;
+		fn comb<K: CombKind>(
+			_param: &'static SystemParamItem<Self::Param>,
+			kind: K,
+			_input: Self::Input,
+		) -> Self::Comb<K> {
+			EmptyComb::new(kind)
+		}
 	}
-}
-
-impl<A, Kind> PredCombinator for PredSingleComb<A, Kind>
-where
-	A: PredCombinator,
-	Kind: CombKind,
-{
-	type Param = A::Param;
-	type Id = (A::Id,);
-	type Item_ = (A::Item_,);
-	type Case = (A::Case,);
-	type Input = (A::Input,);
-	type Comb<K: CombKind> = PredSingleComb<A, K>;
-	fn comb<K: CombKind>(
-		param: &'static SystemParamItem<Self::Param>,
-		kind: K,
-		(input,): Self::Input,
-	) -> Self::Comb<K> {
-		PredSingleComb::new(A::comb(param, kind, input))
+	
+	impl<A, Kind> PredCombinator for PredSingleComb<A, Kind>
+	where
+		A: PredCombinator,
+		Kind: CombKind,
+	{
+		type Param = A::Param;
+		type Id = (A::Id,);
+		type Item_ = (A::Item_,);
+		type Case = (A::Case,);
+		type Input = (A::Input,);
+		type Comb<K: CombKind> = PredSingleComb<A, K>;
+		fn comb<K: CombKind>(
+			param: &'static SystemParamItem<Self::Param>,
+			kind: K,
+			(input,): Self::Input,
+		) -> Self::Comb<K> {
+			PredSingleComb::new(A::comb(param, kind, input))
+		}
 	}
-}
-
-impl<A, B, Kind> PredCombinator for PredPairComb<A, B, Kind>
-where
-	A: PredCombinator,
-	B: PredCombinator,
-	Kind: CombKind,
-{
-	type Param = (A::Param, B::Param);
-	type Id = (A::Id, B::Id);
-	type Item_ = (A::Item_, B::Item_);
-	type Case = (A::Case, B::Case);
-	type Input = (A::Input, B::Input);
-	type Comb<K: CombKind> = PredPairComb<A, B, K>;
-	fn comb<K: CombKind>(
-		(a, b): &'static SystemParamItem<Self::Param>,
-		kind: K,
-		(a_in, b_in): Self::Input,
-	) -> Self::Comb<K> {
-		PredPairComb::new(
-			A::comb(a, kind, a_in.clone()),
-			B::comb(b, kind.pal(), b_in.clone()),
-			A::comb(a, kind.inv(), a_in),
-			B::comb(b, kind.inv().pal().inv(), b_in),
-			kind,
-		)
+	
+	impl<A, B, Kind> PredCombinator for PredPairComb<A, B, Kind>
+	where
+		A: PredCombinator,
+		B: PredCombinator,
+		Kind: CombKind,
+	{
+		type Param = (A::Param, B::Param);
+		type Id = (A::Id, B::Id);
+		type Item_ = (A::Item_, B::Item_);
+		type Case = (A::Case, B::Case);
+		type Input = (A::Input, B::Input);
+		type Comb<K: CombKind> = PredPairComb<A, B, K>;
+		fn comb<K: CombKind>(
+			(a, b): &'static SystemParamItem<Self::Param>,
+			kind: K,
+			(a_in, b_in): Self::Input,
+		) -> Self::Comb<K> {
+			PredPairComb::new(
+				A::comb(a, kind, a_in.clone()),
+				B::comb(b, kind.pal(), b_in.clone()),
+				A::comb(a, kind.inv(), a_in),
+				B::comb(b, kind.inv().pal().inv(), b_in),
+				kind,
+			)
+		}
 	}
-}
-
-impl<P, const N: usize, Kind> PredCombinator for PredArrayComb<P, N, Kind>
-where
-	P: PredCombinator,
-	P::Id: Ord,
-	Kind: CombKind,
-{
-	type Param = P::Param;
-	type Id = [P::Id; N];
-	type Item_ = [P::Item_; N];
-	type Case = [P::Case; N];
-	type Input = [P::Input; N];
-	type Comb<K: CombKind> = PredArrayComb<P, N, K>;
-	fn comb<K: CombKind>(
-		param: &'static SystemParamItem<Self::Param>,
-		kind: K,
-		input: Self::Input,
-	) -> Self::Comb<K> {
-		PredArrayComb::new(
-			P::comb(param, CombBranch::A(kind.pal()), input[0].clone()),
-			P::comb(param, CombBranch::B(kind), input[0].clone()),
-			kind,
-		) // !!! Fix input
+	
+	impl<P, const N: usize, Kind> PredCombinator for PredArrayComb<P, N, Kind>
+	where
+		P: PredCombinator,
+		P::Id: Ord,
+		Kind: CombKind,
+	{
+		type Param = P::Param;
+		type Id = [P::Id; N];
+		type Item_ = [P::Item_; N];
+		type Case = [P::Case; N];
+		type Input = [P::Input; N];
+		type Comb<K: CombKind> = PredArrayComb<P, N, K>;
+		fn comb<K: CombKind>(
+			param: &'static SystemParamItem<Self::Param>,
+			kind: K,
+			input: Self::Input,
+		) -> Self::Comb<K> {
+			PredArrayComb::new(
+				P::comb(param, CombBranch::A(kind.pal()), input[0].clone()),
+				P::comb(param, CombBranch::B(kind), input[0].clone()),
+				kind,
+			) // !!! Fix input
+		}
 	}
-}
-
-// impl<C, I> PredParam<I> for &C
-// where
-// 	C: Component
-// {
-// 	type Param = Query<'static, 'static, (Ref<'static, C>, Entity)>;
-// 	type Id = Entity;
-// 	type Comb<'w> = QueryComb<'w, C, ()>;
-// 	fn comb<'w>(param: &'w SystemParamItem<Self::Param>) -> Self::Comb<'w> {
-// 		QueryComb::new(param)
-// 	}
-// }
-
-impl<I> PredCombinator for PredIdComb<I>
-where
-	I: IntoIterator + Clone,
-	I::Item: PredId,
-{
-	type Param = ();
-	type Input = I;
-	type Id = I::Item;
-	type Item_ = WithId<I::Item>;
-	type Case = PredCombCase<Self::Item_, Self::Id>;
-	type Comb<K: CombKind> = PredIdComb<I>;
-	fn comb<K: CombKind>(
-		_param: &'static SystemParamItem<Self::Param>,
-		_kind: K,
-		input: Self::Input,
-	) -> Self::Comb<K> {
-		PredIdComb::new(input)
+	
+	// impl<C, I> PredParam<I> for &C
+	// where
+	// 	C: Component
+	// {
+	// 	type Param = Query<'static, 'static, (Ref<'static, C>, Entity)>;
+	// 	type Id = Entity;
+	// 	type Comb<'w> = QueryComb<'w, C, ()>;
+	// 	fn comb<'w>(param: &'w SystemParamItem<Self::Param>) -> Self::Comb<'w> {
+	// 		QueryComb::new(param)
+	// 	}
+	// }
+	
+	impl<I> PredCombinator for PredIdComb<I>
+	where
+		I: IntoIterator + Clone,
+		I::Item: PredId,
+	{
+		type Param = ();
+		type Input = I;
+		type Id = I::Item;
+		type Item_ = WithId<I::Item>;
+		type Case = PredCombCase<Self::Item_, Self::Id>;
+		type Comb<K: CombKind> = PredIdComb<I>;
+		fn comb<K: CombKind>(
+			_param: &'static SystemParamItem<Self::Param>,
+			_kind: K,
+			input: Self::Input,
+		) -> Self::Comb<K> {
+			PredIdComb::new(input)
+		}
 	}
-}
-
-impl<T> PredCombinator for Misc<T>
-where
-	T: PredCombinator,
-{
-	type Param = T::Param;
-	type Input = T::Input;
-	type Id = T::Id;
-	type Item_ = Misc<T::Item_>;
-	type Case = Misc<T::Case>;
-	type Comb<K: CombKind> = Misc<T::Comb<K>>;
-	fn comb<K: CombKind>(
-		param: &'static SystemParamItem<Self::Param>,
-		kind: K,
-		input: Self::Input,
-	) -> Self::Comb<K> {
-		Misc(T::comb(param, kind, input))
+	
+	impl<T> PredCombinator for Misc<T>
+	where
+		T: PredCombinator,
+	{
+		type Param = T::Param;
+		type Input = T::Input;
+		type Id = T::Id;
+		type Item_ = Misc<T::Item_>;
+		type Case = Misc<T::Case>;
+		type Comb<K: CombKind> = Misc<T::Comb<K>>;
+		fn comb<K: CombKind>(
+			param: &'static SystemParamItem<Self::Param>,
+			kind: K,
+			input: Self::Input,
+		) -> Self::Comb<K> {
+			Misc(T::comb(param, kind, input))
+		}
+	}
+	
+	impl<T> PredCombinatorCase for Misc<T>
+	where
+		T: PredCombinatorCase,
+	{
+		type Id = T::Id;
+		type Item = Misc<T::Item>;
+		fn is_diff(&self) -> bool {
+			false
+		}
+		fn into_parts(self) -> (Self::Item, Self::Id) {
+			let Misc(inner) = self;
+			let (item, id) = T::into_parts(inner);
+			(Misc(item), id)
+		}
 	}
 }
 
@@ -259,22 +279,6 @@ where
 	fn clone(&self) -> Self {
 		let Misc(inner) = self;
 		Misc(inner.clone())
-	}
-}
-
-impl<T> PredCombinatorCase for Misc<T>
-where
-	T: PredCombinatorCase,
-{
-	type Id = T::Id;
-	type Item = Misc<T::Item>;
-	fn is_diff(&self) -> bool {
-		false
-	}
-	fn into_parts(self) -> (Self::Item, Self::Id) {
-		let Misc(inner) = self;
-		let (item, id) = T::into_parts(inner);
-		(Misc(item), id)
 	}
 }
 
