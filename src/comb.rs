@@ -1205,6 +1205,25 @@ mod _pred_combinator_impls {
 	}
 }
 
+/// An item & ID pair of a `PredParam`, with their updated state.
+pub enum PredCombCase<P, I> {
+	Diff(P, I),
+	Same(P, I),
+}
+
+impl<P, I> Clone for PredCombCase<P, I>
+where
+	P: PredItem,
+	I: PredId,
+{
+	fn clone(&self) -> Self {
+		match self {
+			Self::Diff(item, id) => Self::Diff(item.clone(), *id),
+			Self::Same(item, id) => Self::Same(item.clone(), *id),
+		}
+	}
+}
+
 /// Item of a [`PredCombinator`]'s iterator.
 pub trait PredCombinatorCase: Clone {
 	type Item: PredItem;
@@ -1319,25 +1338,6 @@ mod _pred_combinator_case_impls {
 			let (a_item, a_id) = a.into_parts();
 			let (b_item, b_id) = b.into_parts();
 			((a_item, b_item), (a_id, b_id))
-		}
-	}
-}
-
-/// An item & ID pair of a `PredParam`, with their updated state.
-pub enum PredCombCase<P, I> {
-	Diff(P, I),
-	Same(P, I),
-}
-
-impl<P, I> Clone for PredCombCase<P, I>
-where
-	P: PredItem,
-	I: PredId,
-{
-	fn clone(&self) -> Self {
-		match self {
-			Self::Diff(item, id) => Self::Diff(item.clone(), *id),
-			Self::Same(item, id) => Self::Same(item.clone(), *id),
 		}
 	}
 }
