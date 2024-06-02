@@ -294,6 +294,32 @@ where
 }
 
 /// ...
+#[derive(Clone)]
+pub struct PredIdComb<I> {
+	iter: I,
+}
+
+impl<I> PredIdComb<I> {
+	pub(crate) fn new(iter: I) -> Self {
+		Self { iter }
+	}
+}
+
+impl<I> IntoIterator for PredIdComb<I>
+where
+	I: IntoIterator,
+	I::Item: PredId,
+{
+	type Item = <Self::IntoIter as Iterator>::Item;
+	type IntoIter = PredIdCombIter<I::IntoIter>;
+	fn into_iter(self) -> Self::IntoIter {
+		PredIdCombIter {
+			iter: self.iter.into_iter(),
+		}
+	}
+}
+
+/// ...
 pub struct PredSingleComb<A, K = CombNone>
 where
 	A: PredCombinator,
@@ -631,6 +657,26 @@ where
 			[true, true] => self.iter.size_hint(),
 			_ => (0, self.iter.size_hint().1)
 		}
+	}
+}
+
+/// ...
+pub struct PredIdCombIter<I> {
+	iter: I,
+}
+
+impl<I> Iterator for PredIdCombIter<I>
+where
+	I: Iterator,
+	I::Item: PredId,
+{
+	type Item = PredCombCase<WithId<I::Item>, I::Item>;
+	fn next(&mut self) -> Option<Self::Item> {
+		self.iter.next()
+			.map(|id| PredCombCase::Same(WithId(id), id))
+	}
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		self.iter.size_hint()
 	}
 }
 
@@ -1038,52 +1084,6 @@ where
 			Self::Diff(item, id) => Self::Diff(item.clone(), *id),
 			Self::Same(item, id) => Self::Same(item.clone(), *id),
 		}
-	}
-}
-
-/// ...
-#[derive(Clone)]
-pub struct PredIdComb<I> {
-	iter: I,
-}
-
-impl<I> PredIdComb<I> {
-	pub(crate) fn new(iter: I) -> Self {
-		Self { iter }
-	}
-}
-
-impl<I> IntoIterator for PredIdComb<I>
-where
-	I: IntoIterator,
-	I::Item: PredId,
-{
-	type Item = <Self::IntoIter as Iterator>::Item;
-	type IntoIter = PredIdCombIter<I::IntoIter>;
-	fn into_iter(self) -> Self::IntoIter {
-		PredIdCombIter {
-			iter: self.iter.into_iter(),
-		}
-	}
-}
-
-/// ...
-pub struct PredIdCombIter<I> {
-	iter: I,
-}
-
-impl<I> Iterator for PredIdCombIter<I>
-where
-	I: Iterator,
-	I::Item: PredId,
-{
-	type Item = PredCombCase<WithId<I::Item>, I::Item>;
-	fn next(&mut self) -> Option<Self::Item> {
-		self.iter.next()
-			.map(|id| PredCombCase::Same(WithId(id), id))
-	}
-	fn size_hint(&self) -> (usize, Option<usize>) {
-		self.iter.size_hint()
 	}
 }
 
