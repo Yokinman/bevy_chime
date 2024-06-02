@@ -32,21 +32,21 @@ where
 {}
 
 /// ...
-pub trait PredParamQueryData: ReadOnlyQueryData {
+pub trait FetchData: ReadOnlyQueryData {
 	type ItemRef: ReadOnlyQueryData + 'static;
 }
 
-impl<'a, T> PredParamQueryData for &'a T
+impl<'a, T> FetchData for &'a T
 where
 	T: Component,
 {
 	type ItemRef = Ref<'static, T>;
 }
 
-impl<A, B> PredParamQueryData for (A, B)
+impl<A, B> FetchData for (A, B)
 where
-	A: PredParamQueryData,
-	B: PredParamQueryData,
+	A: FetchData,
+	B: FetchData,
 {
 	type ItemRef = (A::ItemRef, B::ItemRef);
 }
@@ -174,7 +174,7 @@ mod _pred_item2_impls {
 	
 	impl<'w, D, F> PredItem2<QueryComb<'w, D, F>> for Fetch<'w, D, F>
 	where
-		D: PredParamQueryData,
+		D: FetchData,
 		F: ArchetypeFilter + 'static,
 		D::Item<'w>: PredItem,
 		<D::ItemRef as WorldQuery>::Item<'w>: PredItemRef<Item = D::Item<'w>>,
