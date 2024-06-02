@@ -212,7 +212,7 @@ where
 }
 
 /// Combinator for `PredParam` `Query` implementation.
-pub enum QueryComb<'w, T, F = (), K = CombNone>
+pub enum FetchComb<'w, T, F = (), K = CombNone>
 where
 	T: FetchData,
 	F: QueryFilter + 'static,
@@ -227,7 +227,7 @@ where
 	},
 }
 
-impl<'w, T, F, K> QueryComb<'w, T, F, K>
+impl<'w, T, F, K> FetchComb<'w, T, F, K>
 where
 	T: FetchData,
 	F: ArchetypeFilter + 'static,
@@ -250,7 +250,7 @@ where
 	}
 }
 
-impl<'w, T, F, K> Clone for QueryComb<'w, T, F, K>
+impl<'w, T, F, K> Clone for FetchComb<'w, T, F, K>
 where
 	T: FetchData,
 	F: ArchetypeFilter + 'static,
@@ -270,7 +270,7 @@ where
 	}
 }
 
-impl<'w, T, F, K> IntoIterator for QueryComb<'w, T, F, K>
+impl<'w, T, F, K> IntoIterator for FetchComb<'w, T, F, K>
 where
 	K: CombKind,
 	T: FetchData,
@@ -1031,7 +1031,7 @@ pub trait PredCombinator: Clone + IntoIterator<Item=Self::Case> {
 mod _pred_combinator_impls {
 	use super::*;
 
-	impl<'w, T, F, Kind> PredCombinator for QueryComb<'w, T, F, Kind>
+	impl<'w, T, F, Kind> PredCombinator for FetchComb<'w, T, F, Kind>
 	where
 		T: FetchData,
 		F: ArchetypeFilter + 'static,
@@ -1044,13 +1044,13 @@ mod _pred_combinator_impls {
 		type Item_ = Fetch<'w, T, F>;
 		type Case = PredCombCase<Self::Item_, Self::Id>;
 		type Input = ();
-		type Comb<K: CombKind> = QueryComb<'w, T, F, K>;
+		type Comb<K: CombKind> = FetchComb<'w, T, F, K>;
 		fn comb<K: CombKind>(
 			param: &'static SystemParamItem<Self::Param>,
 			kind: K,
 			_input: Self::Input,
 		) -> Self::Comb<K> {
-			QueryComb::new(param, kind)
+			FetchComb::new(param, kind)
 		}
 	}
 	
