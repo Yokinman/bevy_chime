@@ -238,66 +238,6 @@ mod _pred_combinator_impls {
 			Misc(T::comb(param, kind, input))
 		}
 	}
-	
-	impl<T> PredCombinatorCase for Misc<T>
-	where
-		T: PredCombinatorCase,
-	{
-		type Id = T::Id;
-		type Item = Misc<T::Item>;
-		fn is_diff(&self) -> bool {
-			false
-		}
-		fn into_parts(self) -> (Self::Item, Self::Id) {
-			let Misc(inner) = self;
-			let (item, id) = T::into_parts(inner);
-			(Misc(item), id)
-		}
-	}
-}
-
-/// `PredParam` wrapper for stripping the updated state.
-#[derive(Clone)]
-pub struct Misc<T>(pub T);
-
-impl<T> PredItem for Misc<T>
-where
-	T: PredItem,
-{
-	fn clone(&self) -> Self {
-		let Misc(inner) = self;
-		Misc(inner.clone())
-	}
-}
-
-impl<T> IntoIterator for Misc<T>
-where
-	T: IntoIterator,
-{
-	type Item = Misc<T::Item>;
-	type IntoIter = MiscIter<T::IntoIter>;
-	fn into_iter(self) -> Self::IntoIter {
-		let Misc(inner) = self;
-		MiscIter(inner.into_iter())
-	}
-}
-
-/// ...
-pub struct MiscIter<T>(T);
-
-impl<T> Iterator for MiscIter<T>
-where
-	T: Iterator,
-{
-	type Item = Misc<T::Item>;
-	fn next(&mut self) -> Option<Self::Item> {
-		let MiscIter(inner) = self;
-		inner.next().map(Misc)
-	}
-	fn size_hint(&self) -> (usize, Option<usize>) {
-		let MiscIter(inner) = self;
-		inner.size_hint()
-	}
 }
 
 /// ...
@@ -389,6 +329,16 @@ mod _pred_item_impls {
 		fn clone(&self) -> Self {
 			let (a,) = self;
 			(a.clone(),)
+		}
+	}
+	
+	impl<T> PredItem for Misc<T>
+	where
+		T: PredItem,
+	{
+		fn clone(&self) -> Self {
+			let Misc(inner) = self;
+			Misc(inner.clone())
 		}
 	}
 	

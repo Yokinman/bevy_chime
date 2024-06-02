@@ -319,6 +319,22 @@ where
 	}
 }
 
+/// `PredParam` wrapper for stripping the updated state.
+#[derive(Clone)]
+pub struct Misc<T>(pub T);
+
+impl<T> IntoIterator for Misc<T>
+where
+	T: IntoIterator,
+{
+	type Item = Misc<T::Item>;
+	type IntoIter = MiscIter<T::IntoIter>;
+	fn into_iter(self) -> Self::IntoIter {
+		let Misc(inner) = self;
+		MiscIter(inner.into_iter())
+	}
+}
+
 /// ...
 pub struct PredSingleComb<A, K = CombNone>
 where
@@ -681,6 +697,24 @@ where
 }
 
 /// ...
+pub struct MiscIter<T>(T);
+
+impl<T> Iterator for MiscIter<T>
+where
+	T: Iterator,
+{
+	type Item = Misc<T::Item>;
+	fn next(&mut self) -> Option<Self::Item> {
+		let MiscIter(inner) = self;
+		inner.next().map(Misc)
+	}
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		let MiscIter(inner) = self;
+		inner.size_hint()
+	}
+}
+
+/// ...
 pub struct PredSingleCombIter<A, K>
 where
 	A: PredCombinator,
@@ -1004,6 +1038,22 @@ mod _pred_combinator_case_impls {
 		fn into_parts(self) -> (Self::Item, Self::Id) {
 			let (PredCombCase::Diff(item, id) | PredCombCase::Same(item, id)) = self;
 			(item, id)
+		}
+	}
+	
+	impl<T> PredCombinatorCase for Misc<T>
+	where
+		T: PredCombinatorCase,
+	{
+		type Id = T::Id;
+		type Item = Misc<T::Item>;
+		fn is_diff(&self) -> bool {
+			false
+		}
+		fn into_parts(self) -> (Self::Item, Self::Id) {
+			let Misc(inner) = self;
+			let (item, id) = T::into_parts(inner);
+			(Misc(item), id)
 		}
 	}
 	

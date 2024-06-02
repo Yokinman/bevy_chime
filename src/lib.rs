@@ -12,8 +12,8 @@ mod node;
 use comb::*;
 use pred::*;
 
-pub use pred::{Fetch, In, PredState2, PredFetch, WithId, Single, Nested, NestedPerm, Misc};
-pub use comb::{QueryComb, PredArrayComb, PredSingleComb, PredPairComb, ResComb, PredIdComb};
+pub use pred::{Fetch, In, PredState2, PredFetch, WithId, Single, Nested, NestedPerm};
+pub use comb::{QueryComb, PredArrayComb, PredSingleComb, PredPairComb, ResComb, PredIdComb, Misc};
 
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, btree_map, BTreeMap, HashMap};
