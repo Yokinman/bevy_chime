@@ -550,7 +550,7 @@ where
 	}
 }
 
-impl<'w, A, K> IntoIterator for PredSingleComb<A, K>
+impl<A, K> IntoIterator for PredSingleComb<A, K>
 where
 	A: PredCombinator,
 	K: CombKind,
@@ -573,7 +573,7 @@ where
 	iter: <A::Comb<K> as IntoIterator>::IntoIter,
 }
 
-impl<'w, A, K> Iterator for PredSingleCombIter<A, K>
+impl<A, K> Iterator for PredSingleCombIter<A, K>
 where
 	A: PredCombinator,
 	K: CombKind,
