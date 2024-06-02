@@ -893,6 +893,43 @@ mod _pred_fetch_data_impls {
 		}
 	}
 	
+	impl<T> PredFetchData for MomentRef<'_, T>
+	where
+		T: chime::Moment,
+		T::Flux: Component + Clone,
+	{
+		type Id = Entity;
+		type Output<'w> = MomentRef<'w, T>;
+		unsafe fn get_inner(world: UnsafeWorldCell, id: Self::Id) -> Self::Output<'_> {
+			// SAFETY: The caller should ensure that there isn't conflicting access
+			// to the given entity's component and the `Time<Chime>` resource.
+			let time = world.get_resource_ref::<bevy_time::Time<crate::Chime>>()
+				.expect("should exist")
+				.elapsed();
+			<&T::Flux as PredFetchData>::get_inner(world, id)
+				.at(time)
+		}
+	}
+	
+	impl<T> PredFetchData for MomentRefMut<'_, T>
+	where
+		T: chime::Moment,
+		T::Flux: Component + Clone,
+	{
+		type Id = Entity;
+		type Output<'w> = MomentRefMut<'w, T>;
+		unsafe fn get_inner(world: UnsafeWorldCell, id: Self::Id) -> Self::Output<'_> {
+			// SAFETY: The caller should ensure that there isn't conflicting access
+			// to the given entity's component and the `Time<Chime>` resource.
+			let time = world.get_resource_ref::<bevy_time::Time<crate::Chime>>()
+				.expect("should exist")
+				.elapsed();
+			<&mut T::Flux as PredFetchData>::get_inner(world, id)
+				.into_inner()
+				.at_mut(time)
+		}
+	}
+	
 	impl<A, B> PredFetchData for Nested<A, B>
 	where
 		A: PredFetchData,
