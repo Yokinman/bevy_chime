@@ -1305,121 +1305,125 @@ pub trait IntoInput<I> {
 	fn into_input(self) -> I;
 }
 
-impl<T> IntoInput<T> for In<T> {
-	fn into_input(self) -> T {
-		self.0
-	}
-}
-
-impl<T> IntoInput<T> for RangeFull
-where
-	T: Default
-{
-	fn into_input(self) -> T {
-		T::default()
-	}
-}
-
-impl IntoInput<()> for () {
-	fn into_input(self) {}
-}
-
-macro_rules! impl_into_input_for_tuples {
-	($(:$bx:ident,)+ $a0:ident : $b0:ident $(, $a:ident : $b:ident)*) => {
-		 // Range Head Defaults:
-		impl<$($bx,)+ $a0, $b0, $($a, $b,)*> IntoInput<($($bx,)+ $b0, $($b,)*)>
-			for RangeTo<($a0, $($a,)*)>
-		where
-			$($bx: Default,)+
-			$a0: IntoInput<$b0>,
-			$($a: IntoInput<$b>,)*
-		{
-			fn into_input(self) -> ($($bx,)+ $b0, $($b,)*) {
-				#[allow(non_snake_case)]
-				let ($a0, $($a,)*) = self.end;
-				($($bx::default(),)+ $a0.into_input(), $($a.into_input(),)*)
-			}
+mod _into_input_impls {
+	use super::*;
+	
+	impl<T> IntoInput<T> for In<T> {
+		fn into_input(self) -> T {
+			self.0
 		}
-		
-		 // Range Tail Defaults:
-		impl<$($a, $b,)* $a0, $b0, $($bx,)+> IntoInput<($($b,)* $b0, $($bx,)+)>
-			for RangeFrom<($($a,)* $a0,)>
-		where
-			$($a: IntoInput<$b>,)*
-			$a0: IntoInput<$b0>,
-			$($bx: Default,)+
-		{
-			fn into_input(self) -> ($($b,)* $b0, $($bx,)+) {
-				#[allow(non_snake_case)]
-				let ($($a,)* $a0,) = self.start;
-				($($a.into_input(),)* $a0.into_input(), $($bx::default(),)+)
-			}
+	}
+	
+	impl<T> IntoInput<T> for RangeFull
+	where
+		T: Default
+	{
+		fn into_input(self) -> T {
+			T::default()
 		}
-		
-		impl_into_input_for_tuples!{$(:$bx,)+ :$b0 $(, $a:$b)*}
-	};
-	($a0:ident : $b0:ident $(, $a:ident : $b:ident)*) => {
-		impl<$a0, $b0, $($a, $b,)*> IntoInput<($b0, $($b,)*)>
-			for ($a0, $($a,)*)
-		where
-			$a0: IntoInput<$b0>,
-			$($a: IntoInput<$b>,)*
-		{
-			fn into_input(self) -> ($b0, $($b,)*) {
-				#[allow(non_snake_case)]
-				let ($a0, $($a,)*) = self;
-				($a0.into_input(), $($a.into_input(),)*)
+	}
+	
+	impl IntoInput<()> for () {
+		fn into_input(self) {}
+	}
+	
+	macro_rules! impl_into_input_for_tuples {
+		($(:$bx:ident,)+ $a0:ident : $b0:ident $(, $a:ident : $b:ident)*) => {
+			 // Range Head Defaults:
+			impl<$($bx,)+ $a0, $b0, $($a, $b,)*> IntoInput<($($bx,)+ $b0, $($b,)*)>
+				for RangeTo<($a0, $($a,)*)>
+			where
+				$($bx: Default,)+
+				$a0: IntoInput<$b0>,
+				$($a: IntoInput<$b>,)*
+			{
+				fn into_input(self) -> ($($bx,)+ $b0, $($b,)*) {
+					#[allow(non_snake_case)]
+					let ($a0, $($a,)*) = self.end;
+					($($bx::default(),)+ $a0.into_input(), $($a.into_input(),)*)
+				}
 			}
+			
+			 // Range Tail Defaults:
+			impl<$($a, $b,)* $a0, $b0, $($bx,)+> IntoInput<($($b,)* $b0, $($bx,)+)>
+				for RangeFrom<($($a,)* $a0,)>
+			where
+				$($a: IntoInput<$b>,)*
+				$a0: IntoInput<$b0>,
+				$($bx: Default,)+
+			{
+				fn into_input(self) -> ($($b,)* $b0, $($bx,)+) {
+					#[allow(non_snake_case)]
+					let ($($a,)* $a0,) = self.start;
+					($($a.into_input(),)* $a0.into_input(), $($bx::default(),)+)
+				}
+			}
+			
+			impl_into_input_for_tuples!{$(:$bx,)+ :$b0 $(, $a:$b)*}
+		};
+		($a0:ident : $b0:ident $(, $a:ident : $b:ident)*) => {
+			impl<$a0, $b0, $($a, $b,)*> IntoInput<($b0, $($b,)*)>
+				for ($a0, $($a,)*)
+			where
+				$a0: IntoInput<$b0>,
+				$($a: IntoInput<$b>,)*
+			{
+				fn into_input(self) -> ($b0, $($b,)*) {
+					#[allow(non_snake_case)]
+					let ($a0, $($a,)*) = self;
+					($a0.into_input(), $($a.into_input(),)*)
+				}
+			}
+			
+			impl_into_input_for_tuples!{:$b0 $(, $a:$b)*}
+			impl_into_input_for_tuples!{$($a:$b),*}
+		};
+		($(:$b:ident),*) => {};
+	}
+	
+	impl_into_input_for_tuples!{
+		A0:B0, A1:B1, A2:B2, A3:B3
+	}
+	
+	impl<A, B, const N: usize> IntoInput<[B; N]> for [A; N]
+	where
+		A: IntoInput<B>,
+	{
+		fn into_input(self) -> [B; N] {
+			self.map(A::into_input)
 		}
-		
-		impl_into_input_for_tuples!{:$b0 $(, $a:$b)*}
-		impl_into_input_for_tuples!{$($a:$b),*}
-	};
-	($(:$b:ident),*) => {};
-}
-
-impl_into_input_for_tuples!{
-	A0:B0, A1:B1, A2:B2, A3:B3
-}
-
-impl<A, B, const N: usize> IntoInput<[B; N]> for [A; N]
-where
-	A: IntoInput<B>,
-{
-	fn into_input(self) -> [B; N] {
-		self.map(A::into_input)
 	}
-}
-
-impl<A, B> IntoInput<Single<B>> for Single<A>
-where
-	A: IntoInput<B>,
-{
-	fn into_input(self) -> Single<B> {
-		let Single(a) = self;
-		Single(a.into_input())
+	
+	impl<A, B> IntoInput<Single<B>> for Single<A>
+	where
+		A: IntoInput<B>,
+	{
+		fn into_input(self) -> Single<B> {
+			let Single(a) = self;
+			Single(a.into_input())
+		}
 	}
-}
-
-impl<A0, B0, A1, B1> IntoInput<Nested<B0, B1>> for Nested<A0, A1>
-where
-	A0: IntoInput<B0>,
-	A1: IntoInput<B1>,
-{
-	fn into_input(self) -> Nested<B0, B1> {
-		let Nested(a, b) = self;
-		Nested(a.into_input(), b.into_input())
+	
+	impl<A0, B0, A1, B1> IntoInput<Nested<B0, B1>> for Nested<A0, A1>
+	where
+		A0: IntoInput<B0>,
+		A1: IntoInput<B1>,
+	{
+		fn into_input(self) -> Nested<B0, B1> {
+			let Nested(a, b) = self;
+			Nested(a.into_input(), b.into_input())
+		}
 	}
-}
-
-impl<A0, B0, A1, B1> IntoInput<NestedPerm<B0, B1>> for NestedPerm<A0, A1>
-where
-	A0: IntoInput<B0>,
-	A1: IntoInput<B1>,
-{
-	fn into_input(self) -> NestedPerm<B0, B1> {
-		let NestedPerm(a, b) = self;
-		NestedPerm(a.into_input(), b.into_input())
+	
+	impl<A0, B0, A1, B1> IntoInput<NestedPerm<B0, B1>> for NestedPerm<A0, A1>
+	where
+		A0: IntoInput<B0>,
+		A1: IntoInput<B1>,
+	{
+		fn into_input(self) -> NestedPerm<B0, B1> {
+			let NestedPerm(a, b) = self;
+			NestedPerm(a.into_input(), b.into_input())
+		}
 	}
 }
 
