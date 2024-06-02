@@ -794,6 +794,153 @@ impl<P: PredBranch, T> Iterator for PredNodeIter2<P, T> {
 	// }
 }
 
+/// ...
+pub trait PredFetchData2<'a, I: PredId> {
+	type Param: SystemParam;
+	fn fetch_item(param: &'a mut Self::Param, id: I) -> Self;
+}
+
+mod _pred_fetch_data2_impls {
+	use super::{Nested, PredFetchData2, PredId};
+	use bevy_ecs::entity::Entity;
+	use bevy_ecs::component::Component;
+	use bevy_ecs::system::{Query, Res, ResMut, Resource};
+	use bevy_ecs::world::Mut;
+	use chime::{Flux, Moment, MomentMut, MomentRef};
+	use crate::WithId;
+
+	impl<'a, I: PredId> PredFetchData2<'a, I> for () {
+		type Param = ();
+		fn fetch_item(_param: &'a mut Self::Param, _id: I) -> Self {}
+	}
+	
+	impl<'a, T: Component> PredFetchData2<'a, Entity> for &'a T {
+		type Param = Query<'a, 'a, &'static T>;
+		fn fetch_item(param: &'a mut Self::Param, id: Entity) -> Self {
+			param.get_inner(id)
+				.expect("should exist")
+		}
+	}
+	
+	impl<'a, T: Component> PredFetchData2<'a, Entity> for &'a mut T {
+		type Param = Query<'a, 'a, &'static mut T>;
+		fn fetch_item(param: &'a mut Self::Param, id: Entity) -> Self {
+			param.get_mut(id)
+				.expect("should exist")
+				.into_inner()
+		}
+	}
+	
+	impl<'a, T: Resource> PredFetchData2<'a, ()> for &'a T {
+		type Param = Res<'a, T>;
+		fn fetch_item(param: &'a mut Self::Param, _id: ()) -> Self {
+			&**param
+		}
+	}
+	
+	impl<'a, T: Resource> PredFetchData2<'a, ()> for &'a mut T {
+		type Param = ResMut<'a, T>;
+		fn fetch_item(param: &'a mut Self::Param, _id: ()) -> Self {
+			&mut **param
+		}
+	}
+	
+	impl<'a, T, const N: usize> PredFetchData2<'a, [Entity; N]> for [&'a T; N]
+	where
+		T: Component,
+	{
+		type Param = Query<'a, 'a, &'static T>;
+		fn fetch_item(param: &'a mut Self::Param, id: [Entity; N]) -> Self {
+			param.get_many(id)
+				.expect("should exist")
+		}
+	}
+	
+	impl<'a, T, const N: usize> PredFetchData2<'a, [Entity; N]> for [&'a mut T; N]
+	where
+		T: Component,
+	{
+		type Param = Query<'a, 'a, &'static mut T>;
+		fn fetch_item(param: &'a mut Self::Param, id: [Entity; N]) -> Self {
+			param.get_many_mut(id)
+				.expect("should exist")
+				.map(Mut::into_inner)
+		}
+	}
+	
+	impl<'a, I, A,> PredFetchData2<'a, (I,)> for (A,)
+	where
+		I: PredId,
+		A: PredFetchData2<'a, I>,
+	{
+		type Param = (A::Param,);
+		fn fetch_item((a,): &'a mut Self::Param, (i,): (I,)) -> Self {
+			(A::fetch_item(a, i),)
+		}
+	}
+	
+	impl<'a, I, J, A, B,> PredFetchData2<'a, (I, J,)> for (A, B,)
+	where
+		I: PredId,
+		J: PredId,
+		A: PredFetchData2<'a, I>,
+		B: PredFetchData2<'a, J>,
+	{
+		type Param = (A::Param, B::Param,);
+		fn fetch_item((a, b,): &'a mut Self::Param, (i, j,): (I, J,)) -> Self {
+			(A::fetch_item(a, i), B::fetch_item(b, j),)
+		}
+	}
+	
+	impl<I: PredId> PredFetchData2<'_, I> for WithId<I> {
+		type Param = ();
+		fn fetch_item(_param: &'_ mut Self::Param, id: I) -> Self {
+			WithId(id)
+		}
+	}
+	
+	impl<'a, I, T> PredFetchData2<'a, I> for MomentRef<'a, T>
+	where
+		I: PredId,
+		T: Moment,
+		T::Flux: Clone,
+		&'a T::Flux: PredFetchData2<'a, I>,
+	{
+		type Param = <&'a T::Flux as PredFetchData2<'a, I>>::Param;
+		fn fetch_item(param: &'a mut Self::Param, id: I) -> Self {
+			<&'a T::Flux>::fetch_item(param, id)
+				.at(std::time::Duration::ZERO)
+		}
+	}
+	
+	impl<'a, I, T> PredFetchData2<'a, I> for MomentMut<'a, T>
+	where
+		I: PredId,
+		T: Moment,
+		T::Flux: Clone,
+		&'a mut T::Flux: PredFetchData2<'a, I>,
+	{
+		type Param = <&'a mut T::Flux as PredFetchData2<'a, I>>::Param;
+		fn fetch_item(param: &'a mut Self::Param, id: I) -> Self {
+			<&'a mut T::Flux>::fetch_item(param, id)
+				.at_mut(std::time::Duration::ZERO)
+		}
+	}
+	
+	impl<'a, I, J, A, B> PredFetchData2<'a, (I, J)> for Nested<A, B>
+	where
+		I: PredId,
+		J: PredId,
+		A: PredFetchData2<'a, I>,
+		B: PredFetchData2<'a, J>,
+	{
+		type Param = (A::Param, B::Param);
+		fn fetch_item((a, b): &'a mut Self::Param, (i, j): (I, J)) -> Self {
+			Nested(A::fetch_item(a, i), B::fetch_item(b, j))
+		}
+	}
+}
+
 /// Types that can be used to query for a specific entity.
 pub trait PredFetchData {
 	type Id: PredId;
