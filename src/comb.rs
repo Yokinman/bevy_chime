@@ -6,136 +6,141 @@ use bevy_ecs::system::{Query, Resource};
 use crate::node::{Node, NodeWriter};
 use crate::pred::*;
 
-/// Unit types that filter what `PredParam::comb` iterates over.
-/// 
-/// ```text
-///           | ::Pal    | ::Inv    | ::Inv::Pal::Inv
-///  None     | None     | All      | None
-///  All      | All      | None     | All
-///  AllTrue  | AllTrue  | AnyFalse | None
-///  AllFalse | AllFalse | AnyTrue  | None
-///  AnyTrue  | All      | AllFalse | AnyTrue
-///  AnyFalse | All      | AllTrue  | AnyFalse
-/// ```
-/// 
-/// - `None`: No combinations.
-/// - `All`: All possible combinations.
-/// - `AllTrue`: Combinations where all are true.
-/// - `AllFalse`: Combinations where all are false.
-/// - `AnyTrue`: Combinations where at least one is true.
-/// - `AnyFalse`: Combinations where at least one is false.
-/// 
-/// ??? Potentially rewrite to define separate associated types for `True` and
-/// `False`. Could support kinds like `AllSame` + `AnyDiff` if ever needed.
-pub trait CombKind: Copy + 'static {
-	/// This is like a helper kind. I'm not really sure how to describe it. It
-	/// generally defines a combination superset. A coincidental utility? 
-	type Pal: CombKind;
+mod kind {
+	use super::*;
 	
-	/// The inverse of this kind, filter-wise. Not overlapping; complementary.
-	type Inv: CombKind;
-	
-	/// Filters some state.
-	fn has_state(self, state: bool) -> bool;
-	
-	/// Conversion from `Self` to [`Self::Pal`].
-	fn pal(self) -> Self::Pal;
-	
-	/// Conversion from `Self` to [`Self::Inv`].
-	fn inv(self) -> Self::Inv;
-	
-	/// If [`Self::has_state`] always filters to `true`.
-	#[inline]
-	fn has_all(self) -> bool {
-		self.has_state(true) && self.has_state(false)
-	}
-	
-	/// If [`Self::has_state`] always filters to `false`.
-	#[inline]
-	fn has_none(self) -> bool {
-		!(self.has_state(true) || self.has_state(false))
-	}
-	
-	/// All outputs of [`Self::has_state`].
-	#[inline]
-	fn states(self) -> [bool; 2] {
-		[self.has_state(true), self.has_state(false)]
-	}
-}
-
-macro_rules! def_comb_kind {
-	($name:ident, $pal:ident, $inv:ident, $state:pat => $has_state:expr) => {
-		/// See [`CombKind`].
-		#[derive(Copy, Clone)]
-		pub struct $name;
+	/// Unit types that filter what `PredParam::comb` iterates over.
+	/// 
+	/// ```text
+	///           | ::Pal    | ::Inv    | ::Inv::Pal::Inv
+	///  None     | None     | All      | None
+	///  All      | All      | None     | All
+	///  AllTrue  | AllTrue  | AnyFalse | None
+	///  AllFalse | AllFalse | AnyTrue  | None
+	///  AnyTrue  | All      | AllFalse | AnyTrue
+	///  AnyFalse | All      | AllTrue  | AnyFalse
+	/// ```
+	/// 
+	/// - `None`: No combinations.
+	/// - `All`: All possible combinations.
+	/// - `AllTrue`: Combinations where all are true.
+	/// - `AllFalse`: Combinations where all are false.
+	/// - `AnyTrue`: Combinations where at least one is true.
+	/// - `AnyFalse`: Combinations where at least one is false.
+	/// 
+	/// ??? Potentially rewrite to define separate associated types for `True` and
+	/// `False`. Could support kinds like `AllSame` + `AnyDiff` if ever needed.
+	pub trait CombKind: Copy + 'static {
+		/// This is like a helper kind. I'm not really sure how to describe it. It
+		/// generally defines a combination superset. A coincidental utility? 
+		type Pal: CombKind;
 		
-		impl CombKind for $name {
-			type Pal = $pal;
-			type Inv = $inv;
-			
-			#[inline]
-			fn has_state(self, $state: bool) -> bool {
-				$has_state
-			}
-			
-			#[inline]
-			fn pal(self) -> Self::Pal {
-				$pal
-			}
-			
-			#[inline]
-			fn inv(self) -> Self::Inv {
-				$inv
-			}
+		/// The inverse of this kind, filter-wise. Not overlapping; complementary.
+		type Inv: CombKind;
+		
+		/// Filters some state.
+		fn has_state(self, state: bool) -> bool;
+		
+		/// Conversion from `Self` to [`Self::Pal`].
+		fn pal(self) -> Self::Pal;
+		
+		/// Conversion from `Self` to [`Self::Inv`].
+		fn inv(self) -> Self::Inv;
+		
+		/// If [`Self::has_state`] always filters to `true`.
+		#[inline]
+		fn has_all(self) -> bool {
+			self.has_state(true) && self.has_state(false)
 		}
-	};
-}
-
-            // Name,         Pal,          Inv,          Filter
-def_comb_kind!(CombNone,     CombNone,     CombAll,      _ => false);
-def_comb_kind!(CombAll,      CombAll,      CombNone,     _ => true);
-def_comb_kind!(CombAllFalse, CombAllFalse, CombAnyTrue,  x => !x);
-def_comb_kind!(CombAnyTrue,  CombAll,      CombAllFalse, x => x);
-
-/// A branching [`CombKind`] for combinators that split into two paths.
-#[derive(Copy, Clone)]
-pub enum CombBranch<A, B> {
-	A(A),
-	B(B),
-}
-
-impl<A, B> CombKind for CombBranch<A, B>
-where
-	A: CombKind,
-	B: CombKind,
-{
-	type Pal = CombBranch<A::Pal, B::Pal>;
-	type Inv = CombBranch<A::Inv, B::Inv>;
-	
-	#[inline]
-	fn has_state(self, state: bool) -> bool {
-		match self {
-			Self::A(a) => a.has_state(state),
-			Self::B(b) => b.has_state(state),
+		
+		/// If [`Self::has_state`] always filters to `false`.
+		#[inline]
+		fn has_none(self) -> bool {
+			!(self.has_state(true) || self.has_state(false))
+		}
+		
+		/// All outputs of [`Self::has_state`].
+		#[inline]
+		fn states(self) -> [bool; 2] {
+			[self.has_state(true), self.has_state(false)]
 		}
 	}
 	
-	#[inline]
-	fn pal(self) -> Self::Pal {
-		match self {
-			Self::A(a) => CombBranch::A(a.pal()),
-			Self::B(b) => CombBranch::B(b.pal()),
-		}
+	macro_rules! def_comb_kind {
+		($name:ident, $pal:ident, $inv:ident, $state:pat => $has_state:expr) => {
+			/// See [`CombKind`].
+			#[derive(Copy, Clone)]
+			pub struct $name;
+			
+			impl CombKind for $name {
+				type Pal = $pal;
+				type Inv = $inv;
+				
+				#[inline]
+				fn has_state(self, $state: bool) -> bool {
+					$has_state
+				}
+				
+				#[inline]
+				fn pal(self) -> Self::Pal {
+					$pal
+				}
+				
+				#[inline]
+				fn inv(self) -> Self::Inv {
+					$inv
+				}
+			}
+		};
 	}
 	
-	#[inline]
-	fn inv(self) -> Self::Inv {
-		match self {
-			Self::A(a) => CombBranch::A(a.inv()),
-			Self::B(b) => CombBranch::B(b.inv()),
+	            // Name,         Pal,          Inv,          Filter
+	def_comb_kind!(CombNone,     CombNone,     CombAll,      _ => false);
+	def_comb_kind!(CombAll,      CombAll,      CombNone,     _ => true);
+	def_comb_kind!(CombAllFalse, CombAllFalse, CombAnyTrue,  x => !x);
+	def_comb_kind!(CombAnyTrue,  CombAll,      CombAllFalse, x => x);
+	
+	/// A branching [`CombKind`] for combinators that split into two paths.
+	#[derive(Copy, Clone)]
+	pub enum CombBranch<A, B> {
+		A(A),
+		B(B),
+	}
+	
+	impl<A, B> CombKind for CombBranch<A, B>
+	where
+		A: CombKind,
+		B: CombKind,
+	{
+		type Pal = CombBranch<A::Pal, B::Pal>;
+		type Inv = CombBranch<A::Inv, B::Inv>;
+		
+		#[inline]
+		fn has_state(self, state: bool) -> bool {
+			match self {
+				Self::A(a) => a.has_state(state),
+				Self::B(b) => b.has_state(state),
+			}
+		}
+		
+		#[inline]
+		fn pal(self) -> Self::Pal {
+			match self {
+				Self::A(a) => CombBranch::A(a.pal()),
+				Self::B(b) => CombBranch::B(b.pal()),
+			}
+		}
+		
+		#[inline]
+		fn inv(self) -> Self::Inv {
+			match self {
+				Self::A(a) => CombBranch::A(a.inv()),
+				Self::B(b) => CombBranch::B(b.inv()),
+			}
 		}
 	}
 }
+pub use kind::*;
 
 /// Combinator for `PredParam` `()` implementation.
 #[derive(Clone)]
