@@ -200,18 +200,6 @@ mod _pred_combinator_impls {
 		}
 	}
 	
-	// impl<C, I> PredParam<I> for &C
-	// where
-	// 	C: Component
-	// {
-	// 	type Param = Query<'static, 'static, (Ref<'static, C>, Entity)>;
-	// 	type Id = Entity;
-	// 	type Comb<'w> = QueryComb<'w, C, ()>;
-	// 	fn comb<'w>(param: &'w SystemParamItem<Self::Param>) -> Self::Comb<'w> {
-	// 		QueryComb::new(param)
-	// 	}
-	// }
-	
 	impl<I> PredCombinator for PredIdComb<I>
 	where
 		I: IntoIterator + Clone,
@@ -723,13 +711,6 @@ mod _pred_perm_branch_impls {
 	}
 }
 
-// impl<T, const N: usize> std::ops::Index<usize> for Single<[T; N]> {
-// 	type Output = T;
-// 	fn index(&self, index: usize) -> &Self::Output {
-// 		self.0.index(index)
-// 	}
-// }
-
 /// ...
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug, Default)]
 pub struct Single<T>(pub T);
@@ -741,20 +722,6 @@ pub struct Nested<A, B>(pub A, pub B);
 /// ...
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug, Default)]
 pub struct NestedPerm<A, B>(pub A, pub B);
-
-// impl<A, const N: usize, B> std::ops::Index<usize> for NestedPerm<[A; N], B>
-// where
-// 	B: PredPermBranch<Output = A>,
-// {
-// 	type Output = A;
-// 	fn index(&self, index: usize) -> &Self::Output {
-// 		if index < N {
-// 			self.0.index(index)
-// 		} else {
-// 			self.1.index(index - N)
-// 		}
-// 	}
-// }
 
 /// ...
 pub trait PredBranch {
