@@ -1216,62 +1216,66 @@ pub struct PredFetch<'world, D: PredFetchData> {
 	time: Duration,
 }
 
-impl<'w, D: PredFetchData> PredFetch<'w, D> {
-	pub fn get_inner(self) -> D::Output<'w> {
-		self.inner
-	}
-}
-
-impl<'w, D: PredFetchData> PredFetch<'w, D>
-where
-	D::Output<'w>: Deref,
-	<D::Output<'w> as Deref>::Target: Flux + Clone,
-{
-	/// ...
-	pub fn moment(&self)
-		-> MomentRef<<<D::Output<'w> as Deref>::Target as Flux>::Moment>
-	{
-		self.inner.at(self.time)
-	}
+mod _pred_fetch_impls {
+	use super::*;
 	
-	/// ...
-	pub fn moment_mut(&mut self)
-		-> MomentRefMut<<<D::Output<'w> as Deref>::Target as Flux>::Moment>
-	where
-		D::Output<'w>: DerefMut,
-	{
-		self.inner.at_mut(self.time)
-	}
-}
-
-unsafe impl<D: PredFetchData> SystemParam for PredFetch<'_, D> {
-	type State = (D::Id, Arc<Mutex<Duration>>);
-	type Item<'world, 'state> = PredFetch<'world, D>;
-	fn init_state(world: &mut World, system_meta: &mut SystemMeta) -> Self::State {
-		// !!! Check for component access overlap. This isn't safe right now.
-		if let Some(PredSystemInput { id, time, .. }) = world
-			.get_resource::<PredSystemInput>()
-		{
-			if let Some(id) = id.downcast_ref::<D::Id>() {
-				(*id, Arc::clone(time))
-			} else {
-				panic!(
-					"!!! parameter is for wrong ID type. got {:?} in {:?}",
-					std::any::type_name::<D::Id>(),
-					system_meta.name(),
-				);
-			}
-		} else {
-			panic!("!!! {:?} is not a Chime event system, it can't use this parameter type", system_meta.name());
+	impl<'w, D: PredFetchData> PredFetch<'w, D> {
+		pub fn get_inner(self) -> D::Output<'w> {
+			self.inner
 		}
 	}
-	// fn new_archetype(_state: &mut Self::State, _archetype: &Archetype, _system_meta: &mut SystemMeta) {
-	// 	todo!()
-	// }
-	unsafe fn get_param<'world, 'state>((id, time): &'state mut Self::State, _system_meta: &SystemMeta, world: UnsafeWorldCell<'world>, _change_tick: Tick) -> Self::Item<'world, 'state> {
-		PredFetch {
-			inner: D::get_inner(world, *id),
-			time: *time.lock().expect("should be available"),
+	
+	impl<'w, D: PredFetchData> PredFetch<'w, D>
+	where
+		D::Output<'w>: Deref,
+		<D::Output<'w> as Deref>::Target: Flux + Clone,
+	{
+		/// ...
+		pub fn moment(&self)
+			-> MomentRef<<<D::Output<'w> as Deref>::Target as Flux>::Moment>
+		{
+			self.inner.at(self.time)
+		}
+		
+		/// ...
+		pub fn moment_mut(&mut self)
+			-> MomentRefMut<<<D::Output<'w> as Deref>::Target as Flux>::Moment>
+		where
+			D::Output<'w>: DerefMut,
+		{
+			self.inner.at_mut(self.time)
+		}
+	}
+	
+	unsafe impl<D: PredFetchData> SystemParam for PredFetch<'_, D> {
+		type State = (D::Id, Arc<Mutex<Duration>>);
+		type Item<'world, 'state> = PredFetch<'world, D>;
+		fn init_state(world: &mut World, system_meta: &mut SystemMeta) -> Self::State {
+			// !!! Check for component access overlap. This isn't safe right now.
+			if let Some(PredSystemInput { id, time, .. }) = world
+				.get_resource::<PredSystemInput>()
+			{
+				if let Some(id) = id.downcast_ref::<D::Id>() {
+					(*id, Arc::clone(time))
+				} else {
+					panic!(
+						"!!! parameter is for wrong ID type. got {:?} in {:?}",
+						std::any::type_name::<D::Id>(),
+						system_meta.name(),
+					);
+				}
+			} else {
+				panic!("!!! {:?} is not a Chime event system, it can't use this parameter type", system_meta.name());
+			}
+		}
+		// fn new_archetype(_state: &mut Self::State, _archetype: &Archetype, _system_meta: &mut SystemMeta) {
+		// 	todo!()
+		// }
+		unsafe fn get_param<'world, 'state>((id, time): &'state mut Self::State, _system_meta: &SystemMeta, world: UnsafeWorldCell<'world>, _change_tick: Tick) -> Self::Item<'world, 'state> {
+			PredFetch {
+				inner: D::get_inner(world, *id),
+				time: *time.lock().expect("should be available"),
+			}
 		}
 	}
 }
