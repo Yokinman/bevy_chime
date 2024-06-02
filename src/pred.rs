@@ -682,23 +682,6 @@ mod _pred_branch_impls {
 }
 
 /// ...
-pub trait PredNodeCase {
-	type Id;
-}
-
-impl<I, T> PredNodeCase for PredStateCase<I, T> {
-	type Id = I;
-}
-
-impl<I, T> PredNodeCase for (I, Node<T>)
-where
-	I: PredId,
-	T: PredNodeCase,
-{
-	type Id = I;
-}
-
-/// ...
 pub struct NestedPredBranchIter<P: PredBranch, T> {
 	id: <P::Param as PredCombinator>::Id,
 	iter: NodeIter<<P::Branch as PredBranch>::Case<T>>,
@@ -754,6 +737,23 @@ where
 	// fn size_hint(&self) -> (usize, Option<usize>) {
 	// 	todo!()
 	// }
+}
+
+/// ...
+pub trait PredNodeCase {
+	type Id;
+}
+
+impl<I, T> PredNodeCase for PredStateCase<I, T> {
+	type Id = I;
+}
+
+impl<I, T> PredNodeCase for (I, Node<T>)
+where
+	I: PredId,
+	T: PredNodeCase,
+{
+	type Id = I;
 }
 
 /// ...
