@@ -546,6 +546,51 @@ where
 	}
 }
 
+/// `Iterator` of `ResComb`'s `IntoIterator` implementation.
+pub struct CombIter<T, K> {
+	iter: T,
+	kind: K,
+}
+
+impl<T, K> CombIter<T, K> {
+	pub fn new(iter: T, kind: K) -> Self {
+		Self { iter, kind }
+	}
+}
+
+impl<P, I, T, K> Iterator for CombIter<T, K>
+where
+	P: PredItemRef,
+	I: PredId,
+	T: Iterator<Item = (P, I)>,
+	K: CombKind,
+{
+	type Item = PredCombCase<P::Item, I>;
+	fn next(&mut self) -> Option<Self::Item> {
+		if self.kind.has_none() {
+			return None
+		}
+		for (item, id) in self.iter.by_ref() {
+			let is_updated = P::is_updated(&item);
+			if self.kind.has_state(is_updated) {
+				return Some(if is_updated {
+					PredCombCase::Diff(item.into_item(), id)
+				} else {
+					PredCombCase::Same(item.into_item(), id)
+				})
+			}
+		}
+		None
+	}
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		match self.kind.states() {
+			[false, false] => (0, Some(0)),
+			[true, true] => self.iter.size_hint(),
+			_ => (0, self.iter.size_hint().1)
+		}
+	}
+}
+
 /// ...
 pub enum QueryCombIter<'w, T, F, K>
 where
@@ -611,51 +656,6 @@ where
 		match self {
 			Self::Normal { iter } => iter.count(),
 			Self::Cached { slice, index } => slice.len() - index,
-		}
-	}
-}
-
-/// `Iterator` of `ResComb`'s `IntoIterator` implementation.
-pub struct CombIter<T, K> {
-	iter: T,
-	kind: K,
-}
-
-impl<T, K> CombIter<T, K> {
-	pub fn new(iter: T, kind: K) -> Self {
-		Self { iter, kind }
-	}
-}
-
-impl<P, I, T, K> Iterator for CombIter<T, K>
-where
-	P: PredItemRef,
-	I: PredId,
-	T: Iterator<Item = (P, I)>,
-	K: CombKind,
-{
-	type Item = PredCombCase<P::Item, I>;
-	fn next(&mut self) -> Option<Self::Item> {
-		if self.kind.has_none() {
-			return None
-		}
-		for (item, id) in self.iter.by_ref() {
-			let is_updated = P::is_updated(&item);
-			if self.kind.has_state(is_updated) {
-				return Some(if is_updated {
-					PredCombCase::Diff(item.into_item(), id)
-				} else {
-					PredCombCase::Same(item.into_item(), id)
-				})
-			}
-		}
-		None
-	}
-	fn size_hint(&self) -> (usize, Option<usize>) {
-		match self.kind.states() {
-			[false, false] => (0, Some(0)),
-			[true, true] => self.iter.size_hint(),
-			_ => (0, self.iter.size_hint().1)
 		}
 	}
 }
