@@ -803,7 +803,7 @@ pub(crate) struct ChimeSystemParamNext<A, B>(A, B);
 /// ...
 pub trait ChimeSystemParam<'a, I: PredId> {
 	type Param: SystemParam;
-	fn fetch_param(param: &'a mut Option<Self::Param>, id: I) -> Self;
+	fn fetch_param(param: Self::Param, id: I) -> Self;
 }
 
 mod _pred_param_impls {
@@ -816,9 +816,8 @@ mod _pred_param_impls {
 		T: SystemParam,
 	{
 		type Param = T;
-		fn fetch_param(param: &'_ mut Option<Self::Param>, _id: I) -> Self {
-			param.take()
-				.expect("should exist")
+		fn fetch_param(param: Self::Param, _id: I) -> Self {
+			param
 		}
 	}
 	
@@ -828,11 +827,8 @@ mod _pred_param_impls {
 		T: PredFetchData2<'a, I>,
 	{
 		type Param = T::Param;
-		fn fetch_param(param: &'a mut Option<Self::Param>, id: I) -> Self {
-			PredFetch2(T::fetch_item(
-				param.as_mut().expect("should exist"),
-				id,
-			))
+		fn fetch_param(param: Self::Param, id: I) -> Self {
+			PredFetch2(T::fetch_item(param, id))
 		}
 	}
 	
@@ -844,17 +840,11 @@ mod _pred_param_impls {
 		B: ChimeSystemParam<'a, J>,
 	{
 		type Param = (A::Param, B::Param);
-		fn fetch_param(param: &'a mut Option<Self::Param>, (i, j): (I, J)) -> Self {
-			let (a, b) = param.take()
-				.expect("should exist");
-			let mut a = Some(a);
-			let mut b = Some(b);
-			unsafe {
-				ChimeSystemParamNext(
-					A::fetch_param(std::mem::transmute(&mut a), i),
-					B::fetch_param(std::mem::transmute(&mut b), j),
-				)
-			}
+		fn fetch_param((a, b): Self::Param, (i, j): (I, J)) -> Self {
+			ChimeSystemParamNext(
+				A::fetch_param(a, i),
+				B::fetch_param(b, j),
+			)
 		}
 	}
 }
@@ -862,7 +852,7 @@ mod _pred_param_impls {
 /// ...
 pub trait PredFetchData2<'a, I: PredId> {
 	type Param: SystemParam;
-	fn fetch_item(param: &'a mut Self::Param, id: I) -> Self;
+	fn fetch_item(param: Self::Param, id: I) -> Self;
 }
 
 mod _pred_fetch_data2_impls {
@@ -876,12 +866,12 @@ mod _pred_fetch_data2_impls {
 
 	impl<'a, I: PredId> PredFetchData2<'a, I> for () {
 		type Param = ();
-		fn fetch_item(_param: &'a mut Self::Param, _id: I) -> Self {}
+		fn fetch_item(_param: Self::Param, _id: I) -> Self {}
 	}
 	
 	impl<'a, T: Component> PredFetchData2<'a, Entity> for &'a T {
 		type Param = Query<'a, 'a, &'static T>;
-		fn fetch_item(param: &'a mut Self::Param, id: Entity) -> Self {
+		fn fetch_item(param: Self::Param, id: Entity) -> Self {
 			param.get_inner(id)
 				.expect("should exist")
 		}
@@ -889,24 +879,27 @@ mod _pred_fetch_data2_impls {
 	
 	impl<'a, T: Component> PredFetchData2<'a, Entity> for &'a mut T {
 		type Param = Query<'a, 'a, &'static mut T>;
-		fn fetch_item(param: &'a mut Self::Param, id: Entity) -> Self {
-			param.get_mut(id)
+		fn fetch_item(mut param: Self::Param, id: Entity) -> Self {
+			let m = param.get_mut(id)
 				.expect("should exist")
-				.into_inner()
+				.into_inner();
+			unsafe {
+				std::mem::transmute(m)
+			}
 		}
 	}
 	
 	impl<'a, T: Resource> PredFetchData2<'a, ()> for &'a T {
 		type Param = Res<'a, T>;
-		fn fetch_item(param: &'a mut Self::Param, _id: ()) -> Self {
-			&**param
+		fn fetch_item(param: Self::Param, _id: ()) -> Self {
+			param.into_inner()
 		}
 	}
 	
 	impl<'a, T: Resource> PredFetchData2<'a, ()> for &'a mut T {
 		type Param = ResMut<'a, T>;
-		fn fetch_item(param: &'a mut Self::Param, _id: ()) -> Self {
-			&mut **param
+		fn fetch_item(param: Self::Param, _id: ()) -> Self {
+			param.into_inner()
 		}
 	}
 	
@@ -915,9 +908,12 @@ mod _pred_fetch_data2_impls {
 		T: Component,
 	{
 		type Param = Query<'a, 'a, &'static T>;
-		fn fetch_item(param: &'a mut Self::Param, id: [Entity; N]) -> Self {
-			param.get_many(id)
-				.expect("should exist")
+		fn fetch_item(param: Self::Param, id: [Entity; N]) -> Self {
+			let m = param.get_many(id)
+				.expect("should exist");
+			unsafe {
+				std::mem::transmute(m)
+			}
 		}
 	}
 	
@@ -926,10 +922,13 @@ mod _pred_fetch_data2_impls {
 		T: Component,
 	{
 		type Param = Query<'a, 'a, &'static mut T>;
-		fn fetch_item(param: &'a mut Self::Param, id: [Entity; N]) -> Self {
-			param.get_many_mut(id)
+		fn fetch_item(mut param: Self::Param, id: [Entity; N]) -> Self {
+			let m = param.get_many_mut(id)
 				.expect("should exist")
-				.map(Mut::into_inner)
+				.map(Mut::into_inner);
+			unsafe {
+				std::mem::transmute(m)
+			}
 		}
 	}
 	
@@ -939,7 +938,7 @@ mod _pred_fetch_data2_impls {
 		A: PredFetchData2<'a, I>,
 	{
 		type Param = (A::Param,);
-		fn fetch_item((a,): &'a mut Self::Param, (i,): (I,)) -> Self {
+		fn fetch_item((a,): Self::Param, (i,): (I,)) -> Self {
 			(A::fetch_item(a, i),)
 		}
 	}
@@ -952,14 +951,14 @@ mod _pred_fetch_data2_impls {
 		B: PredFetchData2<'a, J>,
 	{
 		type Param = (A::Param, B::Param,);
-		fn fetch_item((a, b,): &'a mut Self::Param, (i, j,): (I, J,)) -> Self {
+		fn fetch_item((a, b,): Self::Param, (i, j,): (I, J,)) -> Self {
 			(A::fetch_item(a, i), B::fetch_item(b, j),)
 		}
 	}
 	
 	impl<I: PredId> PredFetchData2<'_, I> for WithId<I> {
 		type Param = ();
-		fn fetch_item(_param: &'_ mut Self::Param, id: I) -> Self {
+		fn fetch_item(_param: Self::Param, id: I) -> Self {
 			WithId(id)
 		}
 	}
@@ -972,7 +971,7 @@ mod _pred_fetch_data2_impls {
 		&'a T::Flux: PredFetchData2<'a, I>,
 	{
 		type Param = <&'a T::Flux as PredFetchData2<'a, I>>::Param;
-		fn fetch_item(param: &'a mut Self::Param, id: I) -> Self {
+		fn fetch_item(param: Self::Param, id: I) -> Self {
 			<&'a T::Flux>::fetch_item(param, id)
 				.at(std::time::Duration::ZERO)
 		}
@@ -986,7 +985,7 @@ mod _pred_fetch_data2_impls {
 		&'a mut T::Flux: PredFetchData2<'a, I>,
 	{
 		type Param = <&'a mut T::Flux as PredFetchData2<'a, I>>::Param;
-		fn fetch_item(param: &'a mut Self::Param, id: I) -> Self {
+		fn fetch_item(param: Self::Param, id: I) -> Self {
 			<&'a mut T::Flux>::fetch_item(param, id)
 				.at_mut(std::time::Duration::ZERO)
 		}
@@ -1000,7 +999,7 @@ mod _pred_fetch_data2_impls {
 		B: PredFetchData2<'a, J>,
 	{
 		type Param = (A::Param, B::Param);
-		fn fetch_item((a, b): &'a mut Self::Param, (i, j): (I, J)) -> Self {
+		fn fetch_item((a, b): Self::Param, (i, j): (I, J)) -> Self {
 			Nested(A::fetch_item(a, i), B::fetch_item(b, j))
 		}
 	}
