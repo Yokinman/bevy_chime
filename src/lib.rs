@@ -310,13 +310,13 @@ where
 }
 
 /// ...
-trait IntoChimeEventSystem<'a, I: PredId, P: ChimeSystemParamGroup<I>> {
+trait IntoChimeEventSystem<I: PredId, P: ChimeSystemParamGroup<I>> {
 	fn into_chime_event_system(self, id: I) -> impl FnMut(
 		<P as ChimeSystemParamGroup<I>>::Param
 	);
 }
 
-impl<'a, F, I, A,> IntoChimeEventSystem<'a, I, ChimeSystemParamSingle<A>> for F
+impl<F, I, A,> IntoChimeEventSystem<I, ChimeSystemParamSingle<A>> for F
 where
 	I: PredId,
 	A: ChimeSystemParam<I>,
@@ -331,7 +331,7 @@ where
 	}
 }
 
-impl<'a, F, I, A, B,> IntoChimeEventSystem<'a, I, ChimeSystemParamPair<A, B>> for F
+impl<F, I, A, B,> IntoChimeEventSystem<I, ChimeSystemParamPair<A, B>> for F
 where
 	I: PredId,
 	A: ChimeSystemParam<I>,
