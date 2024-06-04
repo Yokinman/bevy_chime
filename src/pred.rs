@@ -804,12 +804,12 @@ pub(crate) struct ChimeSystemParamSingle<A>(A);
 pub(crate) struct ChimeSystemParamPair<A, B>(A, B);
 
 /// ...
-pub(crate) trait ChimeSystemParamGroup<'a, I: PredId> {
+pub(crate) trait ChimeSystemParamGroup<I: PredId> {
 	type Param: SystemParam;
 	fn fetch_param(param: Self::Param, id: I) -> Self;
 }
 
-impl<'a, I, A> ChimeSystemParamGroup<'a, I> for ChimeSystemParamSingle<A>
+impl<I, A> ChimeSystemParamGroup<I> for ChimeSystemParamSingle<A>
 where
 	I: PredId,
 	A: ChimeSystemParam<I>,
@@ -820,7 +820,7 @@ where
 	}
 }
 
-impl<'a, I, A, B> ChimeSystemParamGroup<'a, I> for ChimeSystemParamPair<A, B>
+impl<I, A, B> ChimeSystemParamGroup<I> for ChimeSystemParamPair<A, B>
 where
 	I: PredId,
 	A: ChimeSystemParam<I>,
