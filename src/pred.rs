@@ -812,7 +812,7 @@ pub(crate) trait ChimeSystemParamGroup<'a, I: PredId> {
 impl<'a, I, A> ChimeSystemParamGroup<'a, I> for ChimeSystemParamSingle<A>
 where
 	I: PredId,
-	A: ChimeSystemParam<'a, I>,
+	A: ChimeSystemParam<I>,
 {
 	type Param = A::Param;
 	fn fetch_param(param: Self::Param, id: I) -> Self {
@@ -823,8 +823,8 @@ where
 impl<'a, I, A, B> ChimeSystemParamGroup<'a, I> for ChimeSystemParamPair<A, B>
 where
 	I: PredId,
-	A: ChimeSystemParam<'a, I>,
-	B: ChimeSystemParam<'a, I>,
+	A: ChimeSystemParam<I>,
+	B: ChimeSystemParam<I>,
 {
 	type Param = (A::Param, B::Param);
 	fn fetch_param((a, b): Self::Param, id: I) -> Self {
@@ -836,7 +836,7 @@ where
 }
 
 /// ...
-pub trait ChimeSystemParam<'a, I: PredId> {
+pub trait ChimeSystemParam<I: PredId> {
 	type Param: SystemParam;
 	fn fetch_param(param: Self::Param, id: I) -> Self;
 }
@@ -845,7 +845,7 @@ mod _pred_param_impls {
 	use super::{ChimeSystemParam, PredFetch2, PredFetchData2, PredId};
 	use bevy_ecs::system::SystemParam;
 	
-	impl<I, T> ChimeSystemParam<'_, I> for T
+	impl<I, T> ChimeSystemParam<I> for T
 	where
 		I: PredId,
 		T: SystemParam,
@@ -856,7 +856,7 @@ mod _pred_param_impls {
 		}
 	}
 	
-	impl<'a, I, T> ChimeSystemParam<'a, I> for PredFetch2<T>
+	impl<I, T> ChimeSystemParam<I> for PredFetch2<T>
 	where
 		I: PredId,
 		T: PredFetchData2<I>,

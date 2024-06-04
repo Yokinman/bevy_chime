@@ -319,13 +319,13 @@ trait IntoChimeEventSystem<'a, I: PredId, P: ChimeSystemParamGroup<'a, I>> {
 impl<'a, F, I, A,> IntoChimeEventSystem<'a, I, ChimeSystemParamSingle<A>> for F
 where
 	I: PredId,
-	A: ChimeSystemParam<'a, I>,
+	A: ChimeSystemParam<I>,
 	F: FnMut(A,),
 {
 	fn into_chime_event_system(mut self, id: I) -> impl FnMut(
-		<A as ChimeSystemParam<'a, I>>::Param
+		<A as ChimeSystemParam<I>>::Param
 	) {
-		move |a: <A as ChimeSystemParam<'a, I>>::Param| {
+		move |a: <A as ChimeSystemParam<I>>::Param| {
 			self(A::fetch_param(a, id))
 		}
 	}
@@ -334,17 +334,17 @@ where
 impl<'a, F, I, A, B,> IntoChimeEventSystem<'a, I, ChimeSystemParamPair<A, B>> for F
 where
 	I: PredId,
-	A: ChimeSystemParam<'a, I>,
-	B: ChimeSystemParam<'a, I>,
+	A: ChimeSystemParam<I>,
+	B: ChimeSystemParam<I>,
 	F: FnMut(A, B,),
 {
 	fn into_chime_event_system(mut self, id: I) -> impl FnMut((
-		<A as ChimeSystemParam<'a, I>>::Param,
-		<B as ChimeSystemParam<'a, I>>::Param,
+		<A as ChimeSystemParam<I>>::Param,
+		<B as ChimeSystemParam<I>>::Param,
 	)) {
 		move |(a, b): (
-			<A as ChimeSystemParam<'a, I>>::Param,
-			<B as ChimeSystemParam<'a, I>>::Param,
+			<A as ChimeSystemParam<I>>::Param,
+			<B as ChimeSystemParam<I>>::Param,
 		)| {
 			self(A::fetch_param(a, id), B::fetch_param(b, id))
 		}
