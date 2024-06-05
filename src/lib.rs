@@ -311,19 +311,20 @@ where
 
 /// ...
 trait IntoChimeEventSystem<I: PredId, P: ChimeSystemParamGroup<I>> {
-	fn into_chime_event_system(self, id: I) -> impl FnMut(P::Param);
+	fn into_chime_event_system(self, id: I) -> impl ChimeEventSystem;
 }
 
 impl<F, I, A,> IntoChimeEventSystem<I, ChimeSystemParamSingle<A>> for F
 where
 	I: PredId,
 	A: ChimeSystemParam<I>,
-	F: FnMut(A,),
+	for<'w, 's> A::Param: system::SystemParam<Item<'w, 's> = A::Param> + 'static,
+	for<'w, 's> F: FnMut(A::Item<'w, 's>,) + Clone + Send + Sync + 'static,
 {
-	fn into_chime_event_system(mut self, id: I) -> impl FnMut(A::Param) {
-		move |a: A::Param| {
-			self(A::fetch_param(a, id))
-		}
+	fn into_chime_event_system(mut self, id: I) -> impl ChimeEventSystem {
+		IntoSystem::into_system(move |a: system::StaticSystemParam<A::Param>| {
+			self(A::fetch_param(a.into_inner(), id))
+		})
 	}
 }
 
@@ -332,12 +333,15 @@ where
 	I: PredId,
 	A: ChimeSystemParam<I>,
 	B: ChimeSystemParam<I>,
-	F: FnMut(A, B,),
+	for<'w, 's> A::Param: system::SystemParam<Item<'w, 's> = A::Param> + 'static,
+	for<'w, 's> B::Param: system::SystemParam<Item<'w, 's> = B::Param> + 'static,
+	for<'w, 's> F: FnMut(A::Item<'w, 's>, B::Item<'w, 's>,) + Clone + Send + Sync + 'static,
 {
-	fn into_chime_event_system(mut self, id: I) -> impl FnMut((A::Param, B::Param,)) {
-		move |(a, b): (A::Param, B::Param)| {
+	fn into_chime_event_system(mut self, id: I) -> impl ChimeEventSystem {
+		IntoSystem::into_system(move |a: system::StaticSystemParam<(A::Param, B::Param)>| {
+			let (a, b) = a.into_inner();
 			self(A::fetch_param(a, id), B::fetch_param(b, id))
-		}
+		})
 	}
 }
 
