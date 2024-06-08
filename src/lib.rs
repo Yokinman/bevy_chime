@@ -389,7 +389,7 @@ where
 	}
 	
 	/// The system that runs when the event's prediction becomes active.
-	pub fn on_begin<T, Marker>(mut self, sys: T) -> ChimeEventBuilder<U, P, A, I, F, T, EndSys, OutSys>
+	pub fn on_begin<T, Marker>(self, sys: T) -> ChimeEventBuilder<U, P, A, I, F, T, EndSys, OutSys>
 	where
 		T: IntoChimeEventSystem<P::Id, Marker>,
 		Marker: ChimeSystemParamGroup<P::Id>,
@@ -406,7 +406,7 @@ where
 	}
 	
 	/// The system that runs when the event's prediction becomes inactive.
-	pub fn on_end<T, Marker>(mut self, sys: T) -> ChimeEventBuilder<U, P, A, I, F, BgnSys, T, OutSys>
+	pub fn on_end<T, Marker>(self, sys: T) -> ChimeEventBuilder<U, P, A, I, F, BgnSys, T, OutSys>
 	where
 		T: IntoChimeEventSystem<P::Id, Marker>,
 		Marker: ChimeSystemParamGroup<P::Id>,
@@ -423,7 +423,7 @@ where
 	}
 	
 	/// The system that runs when the event's prediction repeats excessively.
-	pub fn on_repeat<T, Marker>(mut self, sys: T) -> ChimeEventBuilder<U, P, A, I, F, BgnSys, EndSys, T>
+	pub fn on_repeat<T, Marker>(self, sys: T) -> ChimeEventBuilder<U, P, A, I, F, BgnSys, EndSys, T>
 	where
 		T: IntoChimeEventSystem<P::Id, Marker>,
 		Marker: ChimeSystemParamGroup<P::Id>,
