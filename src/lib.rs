@@ -313,47 +313,32 @@ pub trait IntoChimeEventSystem<I: PredId, P: ChimeSystemParamGroup<I>> {
 	fn into_chime_event_system(self, id: I) -> impl ChimeEventSystem;
 }
 
-impl<F, I,> IntoChimeEventSystem<I, ()> for F
-where
-	I: PredId,
-	F: FnMut() + Clone + Send + Sync + 'static,
-{
-	fn into_chime_event_system(mut self, _id: I) -> impl ChimeEventSystem {
-		IntoSystem::into_system(move |_a: system::StaticSystemParam<()>| {
-			self()
-		})
-	}
+macro_rules! impl_into_chime_event_system {
+    ($($param:ident $(, $rest:ident)*)?) => {
+		impl_into_chime_event_system!(@impl $($param $(, $rest)*)?);
+		$(impl_into_chime_event_system!($($rest),*);)?
+	};
+	(@impl $($param:ident),*) => {
+		impl<F, I, $($param,)*> IntoChimeEventSystem<I, ($($param,)*)> for F
+		where
+			I: PredId,
+			$($param: ChimeSystemParam<I>, $param::Param: 'static,)*
+			F: FnMut($($param,)*) + FnMut($($param::Item<'_, '_>,)*)
+				+ Clone + Send + Sync + 'static,
+		{
+			#[allow(unused_variables)]
+			fn into_chime_event_system(mut self, id: I) -> impl ChimeEventSystem {
+				IntoSystem::into_system(move |a: system::StaticSystemParam<($($param::Param,)*)>| {
+					let ($($param,)*) = a.into_inner();
+					self($($param::fetch_param($param, id),)*)
+				})
+			}
+		}
+    };
 }
 
-impl<F, I, A,> IntoChimeEventSystem<I, (A,)> for F
-where
-	I: PredId,
-	A: ChimeSystemParam<I>,
-	A::Param: 'static,
-	F: FnMut(A,) + FnMut(A::Item<'_, '_>,) + Clone + Send + Sync + 'static,
-{
-	fn into_chime_event_system(mut self, id: I) -> impl ChimeEventSystem {
-		IntoSystem::into_system(move |a: system::StaticSystemParam<A::Param>| {
-			self(A::fetch_param(a.into_inner(), id))
-		})
-	}
-}
-
-impl<F, I, A, B,> IntoChimeEventSystem<I, (A, B,)> for F
-where
-	I: PredId,
-	A: ChimeSystemParam<I>,
-	B: ChimeSystemParam<I>,
-	A::Param: 'static,
-	B::Param: 'static,
-	F: FnMut(A, B,) + FnMut(A::Item<'_, '_>, B::Item<'_, '_>,) + Clone + Send + Sync + 'static,
-{
-	fn into_chime_event_system(mut self, id: I) -> impl ChimeEventSystem {
-		IntoSystem::into_system(move |a: system::StaticSystemParam<(A::Param, B::Param)>| {
-			let (a, b) = a.into_inner();
-			self(A::fetch_param(a, id), B::fetch_param(b, id))
-		})
-	}
+impl_into_chime_event_system!{
+	_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15
 }
 
 /// Builder for inserting a chime event into a [`World`].  
