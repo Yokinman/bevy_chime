@@ -797,6 +797,12 @@ impl<P: PredBranch, T> Iterator for PredNodeIter2<P, T> {
 /// ...
 pub struct PredFetch2<T>(T);
 
+impl<T> PredFetch2<T> {
+	pub fn get_inner(self) -> T {
+		self.0
+	}
+}
+
 /// ...
 pub struct ChimeSystemParamSingle<A>(A);
 
