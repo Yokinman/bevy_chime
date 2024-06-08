@@ -815,6 +815,7 @@ macro_rules! impl_chime_system_param_group {
 			type Param = ($($param::Param,)*);
 			type Item<'w, 's> = ($($param::Item<'w, 's>,)*);
 			#[allow(unused_variables)]
+			#[allow(clippy::unused_unit)]
 			fn fetch_param<'w, 's>(
 				($($param,)*): SystemParamItem<'w, 's, Self::Param>,
 				id: I,
