@@ -13,13 +13,6 @@ use chime::pred::Prediction;
 use crate::node::*;
 use crate::comb::*;
 
-/// Resource for passing an event's unique ID to its system parameters. 
-#[derive(Resource)]
-pub(crate) struct PredSystemInput {
-	pub id: Box<dyn std::any::Any + Send + Sync>,
-	pub time: Arc<Mutex<Duration>>,
-}
-
 /// A hashable unique identifier for a case of prediction.
 pub trait PredId:
 	Copy + Clone + Eq + Hash + std::fmt::Debug + Send + Sync + 'static
