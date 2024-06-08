@@ -314,6 +314,18 @@ trait IntoChimeEventSystem<I: PredId, P: ChimeSystemParamGroup<I>> {
 	fn into_chime_event_system(self, id: I) -> impl ChimeEventSystem;
 }
 
+impl<F, I,> IntoChimeEventSystem<I, ()> for F
+where
+	I: PredId,
+	F: FnMut() + Clone + Send + Sync + 'static,
+{
+	fn into_chime_event_system(mut self, _id: I) -> impl ChimeEventSystem {
+		IntoSystem::into_system(move |a: system::StaticSystemParam<()>| {
+			self()
+		})
+	}
+}
+
 impl<F, I, A,> IntoChimeEventSystem<I, ChimeSystemParamSingle<A>> for F
 where
 	I: PredId,
