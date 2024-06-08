@@ -798,13 +798,13 @@ impl<P: PredBranch, T> Iterator for PredNodeIter2<P, T> {
 pub struct PredFetch2<T>(T);
 
 /// ...
-pub(crate) struct ChimeSystemParamSingle<A>(A);
+pub struct ChimeSystemParamSingle<A>(A);
 
 /// ...
-pub(crate) struct ChimeSystemParamPair<A, B>(A, B);
+pub struct ChimeSystemParamPair<A, B>(A, B);
 
 /// ...
-pub(crate) trait ChimeSystemParamGroup<I: PredId> {
+pub trait ChimeSystemParamGroup<I: PredId> {
 	type Param: SystemParam;
 	type Item<'w, 's>;
 	fn fetch_param<'w, 's>(
