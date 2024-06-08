@@ -301,7 +301,7 @@ where
 }
 
 /// Begin/end-type system for a chime event (object-safe).
-trait ChimeEventSystem: System<In=(), Out=()> + Send + Sync {}
+pub trait ChimeEventSystem: System<In=(), Out=()> + Send + Sync {}
 
 impl<T> ChimeEventSystem for T
 where
