@@ -819,6 +819,18 @@ pub trait ChimeSystemParamGroup<I: PredId> {
 	) -> Self::Item<'w, 's>;
 }
 
+impl<I,> ChimeSystemParamGroup<I> for ()
+where
+	I: PredId,
+{
+	type Param = ();
+	type Item<'w, 's> = ();
+	fn fetch_param<'w, 's>(
+		_param: SystemParamItem<'w, 's, Self::Param>,
+		_id: I,
+	) -> Self::Item<'w, 's> {}
+}
+
 impl<I, A> ChimeSystemParamGroup<I> for ChimeSystemParamSingle<A>
 where
 	I: PredId,
