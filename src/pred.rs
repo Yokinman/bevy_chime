@@ -1077,7 +1077,7 @@ mod _pred_fetch_data2_impls {
 		}
 	}
 	
-	impl<I, J, A, B> PredFetchData2<(I, J)> for Nested<A, B>
+	impl<I, J, A, B> PredFetchData2<Nested<I, J>> for Nested<A, B>
 	where
 		I: PredId,
 		J: PredId,
@@ -1088,7 +1088,7 @@ mod _pred_fetch_data2_impls {
 		type Item<'w, 's> = Nested<A::Item<'w, 's>, B::Item<'w, 's>>;
 		fn fetch_item<'w, 's>(
 			(a, b): SystemParamItem<'w, 's, Self::Param>,
-			(i, j): (I, J),
+			Nested(i, j): Nested<I, J>,
 		) -> Self::Item<'w, 's> {
 			Nested(A::fetch_item(a, i), B::fetch_item(b, j))
 		}
