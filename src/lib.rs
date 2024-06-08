@@ -318,8 +318,8 @@ impl<F, I, A,> IntoChimeEventSystem<I, ChimeSystemParamSingle<A>> for F
 where
 	I: PredId,
 	A: ChimeSystemParam<I>,
-	for<'w, 's> A::Param: system::SystemParam<Item<'w, 's> = A::Param> + 'static,
-	for<'w, 's> F: FnMut(A::Item<'w, 's>,) + Clone + Send + Sync + 'static,
+	A::Param: 'static,
+	F: FnMut(A,) + FnMut(A::Item<'_, '_>,) + Clone + Send + Sync + 'static,
 {
 	fn into_chime_event_system(mut self, id: I) -> impl ChimeEventSystem {
 		IntoSystem::into_system(move |a: system::StaticSystemParam<A::Param>| {
@@ -333,9 +333,9 @@ where
 	I: PredId,
 	A: ChimeSystemParam<I>,
 	B: ChimeSystemParam<I>,
-	for<'w, 's> A::Param: system::SystemParam<Item<'w, 's> = A::Param> + 'static,
-	for<'w, 's> B::Param: system::SystemParam<Item<'w, 's> = B::Param> + 'static,
-	for<'w, 's> F: FnMut(A::Item<'w, 's>, B::Item<'w, 's>,) + Clone + Send + Sync + 'static,
+	A::Param: 'static,
+	B::Param: 'static,
+	F: FnMut(A, B,) + FnMut(A::Item<'_, '_>, B::Item<'_, '_>,) + Clone + Send + Sync + 'static,
 {
 	fn into_chime_event_system(mut self, id: I) -> impl ChimeEventSystem {
 		IntoSystem::into_system(move |a: system::StaticSystemParam<(A::Param, B::Param)>| {
