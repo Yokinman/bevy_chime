@@ -301,20 +301,12 @@ where
 }
 
 /// Begin/end-type system for a chime event (object-safe).
-trait ChimeEventSystem: System<In=(), Out=()> + Send + Sync {
-	fn init_sys(&self, store: &mut Option<Box<dyn System<In=(), Out=()>>>, world: &mut World);
-}
+trait ChimeEventSystem: System<In=(), Out=()> + Send + Sync {}
 
 impl<T> ChimeEventSystem for T
 where
 	T: System<In=(), Out=()> + Send + Sync + Clone,
-{
-	fn init_sys(&self, store: &mut Option<Box<dyn System<In=(), Out=()>>>, world: &mut World) {
-		let mut sys = self.clone();
-		sys.initialize(world);
-		*store = Some(Box::new(sys));
-	}
-}
+{}
 
 /// ...
 pub trait IntoChimeEventSystem<I: PredId, P: ChimeSystemParamGroup<I>> {
