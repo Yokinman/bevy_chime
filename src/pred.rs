@@ -801,51 +801,33 @@ pub trait ChimeSystemParamGroup<I: PredId> {
 	) -> Self::Item<'w, 's>;
 }
 
-impl<I,> ChimeSystemParamGroup<I> for ()
-where
-	I: PredId,
-{
-	type Param = ();
-	type Item<'w, 's> = ();
-	fn fetch_param<'w, 's>(
-		_param: SystemParamItem<'w, 's, Self::Param>,
-		_id: I,
-	) -> Self::Item<'w, 's> {}
+macro_rules! impl_chime_system_param_group {
+    ($($param:ident $(, $rest:ident)*)?) => {
+		impl_chime_system_param_group!(@impl $($param $(, $rest)*)?);
+		$(impl_chime_system_param_group!($($rest),*);)?
+    };
+	(@impl $($param:ident),*) => {
+		impl<I, $($param,)*> ChimeSystemParamGroup<I> for ($($param,)*)
+		where
+			I: PredId,
+			$($param: ChimeSystemParam<I>,)*
+		{
+			type Param = ($($param::Param,)*);
+			type Item<'w, 's> = ($($param::Item<'w, 's>,)*);
+			#[allow(unused_variables)]
+			fn fetch_param<'w, 's>(
+				($($param,)*): SystemParamItem<'w, 's, Self::Param>,
+				id: I,
+			) -> Self::Item<'w, 's> {
+				($($param::fetch_param($param, id),)*)
+			}
+		}
+    };
 }
 
-impl<I, A> ChimeSystemParamGroup<I> for (A,)
-where
-	I: PredId,
-	A: ChimeSystemParam<I>,
-{
-	type Param = A::Param;
-	type Item<'w, 's> = (A::Item<'w, 's>,);
-	fn fetch_param<'w, 's>(
-		param: SystemParamItem<'w, 's, Self::Param>,
-		id: I,
-	) -> Self::Item<'w, 's> {
-		(A::fetch_param(param, id),)
-	}
-}
-
-impl<I, A, B> ChimeSystemParamGroup<I> for (A, B,)
-where
-	I: PredId,
-	A: ChimeSystemParam<I>,
-	B: ChimeSystemParam<I>,
-{
-	type Param = (A::Param, B::Param);
-	type Item<'w, 's> = (A::Item<'w, 's>, B::Item<'w, 's>,);
-	fn fetch_param<'w, 's>(
-		(a, b): SystemParamItem<'w, 's, Self::Param>,
-		id: I,
-	) -> Self::Item<'w, 's> {
-		(
-			A::fetch_param(a, id),
-			B::fetch_param(b, id),
-		)
-	}
-}
+impl_chime_system_param_group!(
+	_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15
+);
 
 /// ...
 pub trait ChimeSystemParam<I: PredId> {
