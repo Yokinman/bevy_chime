@@ -319,7 +319,7 @@ where
 	F: FnMut() + Clone + Send + Sync + 'static,
 {
 	fn into_chime_event_system(mut self, _id: I) -> impl ChimeEventSystem {
-		IntoSystem::into_system(move |a: system::StaticSystemParam<()>| {
+		IntoSystem::into_system(move |_a: system::StaticSystemParam<()>| {
 			self()
 		})
 	}
