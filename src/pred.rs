@@ -798,6 +798,7 @@ pub trait ChimeSystemParamGroup<I: PredId> {
 	fn fetch_param<'w, 's>(
 		param: SystemParamItem<'w, 's, Self::Param>,
 		id: I,
+		time: std::time::Duration,
 	) -> Self::Item<'w, 's>;
 }
 
@@ -819,8 +820,9 @@ macro_rules! impl_chime_system_param_group {
 			fn fetch_param<'w, 's>(
 				($($param,)*): SystemParamItem<'w, 's, Self::Param>,
 				id: I,
+				time: std::time::Duration,
 			) -> Self::Item<'w, 's> {
-				($($param::fetch_param($param, id),)*)
+				($($param::fetch_param($param, id, time),)*)
 			}
 		}
     };
@@ -834,7 +836,11 @@ impl_chime_system_param_group!(
 pub trait ChimeSystemParam<I: PredId> {
 	type Param: SystemParam;
 	type Item<'w, 's>;
-	fn fetch_param<'w, 's>(param: SystemParamItem<'w, 's, Self::Param>, id: I) -> Self::Item<'w, 's>;
+	fn fetch_param<'w, 's>(
+		param: SystemParamItem<'w, 's, Self::Param>,
+		id: I,
+		time: std::time::Duration,
+	) -> Self::Item<'w, 's>;
 }
 
 mod _pred_param_impls {
@@ -848,7 +854,11 @@ mod _pred_param_impls {
 	{
 		type Param = T;
 		type Item<'w, 's> = SystemParamItem<'w, 's, T>;
-		fn fetch_param<'w, 's>(param: SystemParamItem<'w, 's, Self::Param>, _id: I) -> Self::Item<'w, 's> {
+		fn fetch_param<'w, 's>(
+			param: SystemParamItem<'w, 's, Self::Param>,
+			_id: I,
+			_time: std::time::Duration,
+		) -> Self::Item<'w, 's> {
 			param
 		}
 	}
@@ -860,8 +870,12 @@ mod _pred_param_impls {
 	{
 		type Param = T::Param;
 		type Item<'w, 's> = PredFetch<T::Item<'w, 's>>;
-		fn fetch_param<'w, 's>(param: SystemParamItem<'w, 's, Self::Param>, id: I) -> Self::Item<'w, 's> {
-			PredFetch(T::fetch_item(param, id))
+		fn fetch_param<'w, 's>(
+			param: SystemParamItem<'w, 's, Self::Param>,
+			id: I,
+			time: std::time::Duration,
+		) -> Self::Item<'w, 's> {
+			PredFetch(T::fetch_item(param, id, time))
 		}
 	}
 }
@@ -873,6 +887,7 @@ pub trait PredFetchData<I: PredId> {
 	fn fetch_item<'w, 's>(
 		param: SystemParamItem<'w, 's, Self::Param>,
 		id: I,
+		time: std::time::Duration,
 	) -> Self::Item<'w, 's>;
 }
 
@@ -891,6 +906,7 @@ mod _pred_fetch_data_impls {
 		fn fetch_item<'w, 's>(
 			_param: SystemParamItem<'w, 's, Self::Param>,
 			_id: I,
+			_time: std::time::Duration,
 		) -> Self::Item<'w, 's> {}
 	}
 	
@@ -900,6 +916,7 @@ mod _pred_fetch_data_impls {
 		fn fetch_item<'w, 's>(
 			param: SystemParamItem<'w, 's, Self::Param>,
 			id: Entity,
+			_time: std::time::Duration,
 		) -> Self::Item<'w, 's> {
 			param.get_inner(id)
 				.expect("should exist")
@@ -912,6 +929,7 @@ mod _pred_fetch_data_impls {
 		fn fetch_item<'w, 's>(
 			mut param: SystemParamItem<'w, 's, Self::Param>,
 			id: Entity,
+			_time: std::time::Duration,
 		) -> Self::Item<'w, 's> {
 			let m = param.get_mut(id)
 				.expect("should exist")
@@ -928,6 +946,7 @@ mod _pred_fetch_data_impls {
 		fn fetch_item<'w, 's>(
 			param: SystemParamItem<'w, 's, Self::Param>,
 			_id: (),
+			_time: std::time::Duration,
 		) -> Self::Item<'w, 's> {
 			param.into_inner()
 		}
@@ -939,6 +958,7 @@ mod _pred_fetch_data_impls {
 		fn fetch_item<'w, 's>(
 			param: SystemParamItem<'w, 's, Self::Param>,
 			_id: (),
+			_time: std::time::Duration,
 		) -> Self::Item<'w, 's> {
 			param.into_inner()
 		}
@@ -953,6 +973,7 @@ mod _pred_fetch_data_impls {
 		fn fetch_item<'w, 's>(
 			param: SystemParamItem<'w, 's, Self::Param>,
 			id: [Entity; N],
+			_time: std::time::Duration,
 		) -> Self::Item<'w, 's> {
 			let m = param.get_many(id)
 				.expect("should exist");
@@ -971,6 +992,7 @@ mod _pred_fetch_data_impls {
 		fn fetch_item<'w, 's>(
 			mut param: SystemParamItem<'w, 's, Self::Param>,
 			id: [Entity; N],
+			_time: std::time::Duration,
 		) -> Self::Item<'w, 's> {
 			let m = param.get_many_mut(id)
 				.expect("should exist")
@@ -991,8 +1013,9 @@ mod _pred_fetch_data_impls {
 		fn fetch_item<'w, 's>(
 			(a,): SystemParamItem<'w, 's, Self::Param>,
 			(i,): (I,),
+			time: std::time::Duration,
 		) -> Self::Item<'w, 's> {
-			(A::fetch_item(a, i),)
+			(A::fetch_item(a, i, time),)
 		}
 	}
 	
@@ -1008,8 +1031,9 @@ mod _pred_fetch_data_impls {
 		fn fetch_item<'w, 's>(
 			(a, b,): SystemParamItem<'w, 's, Self::Param>,
 			(i, j,): (I, J,),
+			time: std::time::Duration,
 		) -> Self::Item<'w, 's> {
-			(A::fetch_item(a, i), B::fetch_item(b, j),)
+			(A::fetch_item(a, i, time), B::fetch_item(b, j, time),)
 		}
 	}
 	
@@ -1019,6 +1043,7 @@ mod _pred_fetch_data_impls {
 		fn fetch_item<'w, 's>(
 			_param: SystemParamItem<'w, 's, Self::Param>,
 			id: I,
+			_time: std::time::Duration,
 		) -> Self::Item<'w, 's> {
 			WithId(id)
 		}
@@ -1036,9 +1061,10 @@ mod _pred_fetch_data_impls {
 		fn fetch_item<'w, 's>(
 			param: SystemParamItem<'w, 's, Self::Param>,
 			id: I,
+			time: std::time::Duration,
 		) -> Self::Item<'w, 's> {
-			<&'a T::Flux>::fetch_item(param, id)
-				.at(std::time::Duration::ZERO)
+			<&'a T::Flux>::fetch_item(param, id, time)
+				.at(time)
 		}
 	}
 	
@@ -1054,9 +1080,10 @@ mod _pred_fetch_data_impls {
 		fn fetch_item<'w, 's>(
 			param: SystemParamItem<'w, 's, Self::Param>,
 			id: I,
+			time: std::time::Duration,
 		) -> Self::Item<'w, 's> {
-			<&'a mut T::Flux>::fetch_item(param, id)
-				.at_mut(std::time::Duration::ZERO)
+			<&'a mut T::Flux>::fetch_item(param, id, time)
+				.at_mut(time)
 		}
 	}
 	
@@ -1072,8 +1099,9 @@ mod _pred_fetch_data_impls {
 		fn fetch_item<'w, 's>(
 			(a, b): SystemParamItem<'w, 's, Self::Param>,
 			Nested(i, j): Nested<I, J>,
+			time: std::time::Duration,
 		) -> Self::Item<'w, 's> {
-			Nested(A::fetch_item(a, i), B::fetch_item(b, j))
+			Nested(A::fetch_item(a, i, time), B::fetch_item(b, j, time))
 		}
 	}
 }

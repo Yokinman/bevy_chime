@@ -328,9 +328,12 @@ macro_rules! impl_into_chime_event_system {
 		{
 			#[allow(unused_variables)]
 			fn into_chime_event_system(mut self, id: I) -> impl ChimeEventSystem {
-				IntoSystem::into_system(move |a: system::StaticSystemParam<($($param::Param,)*)>| {
-					let ($($param,)*) = a.into_inner();
-					self($($param::fetch_param($param, id),)*)
+				IntoSystem::into_system(move |
+				param: system::StaticSystemParam<($($param::Param,)*)>,
+				time: bevy_ecs::system::Res<Time>,
+			| {
+					let ($($param,)*) = param.into_inner();
+					self($($param::fetch_param($param, id, time.elapsed()),)*)
 				})
 			}
 		}
