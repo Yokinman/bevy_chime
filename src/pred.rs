@@ -876,7 +876,7 @@ pub trait PredFetchData<I: PredId> {
 	) -> Self::Item<'w, 's>;
 }
 
-mod _pred_fetch_data2_impls {
+mod _pred_fetch_data_impls {
 	use super::{Nested, PredFetchData, PredId};
 	use bevy_ecs::entity::Entity;
 	use bevy_ecs::component::Component;
@@ -884,7 +884,7 @@ mod _pred_fetch_data2_impls {
 	use bevy_ecs::world::Mut;
 	use chime::{Flux, Moment, MomentMut, MomentRef};
 	use crate::WithId;
-
+	
 	impl<I: PredId> PredFetchData<I> for () {
 		type Param = ();
 		type Item<'w, 's> = ();
@@ -935,7 +935,7 @@ mod _pred_fetch_data2_impls {
 	
 	impl<T: Resource> PredFetchData<()> for &mut T {
 		type Param = ResMut<'static, T>;
-		type Item<'w, 's> = &'w T;
+		type Item<'w, 's> = &'w mut T;
 		fn fetch_item<'w, 's>(
 			param: SystemParamItem<'w, 's, Self::Param>,
 			_id: (),
