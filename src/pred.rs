@@ -861,7 +861,7 @@ pub trait ChimeSystemParam<I: PredId> {
 }
 
 mod _pred_param_impls {
-	use super::{ChimeSystemParam, PredFetch, PredFetchData2, PredId};
+	use super::{ChimeSystemParam, PredFetch, PredFetchData, PredId};
 	use bevy_ecs::system::{SystemParam, SystemParamItem};
 	
 	impl<I, T> ChimeSystemParam<I> for T
@@ -879,7 +879,7 @@ mod _pred_param_impls {
 	impl<I, T> ChimeSystemParam<I> for PredFetch<T>
 	where
 		I: PredId,
-		T: PredFetchData2<I>,
+		T: PredFetchData<I>,
 	{
 		type Param = T::Param;
 		type Item<'w, 's> = PredFetch<T::Item<'w, 's>>;
@@ -890,7 +890,7 @@ mod _pred_param_impls {
 }
 
 /// ...
-pub trait PredFetchData2<I: PredId> {
+pub trait PredFetchData<I: PredId> {
 	type Param: SystemParam;
 	type Item<'w, 's>;
 	fn fetch_item<'w, 's>(
@@ -900,7 +900,7 @@ pub trait PredFetchData2<I: PredId> {
 }
 
 mod _pred_fetch_data2_impls {
-	use super::{Nested, PredFetchData2, PredId};
+	use super::{Nested, PredFetchData, PredId};
 	use bevy_ecs::entity::Entity;
 	use bevy_ecs::component::Component;
 	use bevy_ecs::system::{Query, Res, ResMut, Resource, SystemParamItem};
@@ -908,7 +908,7 @@ mod _pred_fetch_data2_impls {
 	use chime::{Flux, Moment, MomentMut, MomentRef};
 	use crate::WithId;
 
-	impl<I: PredId> PredFetchData2<I> for () {
+	impl<I: PredId> PredFetchData<I> for () {
 		type Param = ();
 		type Item<'w, 's> = ();
 		fn fetch_item<'w, 's>(
@@ -917,7 +917,7 @@ mod _pred_fetch_data2_impls {
 		) -> Self::Item<'w, 's> {}
 	}
 	
-	impl<T: Component> PredFetchData2<Entity> for &T {
+	impl<T: Component> PredFetchData<Entity> for &T {
 		type Param = Query<'static, 'static, &'static T>;
 		type Item<'w, 's> = &'w T;
 		fn fetch_item<'w, 's>(
@@ -929,7 +929,7 @@ mod _pred_fetch_data2_impls {
 		}
 	}
 	
-	impl<T: Component> PredFetchData2<Entity> for &mut T {
+	impl<T: Component> PredFetchData<Entity> for &mut T {
 		type Param = Query<'static, 'static, &'static mut T>;
 		type Item<'w, 's> = &'w mut T;
 		fn fetch_item<'w, 's>(
@@ -945,7 +945,7 @@ mod _pred_fetch_data2_impls {
 		}
 	}
 	
-	impl<T: Resource> PredFetchData2<()> for &T {
+	impl<T: Resource> PredFetchData<()> for &T {
 		type Param = Res<'static, T>;
 		type Item<'w, 's> = &'w T;
 		fn fetch_item<'w, 's>(
@@ -956,7 +956,7 @@ mod _pred_fetch_data2_impls {
 		}
 	}
 	
-	impl<T: Resource> PredFetchData2<()> for &mut T {
+	impl<T: Resource> PredFetchData<()> for &mut T {
 		type Param = ResMut<'static, T>;
 		type Item<'w, 's> = &'w T;
 		fn fetch_item<'w, 's>(
@@ -967,7 +967,7 @@ mod _pred_fetch_data2_impls {
 		}
 	}
 	
-	impl<T, const N: usize> PredFetchData2<[Entity; N]> for [&T; N]
+	impl<T, const N: usize> PredFetchData<[Entity; N]> for [&T; N]
 	where
 		T: Component,
 	{
@@ -985,7 +985,7 @@ mod _pred_fetch_data2_impls {
 		}
 	}
 	
-	impl<T, const N: usize> PredFetchData2<[Entity; N]> for [&mut T; N]
+	impl<T, const N: usize> PredFetchData<[Entity; N]> for [&mut T; N]
 	where
 		T: Component,
 	{
@@ -1004,10 +1004,10 @@ mod _pred_fetch_data2_impls {
 		}
 	}
 	
-	impl<I, A,> PredFetchData2<(I,)> for (A,)
+	impl<I, A,> PredFetchData<(I,)> for (A,)
 	where
 		I: PredId,
-		A: PredFetchData2<I>,
+		A: PredFetchData<I>,
 	{
 		type Param = (A::Param,);
 		type Item<'w, 's> = (A::Item<'w, 's>,);
@@ -1019,12 +1019,12 @@ mod _pred_fetch_data2_impls {
 		}
 	}
 	
-	impl<I, J, A, B,> PredFetchData2<(I, J,)> for (A, B,)
+	impl<I, J, A, B,> PredFetchData<(I, J,)> for (A, B,)
 	where
 		I: PredId,
 		J: PredId,
-		A: PredFetchData2<I>,
-		B: PredFetchData2<J>,
+		A: PredFetchData<I>,
+		B: PredFetchData<J>,
 	{
 		type Param = (A::Param, B::Param,);
 		type Item<'w, 's> = (A::Item<'w, 's>, B::Item<'w, 's>,);
@@ -1036,7 +1036,7 @@ mod _pred_fetch_data2_impls {
 		}
 	}
 	
-	impl<I: PredId> PredFetchData2<I> for WithId<I> {
+	impl<I: PredId> PredFetchData<I> for WithId<I> {
 		type Param = ();
 		type Item<'w, 's> = Self;
 		fn fetch_item<'w, 's>(
@@ -1047,14 +1047,14 @@ mod _pred_fetch_data2_impls {
 		}
 	}
 	
-	impl<'a, I, T> PredFetchData2<I> for MomentRef<'a, T>
+	impl<'a, I, T> PredFetchData<I> for MomentRef<'a, T>
 	where
 		I: PredId,
 		T: Moment,
 		T::Flux: Clone + 'static, // !!! Static bound should be unnecessary.
-		for<'w, 's> &'a T::Flux: PredFetchData2<I, Item<'w, 's> = &'w T::Flux>,
+		for<'w, 's> &'a T::Flux: PredFetchData<I, Item<'w, 's> = &'w T::Flux>,
 	{
-		type Param = <&'a T::Flux as PredFetchData2<I>>::Param;
+		type Param = <&'a T::Flux as PredFetchData<I>>::Param;
 		type Item<'w, 's> = MomentRef<'w, T>;
 		fn fetch_item<'w, 's>(
 			param: SystemParamItem<'w, 's, Self::Param>,
@@ -1065,14 +1065,14 @@ mod _pred_fetch_data2_impls {
 		}
 	}
 	
-	impl<'a, I, T> PredFetchData2<I> for MomentMut<'a, T>
+	impl<'a, I, T> PredFetchData<I> for MomentMut<'a, T>
 	where
 		I: PredId,
 		T: Moment,
 		T::Flux: Clone + 'static, // !!! Static bound should be unnecessary.
-		for<'w, 's> &'a mut T::Flux: PredFetchData2<I, Item<'w, 's> = &'w mut T::Flux>,
+		for<'w, 's> &'a mut T::Flux: PredFetchData<I, Item<'w, 's> = &'w mut T::Flux>,
 	{
-		type Param = <&'a mut T::Flux as PredFetchData2<I>>::Param;
+		type Param = <&'a mut T::Flux as PredFetchData<I>>::Param;
 		type Item<'w, 's> = MomentMut<'w, T>;
 		fn fetch_item<'w, 's>(
 			param: SystemParamItem<'w, 's, Self::Param>,
@@ -1083,12 +1083,12 @@ mod _pred_fetch_data2_impls {
 		}
 	}
 	
-	impl<I, J, A, B> PredFetchData2<Nested<I, J>> for Nested<A, B>
+	impl<I, J, A, B> PredFetchData<Nested<I, J>> for Nested<A, B>
 	where
 		I: PredId,
 		J: PredId,
-		A: PredFetchData2<I>,
-		B: PredFetchData2<J>,
+		A: PredFetchData<I>,
+		B: PredFetchData<J>,
 	{
 		type Param = (A::Param, B::Param);
 		type Item<'w, 's> = Nested<A::Item<'w, 's>, B::Item<'w, 's>>;
