@@ -1,5 +1,5 @@
 use std::hash::Hash;
-use std::ops::{Deref, RangeTo, RangeFrom, RangeFull};
+use std::ops::{Deref, RangeTo, RangeFrom};
 use bevy_ecs::change_detection::{DetectChanges, Ref, Res};
 use bevy_ecs::component::Component;
 use bevy_ecs::prelude::Resource;
@@ -8,6 +8,9 @@ use bevy_ecs::system::{SystemParam, SystemParamItem};
 use chime::pred::Prediction;
 use crate::node::*;
 use crate::comb::*;
+
+/// "Etcetera" aka "And the rest".
+pub type Etc = std::ops::RangeFull;
 
 /// A hashable unique identifier for a case of prediction.
 pub trait PredId:
@@ -1133,7 +1136,7 @@ pub struct In<T>(pub T);
 ///     A: IntoInput<B>
 /// ```
 /// 
-/// [`Default`] ([`RangeFull`], [`RangeTo`], [`RangeFrom`])
+/// [`Default`] ([`Etc`], [`RangeTo`], [`RangeFrom`])
 /// ```text
 /// .. -> T where T: Default
 /// ..(A,) -> (*, B) where A: IntoInput<B>, *: Default
@@ -1156,7 +1159,7 @@ mod _into_input_impls {
 		}
 	}
 	
-	impl<T> IntoInput<T> for RangeFull
+	impl<T> IntoInput<T> for Etc
 	where
 		T: Default
 	{
