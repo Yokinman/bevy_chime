@@ -325,7 +325,7 @@ where
 	}
 }
 
-impl<F, I, A,> IntoChimeEventSystem<I, ChimeSystemParamSingle<A>> for F
+impl<F, I, A,> IntoChimeEventSystem<I, (A,)> for F
 where
 	I: PredId,
 	A: ChimeSystemParam<I>,
@@ -339,7 +339,7 @@ where
 	}
 }
 
-impl<F, I, A, B,> IntoChimeEventSystem<I, ChimeSystemParamPair<A, B>> for F
+impl<F, I, A, B,> IntoChimeEventSystem<I, (A, B,)> for F
 where
 	I: PredId,
 	A: ChimeSystemParam<I>,

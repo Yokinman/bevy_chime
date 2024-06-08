@@ -792,12 +792,6 @@ impl<T> PredFetch<T> {
 }
 
 /// ...
-pub struct ChimeSystemParamSingle<A>(A);
-
-/// ...
-pub struct ChimeSystemParamPair<A, B>(A, B);
-
-/// ...
 pub trait ChimeSystemParamGroup<I: PredId> {
 	type Param: SystemParam;
 	type Item<'w, 's>;
@@ -819,34 +813,34 @@ where
 	) -> Self::Item<'w, 's> {}
 }
 
-impl<I, A> ChimeSystemParamGroup<I> for ChimeSystemParamSingle<A>
+impl<I, A> ChimeSystemParamGroup<I> for (A,)
 where
 	I: PredId,
 	A: ChimeSystemParam<I>,
 {
 	type Param = A::Param;
-	type Item<'w, 's> = ChimeSystemParamSingle<A::Item<'w, 's>>;
+	type Item<'w, 's> = (A::Item<'w, 's>,);
 	fn fetch_param<'w, 's>(
 		param: SystemParamItem<'w, 's, Self::Param>,
 		id: I,
 	) -> Self::Item<'w, 's> {
-		ChimeSystemParamSingle(A::fetch_param(param, id))
+		(A::fetch_param(param, id),)
 	}
 }
 
-impl<I, A, B> ChimeSystemParamGroup<I> for ChimeSystemParamPair<A, B>
+impl<I, A, B> ChimeSystemParamGroup<I> for (A, B,)
 where
 	I: PredId,
 	A: ChimeSystemParam<I>,
 	B: ChimeSystemParam<I>,
 {
 	type Param = (A::Param, B::Param);
-	type Item<'w, 's> = ChimeSystemParamPair<A::Item<'w, 's>, B::Item<'w, 's>>;
+	type Item<'w, 's> = (A::Item<'w, 's>, B::Item<'w, 's>,);
 	fn fetch_param<'w, 's>(
 		(a, b): SystemParamItem<'w, 's, Self::Param>,
 		id: I,
 	) -> Self::Item<'w, 's> {
-		ChimeSystemParamPair(
+		(
 			A::fetch_param(a, id),
 			B::fetch_param(b, id),
 		)
