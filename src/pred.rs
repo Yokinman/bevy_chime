@@ -786,7 +786,7 @@ impl<P: PredBranch, T> Iterator for PredNodeIter2<P, T> {
 }
 
 /// ...
-pub struct PredFetch<T>(T);
+pub struct PredFetch<T>(pub T);
 
 impl<T> PredFetch<T> {
 	pub fn get_inner(self) -> T {
