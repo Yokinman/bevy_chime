@@ -317,7 +317,7 @@ where
 }
 
 /// ...
-trait IntoChimeEventSystem<I: PredId, P: ChimeSystemParamGroup<I>> {
+pub trait IntoChimeEventSystem<I: PredId, P: ChimeSystemParamGroup<I>> {
 	fn into_chime_event_system(self, id: I) -> impl ChimeEventSystem;
 }
 
