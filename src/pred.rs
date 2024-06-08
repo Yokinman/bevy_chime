@@ -895,7 +895,8 @@ pub trait PredFetchData<I: PredId> {
 }
 
 mod _pred_fetch_data_impls {
-	use super::{Nested, PredFetchData, PredId};
+	use std::time::Duration;
+	use super::{Etc, Nested, PredFetchData, PredId};
 	use bevy_ecs::entity::Entity;
 	use bevy_ecs::component::Component;
 	use bevy_ecs::system::{Query, Res, ResMut, Resource, SystemParamItem};
@@ -911,6 +912,18 @@ mod _pred_fetch_data_impls {
 			_id: I,
 			_time: std::time::Duration,
 		) -> Self::Item<'w, 's> {}
+	}
+	
+	impl<I: PredId> PredFetchData<I> for Etc {
+		type Param = ();
+		type Item<'w, 's> = Etc;
+		fn fetch_item<'w, 's>(
+			_param: SystemParamItem<'w, 's, Self::Param>,
+			_id: I,
+			_time: Duration,
+		) -> Self::Item<'w, 's> {
+			..
+		}
 	}
 	
 	impl<T: Component> PredFetchData<Entity> for &T {
