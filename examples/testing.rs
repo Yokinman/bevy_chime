@@ -210,7 +210,7 @@ fn when_func_a(pos: Fetch<&Pos>) -> impl Prediction<TimeRanges = impl TimeRanges
 }
 
 fn do_func_a(query: PredFetch<(&mut Pos,)>, time: Res<Time>) {
-	let (mut pos,) = query.get_inner();
+	let (pos,) = query.get_inner();
 	let mut pos_x = pos[0].at_mut(time.elapsed());
 	pos_x.spd.val *= -1.;
 }
@@ -230,7 +230,7 @@ fn when_func_b(pos: Fetch<&Pos>) -> impl Prediction<TimeRanges = impl TimeRanges
 }
 
 fn do_func_b(query: PredFetch<(&mut Pos,)>, time: Res<Time>) {
-	let (mut pos,) = query.get_inner();
+	let (pos,) = query.get_inner();
 	let mut poss = pos.at_vec_mut(time.elapsed());
 	let pos_y = &mut poss[1];
 	pos_y.spd.val *= -1.;
@@ -252,7 +252,7 @@ fn do_func_b(query: PredFetch<(&mut Pos,)>, time: Res<Time>) {
 }
 
 fn outlier_func_b(query: PredFetch<(&mut Pos,)>, time: Res<Time>) {
-	let (mut pos,) = query.get_inner();
+	let (pos,) = query.get_inner();
 	let mut pos_y = pos[1].at_mut(time.elapsed());
 	pos_y.spd.val = 0.;
 	pos_y.spd.acc.val = 0.;
@@ -351,7 +351,7 @@ fn when_func_c([pos, b_pos]: [Fetch<&Pos>; 2]) -> impl Prediction<TimeRanges = i
 }
 
 fn do_func_c(query: PredFetch<([&mut Pos; 2],)>, time: Res<Time>) {
-	let ([mut poss, mut b_poss],) = query.get_inner();
+	let ([poss, b_poss],) = query.get_inner();
 	
 	let poly = (poss[0].poly(poss[0].base_time()) - b_poss[0].poly(b_poss[0].base_time())).sqr()
 		+ (poss[1].poly(poss[1].base_time()) - b_poss[1].poly(b_poss[1].base_time())).sqr();
@@ -432,7 +432,7 @@ fn do_func_c(query: PredFetch<([&mut Pos; 2],)>, time: Res<Time>) {
 }
 
 fn outlier_func_c(query: PredFetch<([&mut Pos; 2],)>, time: Res<Time>) {
-	let ([mut poss, mut b_poss],) = query.get_inner();
+	let ([poss, b_poss],) = query.get_inner();
 	let mut pos = poss.at_vec_mut(time.elapsed());
 	let mut b_pos = b_poss.at_vec_mut(time.elapsed());
 	pos[0].spd.val = 0.; pos[0].spd.acc.val = 0.;
