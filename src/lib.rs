@@ -31,11 +31,11 @@ use chime::pred::Prediction;
 use chime::time;
 use chime::time::InclusiveTimeRanges;
 
-type BlankSystem = system::FunctionSystem<fn(), fn()>;
+type BlankSystem = fn();
 
 /// Builder entry point for adding chime events to a [`World`].
 pub trait AddChimeEvent {
-	fn add_chime_events<T, P, A, I, F, BgnSys, EndSys, OutSys>(
+	fn add_chime_events<T, P, A, I, F, BgnSys, EndSys, OutSys, BgnMarker, EndMarker, OutMarker>(
 		&mut self,
 		events: ChimeEventBuilder<T, P, A, I, F, BgnSys, EndSys, OutSys>,
 	) -> &mut Self
@@ -46,13 +46,17 @@ pub trait AddChimeEvent {
 		A: ReadOnlySystemParam + 'static,
 		I: IntoInput<P::Input> + Clone + Send + Sync + 'static,
 		F: PredFn<T, P, A> + Send + Sync + 'static,
-		BgnSys: ChimeEventSystem,
-		EndSys: ChimeEventSystem,
-		OutSys: ChimeEventSystem;
+		BgnSys: IntoChimeEventSystem<P::Id, BgnMarker> + Clone + Send + Sync + 'static,
+		EndSys: IntoChimeEventSystem<P::Id, EndMarker> + Clone + Send + Sync + 'static,
+		OutSys: IntoChimeEventSystem<P::Id, OutMarker> + Clone + Send + Sync + 'static,
+		BgnMarker: ChimeSystemParamGroup<P::Id>,
+		EndMarker: ChimeSystemParamGroup<P::Id>,
+		OutMarker: ChimeSystemParamGroup<P::Id>,
+	;
 }
 
 impl AddChimeEvent for App {
-	fn add_chime_events<T, P, A, I, F, BgnSys, EndSys, OutSys>(
+	fn add_chime_events<T, P, A, I, F, BgnSys, EndSys, OutSys, BgnMarker, EndMarker, OutMarker>(
 		&mut self,
 		events: ChimeEventBuilder<T, P, A, I, F, BgnSys, EndSys, OutSys>,
 	) -> &mut Self
@@ -63,9 +67,12 @@ impl AddChimeEvent for App {
 		A: ReadOnlySystemParam + 'static,
 		I: IntoInput<P::Input> + Clone + Send + Sync + 'static,
 		F: PredFn<T, P, A> + Send + Sync + 'static,
-		BgnSys: ChimeEventSystem,
-		EndSys: ChimeEventSystem,
-		OutSys: ChimeEventSystem,
+		BgnSys: IntoChimeEventSystem<P::Id, BgnMarker> + Clone + Send + Sync + 'static,
+		EndSys: IntoChimeEventSystem<P::Id, EndMarker> + Clone + Send + Sync + 'static,
+		OutSys: IntoChimeEventSystem<P::Id, OutMarker> + Clone + Send + Sync + 'static,
+		BgnMarker: ChimeSystemParamGroup<P::Id>,
+		EndMarker: ChimeSystemParamGroup<P::Id>,
+		OutMarker: ChimeSystemParamGroup<P::Id>,
 	{
 		assert!(self.is_plugin_added::<ChimePlugin>());
 		
@@ -390,15 +397,15 @@ where
 	}
 	
 	/// The system that runs when the event's prediction becomes active.
-	pub fn on_begin<T, Marker>(mut self, sys: T) -> ChimeEventBuilder<U, P, A, I, F, T::System, EndSys, OutSys>
+	pub fn on_begin<T, Marker>(mut self, sys: T) -> ChimeEventBuilder<U, P, A, I, F, T, EndSys, OutSys>
 	where
-		T: IntoSystem<(), (), Marker>,
-		T::System: Send + Sync + Clone,
+		T: IntoChimeEventSystem<P::Id, Marker>,
+		Marker: ChimeSystemParamGroup<P::Id>,
 	{
 		assert!(self.begin_sys.is_none(), "can't have >1 begin systems");
 		ChimeEventBuilder {
 			pred_sys: self.pred_sys,
-			begin_sys: Some(IntoSystem::into_system(sys)),
+			begin_sys: Some(sys),
 			end_sys: self.end_sys,
 			outlier_sys: self.outlier_sys,
 			input: self.input,
@@ -407,16 +414,16 @@ where
 	}
 	
 	/// The system that runs when the event's prediction becomes inactive.
-	pub fn on_end<T, Marker>(mut self, sys: T) -> ChimeEventBuilder<U, P, A, I, F, BgnSys, T::System, OutSys>
+	pub fn on_end<T, Marker>(mut self, sys: T) -> ChimeEventBuilder<U, P, A, I, F, BgnSys, T, OutSys>
 	where
-		T: IntoSystem<(), (), Marker>,
-		T::System: Send + Sync + Clone,
+		T: IntoChimeEventSystem<P::Id, Marker>,
+		Marker: ChimeSystemParamGroup<P::Id>,
 	{
 		assert!(self.end_sys.is_none(), "can't have >1 end systems");
 		ChimeEventBuilder {
 			pred_sys: self.pred_sys,
 			begin_sys: self.begin_sys,
-			end_sys: Some(IntoSystem::into_system(sys)),
+			end_sys: Some(sys),
 			outlier_sys: self.outlier_sys,
 			input: self.input,
 			_param: std::marker::PhantomData,
@@ -424,17 +431,17 @@ where
 	}
 	
 	/// The system that runs when the event's prediction repeats excessively.
-	pub fn on_repeat<T, Marker>(mut self, sys: T) -> ChimeEventBuilder<U, P, A, I, F, BgnSys, EndSys, T::System>
+	pub fn on_repeat<T, Marker>(mut self, sys: T) -> ChimeEventBuilder<U, P, A, I, F, BgnSys, EndSys, T>
 	where
-		T: IntoSystem<(), (), Marker>,
-		T::System: Send + Sync + Clone,
+		T: IntoChimeEventSystem<P::Id, Marker>,
+		Marker: ChimeSystemParamGroup<P::Id>,
 	{
 		assert!(self.outlier_sys.is_none(), "can't have >1 outlier systems");
 		ChimeEventBuilder {
 			pred_sys: self.pred_sys,
 			begin_sys: self.begin_sys,
 			end_sys: self.end_sys,
-			outlier_sys: Some(IntoSystem::into_system(sys)),
+			outlier_sys: Some(sys),
 			input: self.input,
 			_param: std::marker::PhantomData,
 		}
@@ -615,20 +622,26 @@ impl ChimeEventMap {
 		self.table.len() - 1
 	}
 	
-	fn sched<T, I>(
+	fn sched<T, I, BgnSys, EndSys, OutSys, BgnMarker, EndMarker, OutMarker>(
 		&mut self,
 		input: impl IntoIterator<Item = PredStateCase<I, T>>,
 		pred_time: Duration,
 		event_id: usize,
-		begin_sys: Option<&impl ChimeEventSystem>,
-		end_sys: Option<&impl ChimeEventSystem>,
-		outlier_sys: Option<&impl ChimeEventSystem>,
+		begin_sys: Option<&BgnSys>,
+		end_sys: Option<&EndSys>,
+		outlier_sys: Option<&OutSys>,
 		world: &mut World,
 	)
 	where
 		I: PredId,
 		T: Prediction,
 		T::TimeRanges: 'static,
+		BgnSys: IntoChimeEventSystem<I, BgnMarker> + Clone,
+		EndSys: IntoChimeEventSystem<I, EndMarker> + Clone,
+		OutSys: IntoChimeEventSystem<I, OutMarker> + Clone,
+		BgnMarker: ChimeSystemParamGroup<I>,
+		EndMarker: ChimeSystemParamGroup<I>,
+		OutMarker: ChimeSystemParamGroup<I>,
 	{
 		let event_map = self.table.get_mut(event_id)
 			.expect("id must be initialized with ChimeEventMap::setup_id")
@@ -644,23 +657,20 @@ impl ChimeEventMap {
 				let mut event = ChimeEvent::<T::TimeRanges>::default();
 				
 				 // Initialize Systems:
-				world.insert_resource(PredSystemInput {
-					id: Box::new(case_id),
-					time: event.time,
-				});
 				if let Some(sys) = begin_sys {
-					sys.init_sys(&mut event.begin_sys, world);
+					let mut sys = sys.clone().into_chime_event_system(case_id);
+					sys.initialize(world);
+					event.begin_sys = Some(Box::new(sys));
 				}
 				if let Some(sys) = end_sys {
-					sys.init_sys(&mut event.end_sys, world);
+					let mut sys = sys.clone().into_chime_event_system(case_id);
+					sys.initialize(world);
+					event.end_sys = Some(Box::new(sys));
 				}
 				if let Some(sys) = outlier_sys {
-					sys.init_sys(&mut event.outlier_sys, world);
-				}
-				if let Some(input) = world.remove_resource::<PredSystemInput>() {
-					event.time = input.time;
-				} else {
-					unreachable!()
+					let mut sys = sys.clone().into_chime_event_system(case_id);
+					sys.initialize(world);
+					event.outlier_sys = Some(Box::new(sys));
 				}
 				
 				event
