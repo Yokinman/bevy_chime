@@ -9,20 +9,23 @@ use chime::pred::Prediction;
 use crate::node::*;
 use crate::comb::*;
 
-/// "Etcetera" aka "And the rest".
+/// "Etcetera" aka "And the rest". Used for [`IntoInput`] and [`PredFetchData`].
 pub type Etc = std::ops::RangeFull;
 
 /// A hashable unique identifier for a case of prediction.
 pub trait PredId:
-	Copy + Clone + Eq + Hash + std::fmt::Debug + Send + Sync + 'static
+	Copy + Clone + Eq + Hash + Send + Sync + 'static
+	+ std::fmt::Debug // ??? Tentative
 {}
 
 impl<T> PredId for T
 where
-	T: Copy + Clone + Eq + Hash + std::fmt::Debug + Send + Sync + 'static
+	T: Copy + Clone + Eq + Hash + Send + Sync + 'static
+	+ std::fmt::Debug
 {}
 
-/// ...
+/// Maps the [`QueryData`] parameter of [`Fetch`] to a [`PredItemRef`] type.
+/// Otherwise equivalent to [`ReadOnlyQueryData`].
 pub trait FetchData: ReadOnlyQueryData {
 	type ItemRef: ReadOnlyQueryData + 'static;
 }
@@ -42,8 +45,7 @@ where
 	type ItemRef = (A::ItemRef, B::ItemRef);
 }
 
-/// Unused - may replace the output of `QueryComb` if the concept of
-/// case-by-case prediction closures is implemented.
+/// Single-item equivalent of [`bevy_ecs::system::Query`]. A [`PredItem`].
 #[derive(Debug)]
 pub struct Fetch<'w, D: QueryData, F = ()> {
 	inner: D::Item<'w>,
@@ -70,11 +72,12 @@ impl<'w, D: QueryData, F> Deref for Fetch<'w, D, F> {
 	}
 }
 
-/// ...
+/// A [`PredId`], used as a [`PredItem`] or [`PredFetchData`].
 #[derive(Copy, Clone)]
 pub struct WithId<I>(pub I);
 
-/// Case of prediction.
+/// Parameter of a [`PredCaseFn`]. An item fetched from the
+/// [`bevy_ecs::system::World`] for making predictions against other items.
 pub trait PredItem {
 	fn clone(&self) -> Self;
 }
@@ -159,7 +162,7 @@ mod _pred_item_impls {
 	}
 }
 
-/// ...
+/// Type inference addon to [`PredItem`], for mapping to a [`PredCombinator`].  
 pub trait PredItem2<P: PredCombinator<Item_= Self> + ?Sized>: PredItem {}
 
 mod _pred_item2_impls {
