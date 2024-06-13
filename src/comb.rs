@@ -194,52 +194,6 @@ where
 	}
 }
 
-/// Combinator for `PredParam` `Res` implementation.
-pub struct ResComb<'w, T, K = CombNone>
-where
-	T: Resource,
-{
-	inner: Res<'w, T>,
-	kind: K,
-}
-
-impl<'w, T, K> ResComb<'w, T, K>
-where
-	T: Resource,
-{
-	pub(crate) fn new(inner: Res<'w, T>, kind: K) -> Self {
-		Self {
-			inner,
-			kind,
-		}
-	}
-}
-
-impl<T, K> Clone for ResComb<'_, T, K>
-where
-	T: Resource,
-	K: Clone,
-{
-	fn clone(&self) -> Self {
-		Self {
-			inner: Res::clone(&self.inner),
-			kind: self.kind.clone(),
-		}
-	}
-}
-
-impl<'w, T, K> IntoIterator for ResComb<'w, T, K>
-where
-	K: CombKind,
-	T: Resource,
-{
-	type Item = <Self::IntoIter as Iterator>::Item;
-	type IntoIter = CombIter<std::iter::Once<(Res<'w, T>, ())>, K>;
-	fn into_iter(self) -> Self::IntoIter {
-		CombIter::new(std::iter::once((self.inner, ())), self.kind)
-	}
-}
-
 /// Combinator for `PredParam` `Query` implementation.
 pub enum FetchComb<'w, T, F = (), K = CombNone>
 where
@@ -1109,7 +1063,7 @@ mod _pred_combinator_impls {
 		}
 	}
 	
-	impl<'w, R, Kind> PredCombinator for ResComb<'w, R, Kind>
+	impl<'w, R, Kind> PredCombinator for SystemParamComb<Res<'w, R>, Kind>
 	where
 		R: Resource,
 		Kind: CombKind,
@@ -1119,13 +1073,16 @@ mod _pred_combinator_impls {
 		type Item_ = Res<'w, R>;
 		type Case = PredCombCase<Self::Item_, Self::Id>;
 		type Input = ();
-		type Comb<K: CombKind> = ResComb<'w, R, K>;
+		type Comb<K: CombKind> = SystemParamComb<Res<'w, R>, K>;
 		fn comb<K: CombKind>(
 			param: &'static SystemParamItem<Self::Param>,
 			kind: K,
 			_input: Self::Input,
 		) -> Self::Comb<K> {
-			ResComb::new(Res::clone(param), kind)
+			SystemParamComb {
+				inner: Res::clone(param),
+				kind,
+			}
 		}
 	}
 	

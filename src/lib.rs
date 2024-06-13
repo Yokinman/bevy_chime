@@ -13,7 +13,7 @@ use comb::*;
 use pred::*;
 
 pub use pred::{Etc, Fetch, In, PredState2, PredFetch, WithId, Single, Nested, NestedPerm};
-pub use comb::{FetchComb, PredArrayComb, PredSingleComb, PredPairComb, ResComb, PredIdComb, Misc};
+pub use comb::{FetchComb, PredArrayComb, PredSingleComb, PredPairComb, PredIdComb, Misc};
 
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, btree_map, BTreeMap, HashMap};

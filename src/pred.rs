@@ -202,7 +202,7 @@ mod _pred_item2_impls {
 		<D::ItemRef as WorldQuery>::Item<'w>: PredItemRef<Item = D::Item<'w>>,
 	{}
 	
-	impl<'w, T: Resource> PredItem2<ResComb<'w, T>> for Res<'w, T> {}
+	impl<'w, T: Resource> PredItem2<SystemParamComb<Res<'w, T>>> for Res<'w, T> {}
 	
 	impl<A, P,> PredItem2<PredSingleComb<P>> for (A,)
 	where
