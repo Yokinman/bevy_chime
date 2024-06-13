@@ -193,7 +193,7 @@ mod _pred_item2_impls {
 		<D::ItemRef as WorldQuery>::Item<'w>: PredItemRef<Item = D::Item<'w>>,
 	{}
 	
-	impl<'w, 's, D, F> PredItem2<QueryComb<'w, 's, D, F>>
+	impl<'w, 's, D, F> PredItem2<SystemParamComb<Self>>
 		for bevy_ecs::system::Query<'w, 's, D, F>
 	where
 		D: FetchData + 'static,
