@@ -105,6 +105,21 @@ mod _pred_item_impls {
 		}
 	}
 	
+	impl<'w, 's, D, F> PredItem for bevy_ecs::system::Query<'w, 's, D, F>
+	where
+		D: bevy_ecs::query::ReadOnlyQueryData,
+		F: bevy_ecs::query::QueryFilter,
+	{
+		fn clone(&self) -> Self {
+			unsafe {
+				// SAFETY: This is probably safe, assuming that the Query is
+				// read-only. I'm not 100% sure but it works for now. I'd prefer
+				// a safe clone; maybe I can make this an `&Query` impl later.
+				std::ptr::read(self)
+			}
+		}
+	}
+	
 	impl<T: Resource> PredItem for Res<'_, T> {
 		fn clone(&self) -> Self {
 			Res::clone(self) // GGGRRAAAAAAHHHHH!!!!!!!!!
@@ -178,6 +193,15 @@ mod _pred_item2_impls {
 		<D::ItemRef as WorldQuery>::Item<'w>: PredItemRef<Item = D::Item<'w>>,
 	{}
 	
+	impl<'w, 's, D, F> PredItem2<QueryComb<'w, 's, D, F>>
+		for bevy_ecs::system::Query<'w, 's, D, F>
+	where
+		D: FetchData + 'static,
+		F: ArchetypeFilter + 'static,
+		D::Item<'w>: PredItem,
+		<D::ItemRef as WorldQuery>::Item<'w>: PredItemRef<Item = D::Item<'w>>,
+	{}
+	
 	impl<'w, T: Resource> PredItem2<ResComb<'w, T>> for Res<'w, T> {}
 	
 	impl<A, P,> PredItem2<PredSingleComb<P>> for (A,)
@@ -214,13 +238,13 @@ mod _pred_item2_impls {
 	{}
 }
 
-/// [`PredItem`] with updated state.
+/// [`PredItem`] with updated state, used specifically for [`CombIter`].
 pub trait PredItemRef {
 	type Item: PredItem;
 	fn into_item(self) -> Self::Item;
 	
 	/// Whether this item is in need of a prediction update.
-	fn is_updated(item: &Self) -> bool;
+	fn is_updated(item: &mut Self) -> bool;
 }
 
 mod _pred_item_ref_impls {
@@ -231,8 +255,39 @@ mod _pred_item_ref_impls {
 		fn into_item(self) -> Self::Item {
 			self.into_inner()
 		}
-		fn is_updated(item: &Self) -> bool {
+		fn is_updated(item: &mut Self) -> bool {
 			DetectChanges::is_changed(item)
+		}
+	}
+	
+	impl<'w, 's, D, F> PredItemRef for bevy_ecs::system::Query<'w, 's, D, F>
+	where
+		D: FetchData + 'static,
+		F: ArchetypeFilter + 'static,
+		D::Item<'w>: PredItem,
+		<D::ItemRef as WorldQuery>::Item<'w>: PredItemRef<Item = D::Item<'w>>,
+	{
+		type Item = Self;
+		fn into_item(self) -> Self::Item {
+			self
+		}
+		fn is_updated(item: &mut Self) -> bool {
+			let mut query_lens = item.transmute_lens_filtered::<D::ItemRef, F>();
+			let query = &query_lens.query();
+			let query: &'w bevy_ecs::system::Query<'static, 'static, D::ItemRef, F> = unsafe {
+				// SAFETY: As I understand it, the only reason that the lifetime
+				// of the `Query` is bound to the `QueryLens` is because mutable
+				// queries shouldn't overlap. However, upcasting the lifetime
+				// should be fine because `D::ItemRef` is read-only. Also, the
+				// upcasted query is consumed entirely inside this function.
+				std::mem::transmute(query)
+			};
+			for mut sub_item in query {
+				if PredItemRef::is_updated(&mut sub_item) {
+					return true
+				}
+			}
+			false
 		}
 	}
 	
@@ -241,7 +296,7 @@ mod _pred_item_ref_impls {
 		fn into_item(self) -> Self::Item {
 			self
 		}
-		fn is_updated(item: &Self) -> bool {
+		fn is_updated(item: &mut Self) -> bool {
 			DetectChanges::is_changed(item)
 		}
 	}
@@ -251,7 +306,7 @@ mod _pred_item_ref_impls {
 		fn into_item(self) -> Self::Item {
 			self
 		}
-		fn is_updated(_item: &Self) -> bool {
+		fn is_updated(_item: &mut Self) -> bool {
 			true
 		}
 	}
@@ -266,7 +321,7 @@ mod _pred_item_ref_impls {
 			let (a, b) = self;
 			(a.into_item(), b.into_item())
 		}
-		fn is_updated(item: &Self) -> bool {
+		fn is_updated(item: &mut Self) -> bool {
 			let (a, b) = item;
 			A::is_updated(a) || B::is_updated(b)
 		}

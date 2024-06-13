@@ -209,6 +209,45 @@ where
 	}
 }
 
+/// Combinator for the single-`Query` `PredItem` parameter.
+pub struct QueryComb<'w, 's, D, F, K = CombNone>
+where
+	D: bevy_ecs::query::QueryData,
+	F: bevy_ecs::query::QueryFilter,
+{
+	inner: Query<'w, 's, D, F>,
+	kind: K,
+}
+
+impl<'w, 's, D, F, K> Clone for QueryComb<'w, 's, D, F, K>
+where
+	D: bevy_ecs::query::ReadOnlyQueryData,
+	F: bevy_ecs::query::QueryFilter,
+	K: CombKind,
+{
+	fn clone(&self) -> Self {
+		Self {
+			inner: self.inner.clone(),
+			kind: self.kind,
+		}
+	}
+}
+
+impl<'w, 's, D, F, K> IntoIterator for QueryComb<'w, 's, D, F, K>
+where
+	D: FetchData + 'static,
+	F: ArchetypeFilter + 'static,
+	D::Item<'w>: PredItem,
+	<D::ItemRef as WorldQuery>::Item<'w>: PredItemRef<Item = D::Item<'w>>,
+	K: CombKind,
+{
+	type Item = <Self::IntoIter as Iterator>::Item;
+	type IntoIter = CombIter<std::iter::Once<(Query<'w, 's, D, F>, ())>, K>;
+	fn into_iter(self) -> Self::IntoIter {
+		CombIter::new(std::iter::once((self.inner, ())), self.kind)
+	}
+}
+
 /// Combinator for `PredParam` `Query` implementation.
 pub enum FetchComb<'w, T, F = (), K = CombNone>
 where
@@ -584,8 +623,8 @@ where
 		if self.kind.has_none() {
 			return None
 		}
-		for (item, id) in self.iter.by_ref() {
-			let is_updated = P::is_updated(&item);
+		for (mut item, id) in self.iter.by_ref() {
+			let is_updated = P::is_updated(&mut item);
 			if self.kind.has_state(is_updated) {
 				return Some(if is_updated {
 					PredCombCase::Diff(item.into_item(), id)
@@ -1028,7 +1067,7 @@ pub trait PredCombinator: Clone + IntoIterator<Item=Self::Case> {
 
 mod _pred_combinator_impls {
 	use super::*;
-
+	
 	impl<'w, T, F, Kind> PredCombinator for FetchComb<'w, T, F, Kind>
 	where
 		T: FetchData,
@@ -1049,6 +1088,32 @@ mod _pred_combinator_impls {
 			_input: Self::Input,
 		) -> Self::Comb<K> {
 			FetchComb::new(param, kind)
+		}
+	}
+	
+	impl<'w, 's, D, F, Kind> PredCombinator for QueryComb<'w, 's, D, F, Kind>
+	where
+		D: FetchData + 'static,
+		F: ArchetypeFilter + 'static,
+		D::Item<'w>: PredItem,
+		<D::ItemRef as WorldQuery>::Item<'w>: PredItemRef<Item = D::Item<'w>>,
+		Kind: CombKind,
+	{
+		type Param = Query<'static, 'static, D, F>;
+		type Id = ();
+		type Item_ = Query<'w, 's, D, F>;
+		type Case = PredCombCase<Self::Item_, Self::Id>;
+		type Input = ();
+		type Comb<K: CombKind> = QueryComb<'w, 's, D, F, K>;
+		fn comb<K: CombKind>(
+			param: &'static SystemParamItem<Self::Param>,
+			kind: K,
+			_input: Self::Input,
+		) -> Self::Comb<K> {
+			QueryComb {
+				inner: param.clone(),
+				kind,
+			}
 		}
 	}
 	
