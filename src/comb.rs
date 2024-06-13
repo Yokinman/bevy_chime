@@ -163,6 +163,37 @@ where
 	}
 }
 
+/// Single-item combinator for [`bevy_ecs::system::SystemParam`] types.
+pub struct SystemParamComb<T, K = CombNone> {
+	inner: T,
+	kind: K,
+}
+
+impl<T, K> Clone for SystemParamComb<T, K>
+where
+	T: PredItem,
+	K: CombKind,
+{
+	fn clone(&self) -> Self {
+		Self {
+			inner: self.inner.clone(),
+			kind: self.kind,
+		}
+	}
+}
+
+impl<T, K> IntoIterator for SystemParamComb<T, K>
+where
+	T: PredItemRef,
+	K: CombKind,
+{
+	type Item = <Self::IntoIter as Iterator>::Item;
+	type IntoIter = CombIter<std::iter::Once<(T, ())>, K>;
+	fn into_iter(self) -> Self::IntoIter {
+		CombIter::new(std::iter::once((self.inner, ())), self.kind)
+	}
+}
+
 /// Combinator for `PredParam` `Res` implementation.
 pub struct ResComb<'w, T, K = CombNone>
 where
