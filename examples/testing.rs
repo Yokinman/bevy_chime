@@ -92,22 +92,6 @@ fn setup(world: &mut World) {
 	// 	wait: Duration::from_secs_f64(1./60.)
 	// };
 	
-	/* ??? macro syntax:
-		#[chime_system]
-		fn friction_freeze(query: ChimeQuery<Pos2D>) {
-			for pos in query {
-				for i in 0..2 {
-					when pos.spd.when_index_eq(i, &0.) {
-						pos.spd.rate.fric.val[i] = 0;
-					} else {
-						pos.spd.rate.fric.val[i] = pos.spd.rate.fric.full_val[i];
-					}
-				}
-				// Repetition outlier handler?
-			}
-		}
-	*/
-	
 	// add_two_dogs(world);
 	add_many_dogs(world);
 }
@@ -190,7 +174,7 @@ fn add_many_dogs(world: &mut World) {
 							val: y as f64,
 							spd: SpdX {
 								val: ((16 + (y.abs() % 32)) * y.signum()) as f64,
-								acc: AccX { val: 0. }
+								acc: AccX { val: -500. }
 							}
 						}
 					].to_flux_vec(Duration::ZERO),
