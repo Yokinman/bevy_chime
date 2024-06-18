@@ -12,7 +12,7 @@ use chime::time::TimeRanges;
 
 #[derive(PartialOrd, PartialEq)]
 #[flux(
-	kind = "sum::Sum<f64, 2>",
+	kind = sum::Sum<f64, 2>,
 	value = val,
 	change = |c| c + spd.per(time::SEC)
 )]
@@ -22,9 +22,10 @@ struct PosX {
 	spd: SpdX,
 }
 
+
 #[derive(PartialOrd, PartialEq)]
 #[flux(
-	kind = "sum::Sum<f64, 1>",
+	kind = sum::Sum<f64, 1>,
 	value = val,
 	change = |c| c + acc.per(time::SEC)
 )]
@@ -36,7 +37,7 @@ struct SpdX {
 
 #[derive(PartialOrd, PartialEq)]
 #[flux(
-	kind = "sum::Sum<f64, 0>",
+	kind = sum::Sum<f64, 0>,
 	value = val,
 )]
 #[derive(Component, Clone, Debug)]
