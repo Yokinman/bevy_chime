@@ -307,7 +307,7 @@ mod _pred_item_ref_impls {
 			self
 		}
 		fn is_updated(_item: &mut Self) -> bool {
-			true
+			false
 		}
 	}
 	
