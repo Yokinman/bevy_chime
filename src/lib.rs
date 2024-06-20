@@ -132,70 +132,35 @@ impl AddChimeEvent for App {
 
 /// Specialized function used for predicting and scheduling events, functionally
 /// similar to a read-only [`bevy_ecs::system::SystemParamFunction`].
-pub trait PredFn<T, P, A>:
-	Fn(PredState2<T, P>, SystemParamItem<A>)
+pub trait PredFn<T, P, A>: Sized
+	+ Fn(PredState2<T, P>, A)
+	+ Fn(PredState2<T, P>, SystemParamItem<A>)
 where
 	P: PredBranch,
 	A: ReadOnlySystemParam,
-{}
+{
+	fn into_events(self) -> ChimeEventBuilder<T, P, A, P::Input, Self, BlankSystem, BlankSystem, BlankSystem>
+	where
+		P::Input: Default + Send + Sync + 'static
+	{
+		ChimeEventBuilder::new(self, P::Input::default())
+	}
+	
+	fn into_events_with_input<I>(self, input: I)
+		-> ChimeEventBuilder<T, P, A, I, Self, BlankSystem, BlankSystem, BlankSystem>
+	{
+		ChimeEventBuilder::new(self, input)
+	}
+}
 
 impl<T, P, A, F> PredFn<T, P, A> for F
 where
 	P: PredBranch,
 	A: ReadOnlySystemParam,
-	F: Fn(PredState2<T, P>, SystemParamItem<A>),
+	F: Sized
+		+ Fn(PredState2<T, P>, A)
+		+ Fn(PredState2<T, P>, SystemParamItem<A>),
 {}
-
-/// Types that can be converted into a [`PredFn`].
-pub trait IntoPredFn<T, P, A>: Sized
-where
-	P: PredBranch,
-	A: ReadOnlySystemParam,
-{
-	// !!! This should probably be split into two traits, with the two separate
-	// methods (`into_events` and `into_events_with_input`).
-	
-	fn into_pred_fn(self) -> impl PredFn<T, P, A>;
-	
-	fn into_events(self) -> ChimeEventBuilder<T, P, A, P::Input, impl PredFn<T, P, A>, BlankSystem, BlankSystem, BlankSystem>
-	where
-		P::Input: Default + Send + Sync + 'static
-	{
-		ChimeEventBuilder::new(self.into_pred_fn(), P::Input::default())
-	}
-	
-	fn into_events_with_input<I>(self, input: I)
-		-> ChimeEventBuilder<T, P, A, I, impl PredFn<T, P, A>, BlankSystem, BlankSystem, BlankSystem>
-	{
-		ChimeEventBuilder::new(self.into_pred_fn(), input)
-	}
-}
-
-macro_rules! impl_into_pred_fn {
-	(@all $($param:ident $(, $rest:ident)*)?) => {
-		impl_into_pred_fn!($($param $(, $rest)*)?);
-		$(impl_into_pred_fn!(@all $($rest),*);)?
-	};
-	($($param:ident),*) => {
-		impl<F, T, P, $($param: ReadOnlySystemParam),*> IntoPredFn<T, P, ($($param,)*)> for F
-		where
-			F: Fn(PredState2<T, P>, $($param),*)
-				+ Fn(PredState2<T, P>, $(SystemParamItem<$param>),*),
-			P: PredBranch,
-		{
-			fn into_pred_fn(self) -> impl PredFn<T, P, ($($param,)*)> {
-				move |state, misc| {
-					let ($($param,)*) = misc;
-					self(state, $($param),*);
-				}
-			}
-		}
-	}
-}
-
-impl_into_pred_fn!(@all
-	_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15
-);
 
 /// ...
 pub trait PredCaseFn<P, B: PredBranch, M> {

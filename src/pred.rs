@@ -1377,9 +1377,11 @@ mod testing {
 		let b_update_vec = b_update_list.to_vec();
 		app.add_chime_events((move |
 			state: PredState2<DynPred, Single<PredPairComb<FetchComb<&'static Test>, FetchComb<&'static TestB>>>>,
-			a_query: Query<&Test>,
-			b_query: Query<&TestB>,
-			mut index: system::Local<usize>,
+			(a_query, b_query, mut index): (
+				Query<&Test>,
+				Query<&TestB>,
+				system::Local<usize>,
+			),
 		| {
 			let mut iter = state.into_iter();
 			match *index {
@@ -1435,9 +1437,11 @@ mod testing {
 		let b_update_vec = b_update_list.to_vec();
 		app.add_chime_events((move |
 			state: PredState2<DynPred, Nested<FetchComb<&'static Test>, Single<FetchComb<&'static TestB>>>>,
-			a_query: Query<Ref<Test>>,
-			b_query: Query<Ref<TestB>>,
-			mut index: system::Local<usize>,
+			(a_query, b_query, mut index): (
+				Query<Ref<Test>>,
+				Query<Ref<TestB>>,
+				system::Local<usize>,
+			),
 		| {
 			let mut iter = state.into_iter();
 			match *index {
@@ -1566,8 +1570,10 @@ mod testing {
 		let update_vec = update_list.to_vec();
 		app.add_chime_events((move |
 			state: PredState2<DynPred, Single<PredArrayComb<FetchComb<&'static Test>, R>>>,
-			query: Query<&Test>,
-			mut index: system::Local<usize>,
+			(query, mut index): (
+				Query<&Test>,
+				system::Local<usize>,
+			),
 		| {
 			let mut iter = state.into_iter();
 			match *index {
@@ -1621,8 +1627,10 @@ mod testing {
 		type Param<'w, const S: usize> = NestedPerm<PredArrayComb<FetchComb<'w, &'static Test>, 1>, Single<PredArrayComb<FetchComb<'w, &'static Test>, S>>>;
 		app.add_chime_events((move |
 			state: PredState2<DynPred, Param<'_, S>>,
-			query: Query<Ref<Test>>,
-			mut index: system::Local<usize>,
+			(query, mut index): (
+				Query<Ref<Test>>,
+				system::Local<usize>,
+			),
 		| {
 			let mut iter = state.into_iter();
 			match *index {
