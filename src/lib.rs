@@ -149,14 +149,6 @@ where
 	{
 		ChimeEventBuilder::new(self, B::Input::default())
 	}
-	
-	fn into_events_with_input<I>(self, input: I)
-		-> ChimeEventBuilder<P, B, A, I, Self, BlankSystem, BlankSystem, BlankSystem>
-	where
-		Self: Sized
-	{
-		ChimeEventBuilder::new(self, input)
-	}
 }
 
 impl<T, M, P, B> PredFn<P, B, ()> for PredRun<T, M>
