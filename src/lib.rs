@@ -205,6 +205,19 @@ pub trait PredCaseFn<P, B: PredBranch, M> {
 	}
 }
 
+impl<F, P> PredCaseFn<P, Single<EmptyComb>, ()> for F
+where
+	P: Prediction,
+	F: Fn() -> P,
+{
+	fn run<K: CombKind>(&self, input: PredSubState2<P, Single<EmptyComb>, K>) {
+		for (case, ()) in input {
+			let pred = self();
+			case.set(pred)
+		}
+	}
+}
+
 impl<F, P, A, T> PredCaseFn<P, Single<PredSingleComb<A>>, ()> for F
 where
 	// Specifying `A::Item` as a separate parameter permits type elision.
