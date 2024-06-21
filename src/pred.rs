@@ -1375,145 +1375,174 @@ mod testing {
 		 // Setup [`PredPairComb`] Testing:
 		let update_vec = update_list.to_vec();
 		let b_update_vec = b_update_list.to_vec();
-		app.add_chime_events((move |
-			state: PredState2<DynPred, Single<PredPairComb<FetchComb<&'static Test>, FetchComb<&'static TestB>>>>,
-			(a_query, b_query, mut index): (
-				Query<&Test>,
-				Query<&TestB>,
-				system::Local<usize>,
-			),
-		| {
-			let mut iter = state.into_iter();
-			match *index {
-				0 => { // Full
-					if A > 1 && B > 1 {
-						assert_eq!(iter.size_hint(), (B, Some(A*B)));
-					}
-					let mut n = 0;
-					for a in &a_query {
-						for b in &b_query {
-							// This assumes `iter` and `QueryIter` will always
-							// produce the same order.
-							if let Some((_, (x, y))) = iter.next() {
-								assert_eq!((*x, *y), (a, b));
-							} else {
-								panic!();
-							}
-							n += 1;
+		struct TestRunA<const A: usize, const B: usize>([Vec<usize>; 2]);
+		impl<const A: usize, const B: usize> PredFn<
+			DynPred,
+			Single<PredPairComb<FetchComb<'_, &'static Test>, FetchComb<'_, &'static TestB>>>,
+			(
+				Query<'_, '_, &'static Test>,
+				Query<'_, '_, &'static TestB>,
+				system::Local<'_, usize>
+			)
+		> for TestRunA<A, B> {
+			fn run<K: CombKind>(
+				&self,
+				state: PredSubState2<DynPred, Single<PredPairComb<FetchComb<&'static Test>, FetchComb<&'static TestB>>>, K>,
+				(a_query, b_query, mut index): (
+					Query<&Test>,
+					Query<&TestB>,
+					system::Local<usize>,
+				),
+			) {
+				let TestRunA([update_vec, b_update_vec]) = self;
+				let mut iter = state.into_iter();
+				match *index {
+					0 => { // Full
+						if A > 1 && B > 1 {
+							assert_eq!(iter.size_hint(), (B, Some(A*B)));
 						}
-					}
-					assert_eq!(n, A*B);
-				},
-				1 => { // Empty
-					assert_eq!(iter.size_hint(), (0, Some(0)));
-					let next = iter.next();
-					if next.is_some() {
-						println!("> {:?}", next.as_ref().unwrap().1);
-					}
-					assert!(next.is_none());
-				},
-				2 => { // Misc
-					let count = A*b_update_vec.len()
-						+ B*update_vec.len()
-						- update_vec.len()*b_update_vec.len();
-					if A > 1 && B > 1 {
-						assert_eq!(iter.size_hint(), (B, Some(count)));
-					}
-					let mut n = 0;
-					for (_, (a, b)) in iter {
-						assert!(update_vec.contains(&a.0)
-							|| b_update_vec.contains(&b.0));
-						n += 1;
-					}
-					assert_eq!(n, count);
-				},
-				_ => unimplemented!(),
-			}
-			*index += 1;
-		}).into_events().on_begin(|| {}));
-		
-		 // Setup [`PredSubState::outer_iter`] Testing:
-		let update_vec = update_list.to_vec();
-		let b_update_vec = b_update_list.to_vec();
-		app.add_chime_events((move |
-			state: PredState2<DynPred, Nested<FetchComb<&'static Test>, Single<FetchComb<&'static TestB>>>>,
-			(a_query, b_query, mut index): (
-				Query<Ref<Test>>,
-				Query<Ref<TestB>>,
-				system::Local<usize>,
-			),
-		| {
-			let mut iter = state.into_iter();
-			match *index {
-				0 => { // Full
-					// !!! This should be `(0, Some(A))`, and PredPairCombSplit
-					// shouldn't return A-values that have an empty B iterator.
-					assert_eq!(iter.size_hint(), (A, Some(A)));
-					let mut n = 0;
-					for a in &a_query {
-						if let Some((state, x)) = iter.next() {
-							let mut iter = state.into_iter();
-							assert_eq!(iter.size_hint(), (B, Some(B)));
-							assert_eq!(**x, *a);
+						let mut n = 0;
+						for a in &a_query {
 							for b in &b_query {
-								// This assumes `iter` and `QueryIter` always
+								// This assumes `iter` and `QueryIter` will always
 								// produce the same order.
-								if let Some((_, y)) = iter.next() {
-									assert_eq!(**y, *b);
+								if let Some((_, (x, y))) = iter.next() {
+									assert_eq!((*x, *y), (a, b));
 								} else {
 									panic!();
 								}
 								n += 1;
 							}
-						} else {
-							panic!();
 						}
-					}
-					assert_eq!(n, A*B);
-				},
-				1 => { // Empty
-					assert_eq!(iter.size_hint(), (A, Some(A)));
-					for (state, _) in iter {
-						let mut iter = state.into_iter();
+						assert_eq!(n, A*B);
+					},
+					1 => { // Empty
+						assert_eq!(iter.size_hint(), (0, Some(0)));
 						let next = iter.next();
 						if next.is_some() {
 							println!("> {:?}", next.as_ref().unwrap().1);
 						}
 						assert!(next.is_none());
-					}
-				},
-				2 => { // Misc
-					let count = A*b_update_vec.len()
-						+ B*update_vec.len()
-						- update_vec.len()*b_update_vec.len();
-					assert_eq!(iter.size_hint(), (A, Some(A)));
-					let mut n = 0;
-					for ((state, a), a_ref) in iter.zip(&a_query) {
-						// This assumes `iter` and `QueryIter` always produce
-						// the same order.
-						assert_eq!(**a, *a_ref);
-						let iter = state.into_iter();
-						if DetectChanges::is_changed(&a_ref) {
-							assert!(update_vec.contains(&a.0));
-							assert_eq!(iter.size_hint(), (B, Some(B)));
-							for ((_, b), b_ref) in iter.zip(&b_query) {
-								assert_eq!(**b, *b_ref);
-								n += 1;
-							}
-						} else {
-							assert!(!update_vec.contains(&a.0));
-							for (_, b) in iter {
-								assert!(b_update_vec.contains(&b.0));
-								n += 1;
+					},
+					2 => { // Misc
+						let count = A*b_update_vec.len()
+							+ B*update_vec.len()
+							- update_vec.len()*b_update_vec.len();
+						if A > 1 && B > 1 {
+							assert_eq!(iter.size_hint(), (B, Some(count)));
+						}
+						let mut n = 0;
+						for (_, (a, b)) in iter {
+							assert!(update_vec.contains(&a.0)
+								|| b_update_vec.contains(&b.0));
+							n += 1;
+						}
+						assert_eq!(n, count);
+					},
+					_ => unimplemented!(),
+				}
+				*index += 1;
+			}
+		}
+		app.add_chime_events(TestRunA::<A, B>([update_vec, b_update_vec]).into_events().on_begin(|| {}));
+		
+		
+		 // Setup [`PredSubState::outer_iter`] Testing:
+		let update_vec = update_list.to_vec();
+		let b_update_vec = b_update_list.to_vec();
+		struct TestRunB<const A: usize, const B: usize>([Vec<usize>; 2]);
+		impl<const A: usize, const B: usize> PredFn<
+			DynPred,
+			Nested<FetchComb<'_, &'static Test>, Single<FetchComb<'_, &'static TestB>>>,
+			(
+				Query<'_, '_, Ref<'static, Test>>,
+				Query<'_, '_, Ref<'static, TestB>>,
+				system::Local<'_, usize>
+			)
+		> for TestRunB<A, B> {
+			fn run<K: CombKind>(
+				&self,
+				state: PredSubState2<DynPred, Nested<FetchComb<&'static Test>, Single<FetchComb<&'static TestB>>>, K>,
+				(a_query, b_query, mut index): (
+					Query<Ref<Test>>,
+					Query<Ref<TestB>>,
+					system::Local<usize>,
+				),
+			) {
+				let TestRunB([update_vec, b_update_vec]) = self;
+				let mut iter = state.into_iter();
+				match *index {
+					0 => { // Full
+						// !!! This should be `(0, Some(A))`, and PredPairCombSplit
+						// shouldn't return A-values that have an empty B iterator.
+						assert_eq!(iter.size_hint(), (A, Some(A)));
+						let mut n = 0;
+						for a in &a_query {
+							if let Some((state, x)) = iter.next() {
+								let mut iter = state.into_iter();
+								assert_eq!(iter.size_hint(), (B, Some(B)));
+								assert_eq!(**x, *a);
+								for b in &b_query {
+									// This assumes `iter` and `QueryIter` always
+									// produce the same order.
+									if let Some((_, y)) = iter.next() {
+										assert_eq!(**y, *b);
+									} else {
+										panic!();
+									}
+									n += 1;
+								}
+							} else {
+								panic!();
 							}
 						}
-					}
-					assert_eq!(n, count);
-				},
-				_ => unimplemented!(),
+						assert_eq!(n, A*B);
+					},
+					1 => { // Empty
+						assert_eq!(iter.size_hint(), (A, Some(A)));
+						for (state, _) in iter {
+							let mut iter = state.into_iter();
+							let next = iter.next();
+							if next.is_some() {
+								println!("> {:?}", next.as_ref().unwrap().1);
+							}
+							assert!(next.is_none());
+						}
+					},
+					2 => { // Misc
+						let count = A*b_update_vec.len()
+							+ B*update_vec.len()
+							- update_vec.len()*b_update_vec.len();
+						assert_eq!(iter.size_hint(), (A, Some(A)));
+						let mut n = 0;
+						for ((state, a), a_ref) in iter.zip(&a_query) {
+							// This assumes `iter` and `QueryIter` always produce
+							// the same order.
+							assert_eq!(**a, *a_ref);
+							let iter = state.into_iter();
+							if DetectChanges::is_changed(&a_ref) {
+								assert!(update_vec.contains(&a.0));
+								assert_eq!(iter.size_hint(), (B, Some(B)));
+								for ((_, b), b_ref) in iter.zip(&b_query) {
+									assert_eq!(**b, *b_ref);
+									n += 1;
+								}
+							} else {
+								assert!(!update_vec.contains(&a.0));
+								for (_, b) in iter {
+									assert!(b_update_vec.contains(&b.0));
+									n += 1;
+								}
+							}
+						}
+						assert_eq!(n, count);
+					},
+					_ => unimplemented!(),
+				}
+				*index += 1;
 			}
-			*index += 1;
-		}).into_events().on_begin(|| {}));
+		}
+		app.add_chime_events(TestRunB::<A, B>([update_vec, b_update_vec]).into_events().on_begin(|| {}));
 		
 		 // Run Tests:
 		app.world.run_schedule(ChimeSchedule);
@@ -1566,135 +1595,161 @@ mod testing {
 		}
 		
 		 // Setup [`PredArrayComb`] Testing:
-		let n_choose_r = choose(N, R);
 		let update_vec = update_list.to_vec();
-		app.add_chime_events((move |
-			state: PredState2<DynPred, Single<PredArrayComb<FetchComb<&'static Test>, R>>>,
-			(query, mut index): (
-				Query<&Test>,
-				system::Local<usize>,
+		struct TestRunA<const N: usize, const R: usize, const S: usize>(Vec<usize>);
+		impl<const N: usize, const R: usize, const S: usize> PredFn<
+			DynPred,
+			Single<PredArrayComb<FetchComb<'_, &'static Test>, R>>,
+			(
+				Query<'_, '_, &'static Test>,
+				system::Local<'_, usize>,
 			),
-		| {
-			let mut iter = state.into_iter();
-			match *index {
-				0 => { // Full
-					assert_eq!(iter.size_hint(), (n_choose_r, Some(n_choose_r)));
-					let mut n = 0;
-					for ((_, a), mut b) in iter
-						.zip(query.iter_combinations::<R>())
-					{
-						// This assumes `iter` and `Query::iter_combinations`
-						// will always return in the same order.
-						let mut a = a.into_iter()
-							.map(Fetch::into_inner)
-							.collect::<Vec<_>>();
-						a.sort_unstable();
-						b.sort_unstable();
-						assert_eq!(a, b);
-						n += 1;
-					}
-					assert_eq!(n, n_choose_r);
-				},
-				1 => { // Empty
-					assert_eq!(iter.size_hint(), (0, Some(0)));
-					let next = iter.next();
-					if next.is_some() {
-						println!("> {:?}", next.as_ref().unwrap().1);
-					}
-					assert!(next.is_none());
-				},
-				2 => { // Misc
-					let count = n_choose_r - choose(N - update_vec.len(), R);
-					assert_eq!(iter.size_hint(), (count, Some(count)));
-					let mut n = 0;
-					for (_, a) in iter {
-						let a = a.into_iter()
-							.map(Fetch::into_inner)
-							.collect::<Vec<_>>();
-						assert!(update_vec.iter()
-							.any(|i| a.contains(&&Test(*i))));
-						n += 1;
-					}
-					assert_eq!(n, count);
-				},
-				_ => unimplemented!(),
+		> for TestRunA<N, R, S> {
+			fn run<K: CombKind>(
+				&self,
+				state: PredSubState2<DynPred, Single<PredArrayComb<FetchComb<&'static Test>, R>>, K>,
+				(query, mut index): (
+					Query<&Test>,
+					system::Local<usize>,
+				),
+			) {
+				let TestRunA(update_vec) = self;
+				let n_choose_r = choose(N, R);
+				let mut iter = state.into_iter();
+				match *index {
+					0 => { // Full
+						assert_eq!(iter.size_hint(), (n_choose_r, Some(n_choose_r)));
+						let mut n = 0;
+						for ((_, a), mut b) in iter
+							.zip(query.iter_combinations::<R>())
+						{
+							// This assumes `iter` and `Query::iter_combinations`
+							// will always return in the same order.
+							let mut a = a.into_iter()
+								.map(Fetch::into_inner)
+								.collect::<Vec<_>>();
+							a.sort_unstable();
+							b.sort_unstable();
+							assert_eq!(a, b);
+							n += 1;
+						}
+						assert_eq!(n, n_choose_r);
+					},
+					1 => { // Empty
+						assert_eq!(iter.size_hint(), (0, Some(0)));
+						let next = iter.next();
+						if next.is_some() {
+							println!("> {:?}", next.as_ref().unwrap().1);
+						}
+						assert!(next.is_none());
+					},
+					2 => { // Misc
+						let count = n_choose_r - choose(N - update_vec.len(), R);
+						assert_eq!(iter.size_hint(), (count, Some(count)));
+						let mut n = 0;
+						for (_, a) in iter {
+							let a = a.into_iter()
+								.map(Fetch::into_inner)
+								.collect::<Vec<_>>();
+							assert!(update_vec.iter()
+								.any(|i| a.contains(&&Test(*i))));
+							n += 1;
+						}
+						assert_eq!(n, count);
+					},
+					_ => unimplemented!(),
+				}
+				*index += 1;
 			}
-			*index += 1;
-		}).into_events().on_begin(|| {}));
+		}
+		app.add_chime_events(TestRunA::<N, R, S>(update_vec).into_events().on_begin(|| {}));
 		
 		 // Setup [`PredSubState::outer_iter`] Testing:
 		let update_vec = update_list.to_vec();
+		struct TestRunB<const N: usize, const R: usize, const S: usize>(Vec<usize>);
 		type Param<'w, const S: usize> = NestedPerm<PredArrayComb<FetchComb<'w, &'static Test>, 1>, Single<PredArrayComb<FetchComb<'w, &'static Test>, S>>>;
-		app.add_chime_events((move |
-			state: PredState2<DynPred, Param<'_, S>>,
-			(query, mut index): (
-				Query<Ref<Test>>,
-				system::Local<usize>,
-			),
-		| {
-			let mut iter = state.into_iter();
-			match *index {
-				0 => { // Full
-					let count = N.checked_sub(R).map(|x| x + 1).unwrap_or(0);
-					assert_eq!(iter.size_hint(), (count, Some(count)));
-					let mut n = 0;
-					for ((state, [a]), b) in iter.zip(&query) {
-						// This assumes `iter` and `Query` will always return
-						// in the same order.
-						assert_eq!(**a, *b);
-						let count = choose(N - (n + 1), R - 1);
-						assert_eq!(state.into_iter().size_hint(), (count, Some(count)));
-						n += 1;
-					}
-					assert_eq!(n, count);
-				},
-				1 => { // Empty
-					assert_eq!(iter.size_hint(), (0, Some(0)));
-					let next = iter.next();
-					if next.is_some() {
-						println!("> {:?}", next.as_ref().unwrap().1);
-					}
-					assert!(next.is_none());
-				},
-				2 => { // Misc
-					let count = update_vec.iter().max().copied()
-						.min(N.checked_sub(R))
-						.map(|x| x + 1)
-						.unwrap_or(0);
-					assert_eq!(iter.size_hint(), (
-						(update_vec.len() + 1).saturating_sub(R),
-						Some(count)
-					));
-					let mut n = 0;
-					for ((state, [a]), b) in iter.zip(&query) {
-						// This assumes `iter` and `Query` will always return
-						// in the same order.
-						assert_eq!(**a, *b);
-						if DetectChanges::is_changed(&b) {
-							assert!(update_vec.contains(&n));
+		impl<const N: usize, const R: usize, const S: usize> PredFn<
+			DynPred,
+			Param<'_, S>,
+			(
+				Query<'_, '_, Ref<'static, Test>>,
+				system::Local<'_, usize>,
+			)
+		> for TestRunB<N, R, S> {
+			fn run<K: CombKind>(
+				&self, 
+				state: PredSubState2<DynPred, Param<'_, S>, K>,
+				(query, mut index): (
+					Query<Ref<Test>>,
+					system::Local<usize>,
+				),
+			) {
+				let TestRunB(update_vec) = self;
+				let mut iter = state.into_iter();
+				match *index {
+					0 => { // Full
+						let count = N.checked_sub(R).map(|x| x + 1).unwrap_or(0);
+						assert_eq!(iter.size_hint(), (count, Some(count)));
+						let mut n = 0;
+						for ((state, [a]), b) in iter.zip(&query) {
+							// This assumes `iter` and `Query` will always return
+							// in the same order.
+							assert_eq!(**a, *b);
 							let count = choose(N - (n + 1), R - 1);
 							assert_eq!(state.into_iter().size_hint(), (count, Some(count)));
-						} else {
-							for (_, x) in state {
-								let list = x.into_iter()
-									.map(|x| *x)
-									.collect::<Vec<_>>();
-								assert!(
-									update_vec.iter()
-										.any(|i| list.contains(&&Test(*i))),
-									"{:?} not in {:?}",
-									(list, *a), update_vec,
-								);
-							}
+							n += 1;
 						}
-						n += 1;
-					}
-					assert_eq!(n, count);
-				},
-				_ => unimplemented!(),
+						assert_eq!(n, count);
+					},
+					1 => { // Empty
+						assert_eq!(iter.size_hint(), (0, Some(0)));
+						let next = iter.next();
+						if next.is_some() {
+							println!("> {:?}", next.as_ref().unwrap().1);
+						}
+						assert!(next.is_none());
+					},
+					2 => { // Misc
+						let count = update_vec.iter().max().copied()
+							.min(N.checked_sub(R))
+							.map(|x| x + 1)
+							.unwrap_or(0);
+						assert_eq!(iter.size_hint(), (
+							(update_vec.len() + 1).saturating_sub(R),
+							Some(count)
+						));
+						let mut n = 0;
+						for ((state, [a]), b) in iter.zip(&query) {
+							// This assumes `iter` and `Query` will always return
+							// in the same order.
+							assert_eq!(**a, *b);
+							if DetectChanges::is_changed(&b) {
+								assert!(update_vec.contains(&n));
+								let count = choose(N - (n + 1), R - 1);
+								assert_eq!(state.into_iter().size_hint(), (count, Some(count)));
+							} else {
+								for (_, x) in state {
+									let list = x.into_iter()
+										.map(|x| *x)
+										.collect::<Vec<_>>();
+									assert!(
+										update_vec.iter()
+											.any(|i| list.contains(&&Test(*i))),
+										"{:?} not in {:?}",
+										(list, *a), update_vec,
+									);
+								}
+							}
+							n += 1;
+						}
+						assert_eq!(n, count);
+					},
+					_ => unimplemented!(),
+				}
+				*index += 1;
 			}
-			*index += 1;
-		}).into_events().on_begin(|| {}));
+		}
+		app.add_chime_events(TestRunB::<N, R, S>(update_vec).into_events().on_begin(|| {}));
 		
 		 // Run Tests:
 		app.world.run_schedule(ChimeSchedule);

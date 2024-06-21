@@ -100,10 +100,11 @@ impl AddChimeEvent for App {
 			let mut node = node::Node::default();
 			{
 				let (state, misc) = state.get(world);
-				pred_sys(
-					PredState2::new(
+				pred_sys.run(
+					PredSubState2::new(
 						P::comb_split(unsafe { std::mem::transmute(&state) }, input.clone().into_input(), CombAnyTrue),
 						&mut node,
+						CombAnyTrue,
 					),
 					misc
 				);
@@ -130,39 +131,46 @@ impl AddChimeEvent for App {
 	}
 }
 
-/// Specialized function used for predicting and scheduling events, functionally
-/// similar to a read-only [`bevy_ecs::system::SystemParamFunction`].
-pub trait PredFn<T, P, A>: Sized
-	+ Fn(PredState2<T, P>, A)
-	+ Fn(PredState2<T, P>, SystemParamItem<A>)
+/// ...
+struct PredRun<T, M>(T, std::marker::PhantomData<M>);
+
+/// This is pretty much a no-op except for testing purposes.
+pub trait PredFn<P, B, A>
 where
-	P: PredBranch,
+	B: PredBranch,
 	A: ReadOnlySystemParam,
 {
-	fn into_events(self) -> ChimeEventBuilder<T, P, A, P::Input, Self, BlankSystem, BlankSystem, BlankSystem>
+	fn run<K: CombKind>(&self, state: PredSubState2<P, B, K>, param: SystemParamItem<A>);
+	
+	fn into_events(self) -> ChimeEventBuilder<P, B, A, B::Input, Self, BlankSystem, BlankSystem, BlankSystem>
 	where
-		P::Input: Default + Send + Sync + 'static
+		Self: Sized,
+		B::Input: Default + Send + Sync + 'static,
 	{
-		ChimeEventBuilder::new(self, P::Input::default())
+		ChimeEventBuilder::new(self, B::Input::default())
 	}
 	
 	fn into_events_with_input<I>(self, input: I)
-		-> ChimeEventBuilder<T, P, A, I, Self, BlankSystem, BlankSystem, BlankSystem>
+		-> ChimeEventBuilder<P, B, A, I, Self, BlankSystem, BlankSystem, BlankSystem>
+	where
+		Self: Sized
 	{
 		ChimeEventBuilder::new(self, input)
 	}
 }
 
-impl<T, P, A, F> PredFn<T, P, A> for F
+impl<T, M, P, B> PredFn<P, B, ()> for PredRun<T, M>
 where
-	P: PredBranch,
-	A: ReadOnlySystemParam,
-	F: Sized
-		+ Fn(PredState2<T, P>, A)
-		+ Fn(PredState2<T, P>, SystemParamItem<A>),
-{}
+	B: PredBranch,
+	T: PredCaseFn<P, B, M>,
+{
+	fn run<K: CombKind>(&self, state: PredSubState2<P, B, K>, _param: ()) {
+		self.0.run(state);
+	}
+}
 
-/// ...
+/// Specialized function used for predicting and scheduling events, functionally
+/// similar to a read-only [`bevy_ecs::system::SystemParamFunction`].
 pub trait PredCaseFn<P, B: PredBranch, M> {
 	fn run<K: CombKind>(&self, input: PredSubState2<P, B, K>);
 	
@@ -172,9 +180,7 @@ pub trait PredCaseFn<P, B: PredBranch, M> {
 		<B as PredBranch>::Input: Default + Send + Sync,
 	{
 		ChimeEventBuilder::new(
-			move |state: PredState2<P, B>, _misc: ()| {
-				self.run(state.inner);
-			},
+			PredRun::<Self, M>(self, std::marker::PhantomData),
 			B::Input::default(),
 		)
 	}
@@ -185,9 +191,7 @@ pub trait PredCaseFn<P, B: PredBranch, M> {
 		Self: Sized,
 	{
 		ChimeEventBuilder::new(
-			move |state: PredState2<P, B>, _misc: ()| {
-				self.run(state.inner);
-			},
+			PredRun::<Self, M>(self, std::marker::PhantomData),
 			input,
 		)
 	}
