@@ -90,7 +90,11 @@ impl AddChimeEvent for App {
 		let id = self.world.resource_mut::<ChimeEventMap>()
 			.setup_id::<P::Id, T::TimeRanges>();
 		
-		let mut state = system::SystemState::<(<P::AllParams as PredCombinator>::Param, A)>::new(
+		let mut state = system::SystemState::<(
+			<P::AllParams as PredCombinator>::Param,
+			A,
+			system::Local<bool>,
+		)>::new(
 			&mut self.world
 		);
 		
@@ -99,15 +103,27 @@ impl AddChimeEvent for App {
 			// Maybe chop off nodes that go proportionally underused.
 			let mut node = node::Node::default();
 			{
-				let (state, misc) = state.get(world);
-				pred_sys.run(
-					PredSubState2::new(
-						P::comb_split(unsafe { std::mem::transmute(&state) }, input.clone().into_input(), CombAnyTrue),
-						&mut node,
-						CombAnyTrue,
-					),
-					misc
-				);
+				let (state, misc, mut is_active) = state.get(world);
+				if *is_active == false {
+					*is_active = true;
+					pred_sys.run(
+						PredSubState2::new(
+							P::comb_split(unsafe { std::mem::transmute(&state) }, input.clone().into_input(), CombAll),
+							&mut node,
+							CombAll,
+						),
+						misc
+					);
+				} else {
+					pred_sys.run(
+						PredSubState2::new(
+							P::comb_split(unsafe { std::mem::transmute(&state) }, input.clone().into_input(), CombAnyTrue),
+							&mut node,
+							CombAnyTrue,
+						),
+						misc
+					);
+				}
 			}
 			let time = world.resource::<Time>().elapsed();
 			world.resource_scope::<ChimeEventMap, ()>(|world, mut event_map| {
