@@ -35,44 +35,44 @@ type BlankSystem = fn();
 
 /// Builder entry point for adding chime events to a [`World`].
 pub trait AddChimeEvent {
-	fn add_chime_events<T, P, A, I, F, BgnSys, EndSys, OutSys, BgnMarker, EndMarker, OutMarker>(
+	fn add_chime_events<P, B, A, I, F, BgnSys, EndSys, OutSys, BgnMarker, EndMarker, OutMarker>(
 		&mut self,
-		events: ChimeEventBuilder<T, P, A, I, F, BgnSys, EndSys, OutSys>,
+		events: ChimeEventBuilder<P, B, A, I, F, BgnSys, EndSys, OutSys>,
 	) -> &mut Self
 	where
-		T: Prediction,
-		T::TimeRanges: Send + Sync + 'static,
-		P: PredBranch,
+		P: Prediction,
+		P::TimeRanges: Send + Sync + 'static,
+		B: PredBranch,
 		A: ReadOnlySystemParam + 'static,
-		I: IntoInput<P::Input> + Clone + Send + Sync + 'static,
-		F: PredFn<T, P, A> + Send + Sync + 'static,
-		BgnSys: IntoChimeEventSystem<P::Id, BgnMarker> + Clone + Send + Sync + 'static,
-		EndSys: IntoChimeEventSystem<P::Id, EndMarker> + Clone + Send + Sync + 'static,
-		OutSys: IntoChimeEventSystem<P::Id, OutMarker> + Clone + Send + Sync + 'static,
-		BgnMarker: ChimeSystemParamGroup<P::Id>,
-		EndMarker: ChimeSystemParamGroup<P::Id>,
-		OutMarker: ChimeSystemParamGroup<P::Id>,
+		I: IntoInput<B::Input> + Clone + Send + Sync + 'static,
+		F: PredFn<P, B, A> + Send + Sync + 'static,
+		BgnSys: IntoChimeEventSystem<B::Id, BgnMarker> + Clone + Send + Sync + 'static,
+		EndSys: IntoChimeEventSystem<B::Id, EndMarker> + Clone + Send + Sync + 'static,
+		OutSys: IntoChimeEventSystem<B::Id, OutMarker> + Clone + Send + Sync + 'static,
+		BgnMarker: ChimeSystemParamGroup<B::Id>,
+		EndMarker: ChimeSystemParamGroup<B::Id>,
+		OutMarker: ChimeSystemParamGroup<B::Id>,
 	;
 }
 
 impl AddChimeEvent for App {
-	fn add_chime_events<T, P, A, I, F, BgnSys, EndSys, OutSys, BgnMarker, EndMarker, OutMarker>(
+	fn add_chime_events<P, B, A, I, F, BgnSys, EndSys, OutSys, BgnMarker, EndMarker, OutMarker>(
 		&mut self,
-		events: ChimeEventBuilder<T, P, A, I, F, BgnSys, EndSys, OutSys>,
+		events: ChimeEventBuilder<P, B, A, I, F, BgnSys, EndSys, OutSys>,
 	) -> &mut Self
 	where
-		T: Prediction,
-		T::TimeRanges: Send + Sync + 'static,
-		P: PredBranch,
+		P: Prediction,
+		P::TimeRanges: Send + Sync + 'static,
+		B: PredBranch,
 		A: ReadOnlySystemParam + 'static,
-		I: IntoInput<P::Input> + Clone + Send + Sync + 'static,
-		F: PredFn<T, P, A> + Send + Sync + 'static,
-		BgnSys: IntoChimeEventSystem<P::Id, BgnMarker> + Clone + Send + Sync + 'static,
-		EndSys: IntoChimeEventSystem<P::Id, EndMarker> + Clone + Send + Sync + 'static,
-		OutSys: IntoChimeEventSystem<P::Id, OutMarker> + Clone + Send + Sync + 'static,
-		BgnMarker: ChimeSystemParamGroup<P::Id>,
-		EndMarker: ChimeSystemParamGroup<P::Id>,
-		OutMarker: ChimeSystemParamGroup<P::Id>,
+		I: IntoInput<B::Input> + Clone + Send + Sync + 'static,
+		F: PredFn<P, B, A> + Send + Sync + 'static,
+		BgnSys: IntoChimeEventSystem<B::Id, BgnMarker> + Clone + Send + Sync + 'static,
+		EndSys: IntoChimeEventSystem<B::Id, EndMarker> + Clone + Send + Sync + 'static,
+		OutSys: IntoChimeEventSystem<B::Id, OutMarker> + Clone + Send + Sync + 'static,
+		BgnMarker: ChimeSystemParamGroup<B::Id>,
+		EndMarker: ChimeSystemParamGroup<B::Id>,
+		OutMarker: ChimeSystemParamGroup<B::Id>,
 	{
 		assert!(self.is_plugin_added::<ChimePlugin>());
 		
@@ -88,10 +88,10 @@ impl AddChimeEvent for App {
 		assert!(begin_sys.is_some() || end_sys.is_some() || outlier_sys.is_some());
 		
 		let id = self.world.resource_mut::<ChimeEventMap>()
-			.setup_id::<P::Id, T::TimeRanges>();
+			.setup_id::<B::Id, P::TimeRanges>();
 		
 		let mut state = system::SystemState::<(
-			<P::AllParams as PredCombinator>::Param,
+			<B::AllParams as PredCombinator>::Param,
 			A,
 			system::Local<bool>,
 		)>::new(
@@ -108,7 +108,7 @@ impl AddChimeEvent for App {
 					*is_active = true;
 					pred_sys.run(
 						PredSubState2::new(
-							P::comb_split(unsafe { std::mem::transmute(&state) }, input.clone().into_input(), CombAll),
+							B::comb_split(unsafe { std::mem::transmute(&state) }, input.clone().into_input(), CombAll),
 							&mut node,
 							CombAll,
 						),
@@ -117,7 +117,7 @@ impl AddChimeEvent for App {
 				} else {
 					pred_sys.run(
 						PredSubState2::new(
-							P::comb_split(unsafe { std::mem::transmute(&state) }, input.clone().into_input(), CombAnyTrue),
+							B::comb_split(unsafe { std::mem::transmute(&state) }, input.clone().into_input(), CombAnyTrue),
 							&mut node,
 							CombAnyTrue,
 						),
@@ -128,7 +128,7 @@ impl AddChimeEvent for App {
 			let time = world.resource::<Time>().elapsed();
 			world.resource_scope::<ChimeEventMap, ()>(|world, mut event_map| {
 				event_map.sched(
-					PredNode2::<P, T> { inner: node },
+					PredNode2::<B, P> { inner: node },
 					time,
 					id,
 					begin_sys.as_ref(),
