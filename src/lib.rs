@@ -27,6 +27,7 @@ use bevy_ecs::system::{IntoSystem, ReadOnlySystemParam, System, SystemParamItem}
 use bevy_ecs::world::{Mut, World};
 use bevy_time::Time;
 
+use chime::Chime;
 use chime::pred::Prediction;
 use chime::time;
 use chime::time::InclusiveTimeRanges;
@@ -892,7 +893,3 @@ where
 /// Bevy schedule for re-predicting & scheduling events.
 #[derive(ScheduleLabel, Clone, Debug, PartialEq, Eq, Hash)]
 struct ChimeSchedule;
-
-/// Context for a `bevy::time::Time`.
-#[derive(Default)]
-pub struct Chime;
