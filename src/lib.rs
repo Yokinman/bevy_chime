@@ -126,7 +126,7 @@ impl AddChimeEvent for App {
 					);
 				}
 			}
-			let time = world.resource::<Time>().elapsed();
+			let time = world.resource::<Time<Chime>>().elapsed();
 			world.resource_scope::<ChimeEventMap, ()>(|world, mut event_map| {
 				event_map.sched(
 					PredNode2::<B, P> { inner: node },
@@ -320,9 +320,9 @@ macro_rules! impl_into_chime_event_system {
 			#[allow(unused_variables)]
 			fn into_chime_event_system(mut self, id: I) -> impl ChimeEventSystem {
 				IntoSystem::into_system(move |
-				param: system::StaticSystemParam<($($param::Param,)*)>,
-				time: bevy_ecs::system::Res<Time>,
-			| {
+					param: system::StaticSystemParam<($($param::Param,)*)>,
+					time: bevy_ecs::system::Res<Time<Chime>>,
+				| {
 					let ($($param,)*) = param.into_inner();
 					self($($param::fetch_param($param, id, time.elapsed()),)*)
 				})
@@ -435,24 +435,14 @@ impl Plugin for ChimePlugin {
 }
 
 fn update(world: &mut World) {
-	world.resource_scope(|world, old_time: Mut<Time>| {
 	world.schedule_scope(ChimeSchedule, |world, pred_schedule| {
-		let chime_time = world
-			.resource::<Time<Chime>>()
-			.as_generic();
-		
-		world.insert_resource(chime_time);
-		
 		let start = Duration::ZERO;
 		let end = Duration::MAX;
 		let fast = 1;
 		let slow = 1;
-		let time = (start + old_time.elapsed()*fast/slow).min(end);
-		chime_update(world, time, pred_schedule);
-		
-		world.remove_resource::<Time>();
-		world.resource_mut::<Time<Chime>>().advance_to(time);
-	});
+		let time = world.resource::<Time>().elapsed();
+		let target_time = (start + time*fast/slow).min(end);
+		chime_update(world, target_time, pred_schedule);
 	});
 }
 
@@ -469,7 +459,8 @@ fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule)
 	
 	while let Some(duration) = world.resource::<ChimeEventMap>().first_time() {
 		if time >= duration {
-			world.resource_mut::<Time>().advance_to(duration);
+			world.resource_mut::<Time<Chime>>()
+				.advance_to(duration);
 			
 			if can_print {
 				can_print = false;
@@ -492,6 +483,9 @@ fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule)
 			break
 		}
 	}
+	
+	world.resource_mut::<Time<Chime>>()
+		.advance_to(time);
 	
 	let b_time = Instant::now();
 	if can_can_print && b_time.duration_since(a_time) > chime::time::MILLISEC {
