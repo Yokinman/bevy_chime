@@ -189,8 +189,8 @@ fn add_many_dogs(world: &mut World) {
 }
 
 fn when_func_a(pos: Fetch<&Pos>) -> impl Prediction<TimeRanges = impl TimeRanges + Send + Sync + 'static> {
-	let pred = pos[0].when_eq(&((RIGHT - pos.radius) as f64))
-		| pos[0].when_eq(&((LEFT  + pos.radius) as f64));
+	let pred = pos[0].when_eq_constant(RIGHT - pos.radius)
+		| pos[0].when_eq_constant(LEFT + pos.radius);
 	pred.pre()
 }
 
@@ -200,8 +200,8 @@ fn do_func_a(PredFetch((pos,)): PredFetch<(&mut Pos,)>, time: Res<Time<Chime>>) 
 }
 
 fn when_func_b(pos: Fetch<&Pos>) -> impl Prediction<TimeRanges = impl TimeRanges + Send + Sync + 'static> {
-	let pred = pos[1].when_eq(&((TOP    - pos.radius) as f64))
-		| pos[1].when_eq(&((BOTTOM + pos.radius) as f64));
+	let pred = pos[1].when_eq_constant(TOP - pos.radius)
+		| pos[1].when_eq_constant(BOTTOM + pos.radius);
 	pred.pre()
 	// if pred.find(|t| *t > time).is_none() && pos[1].at(time).spd.acc.val != 0. {
 	// 	println!("Wow! {time:?}, {:?}, {:?}\n  {:?}, spd: {:?}",
@@ -258,6 +258,7 @@ fn when_func_c([pos, b_pos]: [Fetch<&Pos>; 2]) -> impl Prediction<TimeRanges = i
 			
 			let radius = (pos.radius + b_pos.radius) as f64;
 			let dis = chime::Constant::from(radius)
+				.to_flux(Duration::ZERO)
 				.poly(Duration::ZERO);
 			
 			// let a_time = Instant::now();
