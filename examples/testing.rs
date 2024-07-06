@@ -486,12 +486,12 @@ fn debug_draw(mut draw: Gizmos, time: Res<Time>, pred_time: Res<Time<Chime>>, qu
 		let x = pos[0].at(pred_time.elapsed());
 		let y = pos[1].at(pred_time.elapsed());
 		let vec = Vec2::new(x.val as f32, y.val as f32);
-		draw.circle_2d(vec, pos.radius as f32, Color::YELLOW);
+		draw.circle_2d(vec, pos.radius as f32, bevy::color::palettes::basic::YELLOW);
 		if has_gun {
 			draw.line_2d(
 				vec,
 				vec + Vec2::new((pos.radius as f32) * s.cos(), (pos.radius as f32) * s.sin()),
-				Color::GREEN
+				bevy::color::palettes::basic::GREEN
 			);
 		}
 	}
@@ -505,7 +505,7 @@ fn debug_draw(mut draw: Gizmos, time: Res<Time>, pred_time: Res<Time<Chime>>, qu
 		Vec2::new(((LEFT + RIGHT) / 2) as f32, ((TOP + BOTTOM) / 2) as f32),
 		0.0,
 		Vec2::new((RIGHT - LEFT) as f32, (TOP - BOTTOM) as f32),
-		Color::LIME_GREEN
+		bevy::color::palettes::basic::LIME
 	);
 }
 

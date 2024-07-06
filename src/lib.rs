@@ -88,7 +88,7 @@ impl AddChimeEvent for App {
 		
 		assert!(begin_sys.is_some() || end_sys.is_some() || outlier_sys.is_some());
 		
-		let id = self.world.resource_mut::<ChimeEventMap>()
+		let id = self.world_mut().resource_mut::<ChimeEventMap>()
 			.setup_id::<B::Id, P::TimeRanges>();
 		
 		let mut state = system::SystemState::<(
@@ -96,7 +96,7 @@ impl AddChimeEvent for App {
 			A,
 			system::Local<bool>,
 		)>::new(
-			&mut self.world
+			self.world_mut()
 		);
 		
 		let system = move |world: &mut World| {
@@ -140,7 +140,7 @@ impl AddChimeEvent for App {
 			});
 		};
 		
-		self.world.resource_mut::<Schedules>()
+		self.world_mut().resource_mut::<Schedules>()
 			.get_mut(ChimeSchedule).unwrap()
 			.add_systems(system);
 		
@@ -428,9 +428,9 @@ pub struct ChimePlugin;
 impl Plugin for ChimePlugin {
 	fn build(&self, app: &mut App) {
 		app.add_systems(Update, update);
-		app.world.insert_resource(Time::<Chime>::default());
-		app.world.insert_resource(ChimeEventMap::default());
-		app.world.add_schedule(Schedule::new(ChimeSchedule));
+		app.world_mut().insert_resource(Time::<Chime>::default());
+		app.world_mut().insert_resource(ChimeEventMap::default());
+		app.world_mut().add_schedule(Schedule::new(ChimeSchedule));
 	}
 }
 
