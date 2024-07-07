@@ -20,7 +20,7 @@ use std::collections::{BinaryHeap, btree_map, BTreeMap, HashMap};
 use std::hash::Hash;
 use std::time::{Duration, Instant};
 
-use bevy_app::{App, Plugin, Update};
+use bevy_app::{App, MainScheduleOrder, Plugin, PreUpdate};
 use bevy_ecs::schedule::{Schedule, Schedules, ScheduleLabel};
 use bevy_ecs::system;
 use bevy_ecs::system::{IntoSystem, ReadOnlySystemParam, System, SystemParamItem};
@@ -427,12 +427,22 @@ pub struct ChimePlugin;
 
 impl Plugin for ChimePlugin {
 	fn build(&self, app: &mut App) {
-		app.add_systems(Update, update);
+		let mut schedule_order = app.world_mut()
+			.resource_mut::<MainScheduleOrder>();
+		schedule_order.insert_after(PreUpdate, ChimeUpdate);
+		app.add_systems(ChimeUpdate, update);
 		app.world_mut().insert_resource(Time::<Chime>::default());
 		app.world_mut().insert_resource(ChimeEventMap::default());
 		app.world_mut().add_schedule(Schedule::new(ChimeSchedule));
 	}
 }
+
+/// Update schedule inserted after [`PreUpdate`] in [`MainScheduleOrder`].
+/// 
+/// Used for Chime's main update loop to guarantee that it runs between resource
+/// compilation ([`PreUpdate`]) and general app logic ([`Update`]).
+#[derive(ScheduleLabel, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct ChimeUpdate;
 
 fn update(world: &mut World) {
 	world.schedule_scope(ChimeSchedule, |world, pred_schedule| {
