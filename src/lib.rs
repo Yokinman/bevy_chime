@@ -12,7 +12,7 @@ mod node;
 use comb::*;
 use pred::*;
 
-pub use pred::{Etc, Fetch, In, PredState2, PredFetch, WithId, Single, Nested, NestedPerm};
+pub use pred::{Etc, Fetch, In, PredFetch, WithId, Single, Nested, NestedPerm};
 pub use comb::{FetchComb, PredArrayComb, PredSingleComb, PredPairComb, PredIdComb, Misc};
 
 use std::cmp::Reverse;
@@ -347,7 +347,7 @@ where
 	end_sys: Option<EndSys>,
 	outlier_sys: Option<OutSys>,
 	input: I,
-	_param: std::marker::PhantomData<fn(PredState2<T, P>, SystemParamItem<A>)>,
+	_param: std::marker::PhantomData<fn(PredSubState2<T, P, CombAnyTrue>, SystemParamItem<A>)>,
 }
 
 impl<U, P, A, I, F, BgnSys, EndSys, OutSys> ChimeEventBuilder<U, P, A, I, F, BgnSys, EndSys, OutSys>
