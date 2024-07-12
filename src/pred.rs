@@ -1332,10 +1332,10 @@ mod testing {
 		app.add_plugins(ChimePlugin);
 		
 		for i in 0..A {
-			app.world.spawn(Test(i));
+			app.world_mut().spawn(Test(i));
 		}
 		for i in 0..B {
-			app.world.spawn(TestB(i));
+			app.world_mut().spawn(TestB(i));
 		}
 		
 		 // Setup [`PredPairComb`] Testing:
@@ -1511,23 +1511,23 @@ mod testing {
 		app.add_chime_events(TestRunB::<A, B>([update_vec, b_update_vec]).into_events().on_begin(|| {}));
 		
 		 // Run Tests:
-		app.world.run_schedule(ChimeSchedule);
-		app.world.run_schedule(ChimeSchedule);
-		for mut test in app.world.query::<&mut Test>()
-			.iter_mut(&mut app.world)
+		app.world_mut().run_schedule(ChimeSchedule);
+		app.world_mut().run_schedule(ChimeSchedule);
+		for mut test in app.world_mut().query::<&mut Test>()
+			.iter_mut(app.world_mut())
 		{
 			if update_list.contains(&test.0) {
 				test.0 = std::hint::black_box(test.0);
 			}
 		}
-		for mut test in app.world.query::<&mut TestB>()
-			.iter_mut(&mut app.world)
+		for mut test in app.world_mut().query::<&mut TestB>()
+			.iter_mut(app.world_mut())
 		{
 			if b_update_list.contains(&test.0) {
 				test.0 = std::hint::black_box(test.0);
 			}
 		}
-		app.world.run_schedule(ChimeSchedule);
+		app.world_mut().run_schedule(ChimeSchedule);
 	}
 	
 	fn test_array<
@@ -1550,7 +1550,7 @@ mod testing {
 		app.add_plugins(ChimePlugin);
 		
 		for i in 0..N {
-			app.world.spawn(Test(i));
+			app.world_mut().spawn(Test(i));
 		}
 		
 		fn choose(n: usize, r: usize) -> usize {
@@ -1718,16 +1718,16 @@ mod testing {
 		app.add_chime_events(TestRunB::<N, R, S>(update_vec).into_events().on_begin(|| {}));
 		
 		 // Run Tests:
-		app.world.run_schedule(ChimeSchedule);
-		app.world.run_schedule(ChimeSchedule);
-		for mut test in app.world.query::<&mut Test>()
-			.iter_mut(&mut app.world)
+		app.world_mut().run_schedule(ChimeSchedule);
+		app.world_mut().run_schedule(ChimeSchedule);
+		for mut test in app.world_mut().query::<&mut Test>()
+			.iter_mut(app.world_mut())
 		{
 			if update_list.contains(&test.0) {
 				test.0 = std::hint::black_box(test.0);
 			}
 		}
-		app.world.run_schedule(ChimeSchedule);
+		app.world_mut().run_schedule(ChimeSchedule);
 	}
 	
 	#[test]
