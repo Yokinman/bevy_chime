@@ -10,49 +10,45 @@ use chime::pred::{Prediction, WhenDisEq, /*WhenDis, WhenEq, When*/};
 use std::time::{Duration, /*Instant*/};
 use chime::time::TimeRanges;
 
-#[derive(PartialOrd, PartialEq)]
 #[flux(
 	kind = sum::Sum<f64, 2>,
 	value = val,
 	change = |c| c + spd.per(time::SEC)
 )]
-#[derive(Component, Clone, Debug)]
+#[derive(Component, Clone, Debug, PartialOrd, PartialEq)]
 struct PosX {
 	val: f64,
 	spd: SpdX,
 }
 
-
-#[derive(PartialOrd, PartialEq)]
 #[flux(
 	kind = sum::Sum<f64, 1>,
 	value = val,
 	change = |c| c + acc.per(time::SEC)
 )]
-#[derive(Component, Clone, Debug)]
+#[derive(Component, Clone, Debug, PartialOrd, PartialEq)]
 struct SpdX {
 	val: f64,
 	acc: AccX,
 }
 
-#[derive(PartialOrd, PartialEq)]
 #[flux(
 	kind = sum::Sum<f64, 0>,
 	value = val,
 )]
-#[derive(Component, Clone, Debug)]
+#[derive(Component, Clone, Debug, PartialOrd, PartialEq)]
 struct AccX {
 	val: f64,
 }
 
 #[derive(Component, Clone, Debug)]
 struct Pos {
-	pos: [<PosX as Moment>::Flux; 2],
+	pos: FluxValue<[PosX; 2]>,
 	radius: i64,
 }
 
 impl Deref for Pos {
-	type Target = [<PosX as Moment>::Flux; 2];
+	type Target = FluxValue<[PosX; 2]>;
 	fn deref(&self) -> &Self::Target {
 		&self.pos
 	}
@@ -105,7 +101,7 @@ fn add_two_dogs(world: &mut World) {
 				pos: [
 					PosX { val: 0., spd: SpdX { val: 00., acc: AccX { val: 0. } } },
 					PosX { val: 0., spd: SpdX { val: 20.,  acc: AccX { val: -1000. } } }
-				].to_flux_vec(Duration::ZERO),
+				].to_flux(Duration::ZERO),
 				radius: 6,
 			},
 		},
@@ -122,7 +118,7 @@ fn add_two_dogs(world: &mut World) {
 				pos: [
 					PosX { val: 40., spd: SpdX { val: 100., acc: AccX { val: 0. } } },
 					PosX { val: 0., spd: SpdX { val: 20.,  acc: AccX { val: -1000. } } }
-				].to_flux_vec(Duration::ZERO),
+				].to_flux(Duration::ZERO),
 				radius: 12,
 			},
 		},
@@ -134,7 +130,7 @@ fn add_two_dogs(world: &mut World) {
 				pos: [
 					PosX { val: 0.0, spd: SpdX { val: -00., acc: AccX { val: 00. } } },
 					PosX { val: -40., spd: SpdX { val: -60., acc: AccX { val: -1000. } } }
-				].to_flux_vec(Duration::ZERO),
+				].to_flux(Duration::ZERO),
 				radius: 6,
 			},
 		},
@@ -146,7 +142,7 @@ fn add_two_dogs(world: &mut World) {
 				pos: [
 					PosX { val: 0.0, spd: SpdX { val: -00., acc: AccX { val: 00. } } },
 					PosX { val: 40., spd: SpdX { val: -40., acc: AccX { val: -1000. } } }
-				].to_flux_vec(Duration::ZERO),
+				].to_flux(Duration::ZERO),
 				radius: 6,
 			},
 		},
@@ -178,7 +174,7 @@ fn add_many_dogs(world: &mut World) {
 								acc: AccX { val: -500. }
 							}
 						}
-					].to_flux_vec(Duration::ZERO),
+					].to_flux(Duration::ZERO),
 					radius,
 				},
 			}
@@ -189,19 +185,19 @@ fn add_many_dogs(world: &mut World) {
 }
 
 fn when_func_a(pos: Fetch<&Pos>) -> impl Prediction<TimeRanges = impl TimeRanges + Send + Sync + 'static> {
-	let pred = pos[0].when_eq_constant(RIGHT - pos.radius)
-		| pos[0].when_eq_constant(LEFT + pos.radius);
+	let pred = pos.when_index_eq_constant(0, RIGHT - pos.radius)
+		| pos.when_index_eq_constant(0, LEFT + pos.radius);
 	pred.pre()
 }
 
 fn do_func_a(PredFetch((pos,)): PredFetch<(&mut Pos,)>, time: Res<Time<Chime>>) {
-	let mut pos_x = pos[0].at_mut(time.elapsed());
-	pos_x.spd.val *= -1.;
+	let mut pos_x = pos.at_mut(time.elapsed());
+	pos_x[0].spd.val *= -1.;
 }
 
 fn when_func_b(pos: Fetch<&Pos>) -> impl Prediction<TimeRanges = impl TimeRanges + Send + Sync + 'static> {
-	let pred = pos[1].when_eq_constant(TOP - pos.radius)
-		| pos[1].when_eq_constant(BOTTOM + pos.radius);
+	let pred = pos.when_index_eq_constant(1, TOP - pos.radius)
+		| pos.when_index_eq_constant(1, BOTTOM + pos.radius);
 	pred.pre()
 	// if pred.find(|t| *t > time).is_none() && pos[1].at(time).spd.acc.val != 0. {
 	// 	println!("Wow! {time:?}, {:?}, {:?}\n  {:?}, spd: {:?}",
@@ -214,7 +210,7 @@ fn when_func_b(pos: Fetch<&Pos>) -> impl Prediction<TimeRanges = impl TimeRanges
 }
 
 fn do_func_b(PredFetch((pos,)): PredFetch<(&mut Pos,)>, time: Res<Time<Chime>>) {
-	let mut poss = pos.at_vec_mut(time.elapsed());
+	let mut poss = pos.at_mut(time.elapsed());
 	let pos_y = &mut poss[1];
 	pos_y.spd.val *= -1.;
 	if pos_y.spd.val >= 0. && pos_y.spd.val < 1. { // > -(2. * pos_y.spd.acc.val.abs()).sqrt()
@@ -235,11 +231,10 @@ fn do_func_b(PredFetch((pos,)): PredFetch<(&mut Pos,)>, time: Res<Time<Chime>>) 
 }
 
 fn outlier_func_b(PredFetch((pos,)): PredFetch<(&mut Pos,)>, time: Res<Time<Chime>>) {
-	let mut pos_y = pos[1].at_mut(time.elapsed());
-	pos_y.spd.val = 0.;
-	pos_y.spd.acc.val = 0.;
-	drop(pos_y);
-	pos[0].at_mut(time.elapsed()).spd.val = 0.;
+	let mut pos = pos.at_mut(time.elapsed());
+	pos[0].spd.val = 0.;
+	pos[1].spd.val = 0.;
+	pos[1].spd.acc.val = 0.;
 	// println!("ground freeze {:?}", (ent, time.elapsed(), 
 	// 	pos[0].poly(pos[0].base_time()),
 	// 	pos[1].poly(pos[1].base_time())));
@@ -249,8 +244,8 @@ fn when_func_c([pos, b_pos]: [Fetch<&Pos>; 2]) -> impl Prediction<TimeRanges = i
 	// let mut n = 0;
 	// let a_time = Instant::now();
 	// for (state, [pos]) in state.into_iter() {
-		let time = pos.max_base_time();
-		let pos_poly_vec = pos.poly_vec(time);
+		let time = pos.base_time();
+		let pos_poly_vec = pos.poly(time);
 		// for (state, [b_pos]) in state {
 			// !!! This kind of thing could be optimized by organizing entities
 			// into grid zones, and only making predictions with entities in
@@ -262,7 +257,7 @@ fn when_func_c([pos, b_pos]: [Fetch<&Pos>; 2]) -> impl Prediction<TimeRanges = i
 				.poly(Duration::ZERO);
 			
 			// let a_time = Instant::now();
-			let b_pos_vec = b_pos.poly_vec(b_pos.max_base_time());
+			let b_pos_vec = b_pos.poly(b_pos.base_time());
 			// println!("A: {:?}", Instant::now().duration_since(a_time));
 			// let a_time = Instant::now();
 			let /*mut*/ pred = pos_poly_vec.when_dis_eq(b_pos_vec, dis);
@@ -334,12 +329,12 @@ fn when_func_c([pos, b_pos]: [Fetch<&Pos>; 2]) -> impl Prediction<TimeRanges = i
 }
 
 fn do_func_c(PredFetch(([poss, b_poss],)): PredFetch<([&mut Pos; 2],)>, time: Res<Time<Chime>>) {
-	let poly = (poss[0].poly(poss[0].base_time()) - b_poss[0].poly(b_poss[0].base_time())).sqr()
-		+ (poss[1].poly(poss[1].base_time()) - b_poss[1].poly(b_poss[1].base_time())).sqr();
+	let poly = (poss.index_poly(0, poss.base_time()) - b_poss.index_poly(0, b_poss.base_time())).sqr()
+		+ (poss.index_poly(1, poss.base_time()) - b_poss.index_poly(1, b_poss.base_time())).sqr();
 	assert!(poly.rate_at(time.elapsed()) <= 0., "{:?}", poly);
 	
-	let mut pos = poss.at_vec_mut(time.elapsed());
-	let mut b_pos = b_poss.at_vec_mut(time.elapsed());
+	let mut pos = poss.at_mut(time.elapsed());
+	let mut b_pos = b_poss.at_mut(time.elapsed());
 	let x = pos[0].val - b_pos[0].val;
 	let y = pos[1].val - b_pos[1].val;
 	let dir_x = x / x.hypot(y);
@@ -413,8 +408,8 @@ fn do_func_c(PredFetch(([poss, b_poss],)): PredFetch<([&mut Pos; 2],)>, time: Re
 }
 
 fn outlier_func_c(PredFetch(([poss, b_poss],)): PredFetch<([&mut Pos; 2],)>, time: Res<Time<Chime>>) {
-	let mut pos = poss.at_vec_mut(time.elapsed());
-	let mut b_pos = b_poss.at_vec_mut(time.elapsed());
+	let mut pos = poss.at_mut(time.elapsed());
+	let mut b_pos = b_poss.at_mut(time.elapsed());
 	pos[0].spd.val = 0.; pos[0].spd.acc.val = 0.;
 	pos[1].spd.val = 0.; pos[1].spd.acc.val = 0.;
 	b_pos[0].spd.val = 0.; b_pos[0].spd.acc.val = 0.;
@@ -483,8 +478,7 @@ fn discrete_update(mut query: Query<&mut Pos>, time: Res<Time>) {
 fn debug_draw(mut draw: Gizmos, time: Res<Time>, pred_time: Res<Time<Chime>>, query: Query<(&Pos, Has<Gun>)>) {
 	let s = time.elapsed_seconds();
 	for (pos, has_gun) in &query {
-		let x = pos[0].at(pred_time.elapsed());
-		let y = pos[1].at(pred_time.elapsed());
+		let [x, y] = &*pos.at(pred_time.elapsed());
 		let vec = Vec2::new(x.val as f32, y.val as f32);
 		draw.circle_2d(vec, pos.radius as f32, bevy::color::palettes::basic::YELLOW);
 		if has_gun {
