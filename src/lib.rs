@@ -294,17 +294,9 @@ where
 	}
 }
 
-/// Begin/end-type system for a chime event (object-safe).
-pub trait ChimeEventSystem: System<In=(), Out=()> {}
-
-impl<T> ChimeEventSystem for T
-where
-	T: System<In=(), Out=()> + Clone,
-{}
-
-/// ...
+/// Conversion into a begin/end-type system for a chime event.
 pub trait IntoChimeEventSystem<I: PredId, P: ChimeSystemParamGroup<I>> {
-	fn into_chime_event_system(self, id: I) -> impl ChimeEventSystem;
+	fn into_chime_event_system(self, id: I) -> impl System<In=(), Out=()>;
 }
 
 macro_rules! impl_into_chime_event_system {
@@ -321,7 +313,7 @@ macro_rules! impl_into_chime_event_system {
 				+ Clone + Send + Sync + 'static,
 		{
 			#[allow(unused_variables)]
-			fn into_chime_event_system(mut self, id: I) -> impl ChimeEventSystem {
+			fn into_chime_event_system(mut self, id: I) -> impl System<In=(), Out=()> {
 				IntoSystem::into_system(move |
 					param: system::StaticSystemParam<($($param::Param,)*)>,
 					time: bevy_ecs::system::Res<Time<Chime>>,
