@@ -42,7 +42,7 @@ pub trait AddChimeEvent {
 	) -> &mut Self
 	where
 		P: Prediction,
-		P::TimeRanges: Send + Sync + 'static,
+		P::TimeRanges: 'static,
 		B: PredBranch,
 		A: ReadOnlySystemParam + 'static,
 		I: IntoInput<B::Input> + Clone + Send + Sync + 'static,
@@ -63,7 +63,7 @@ impl AddChimeEvent for App {
 	) -> &mut Self
 	where
 		P: Prediction,
-		P::TimeRanges: Send + Sync + 'static,
+		P::TimeRanges: 'static,
 		B: PredBranch,
 		A: ReadOnlySystemParam + 'static,
 		I: IntoInput<B::Input> + Clone + Send + Sync + 'static,
@@ -165,7 +165,7 @@ where
 	fn into_events(self) -> ChimeEventBuilder<P, B, A, B::Input, Self, BlankSystem, BlankSystem, BlankSystem>
 	where
 		Self: Sized,
-		B::Input: Default + Send + Sync + 'static,
+		B::Input: Default + 'static,
 	{
 		ChimeEventBuilder::new(self, B::Input::default())
 	}
@@ -189,7 +189,7 @@ pub trait PredCaseFn<P, B: PredBranch, M> {
 	fn into_events(self) -> ChimeEventBuilder<P, B, (), B::Input, impl PredFn<P, B, ()>, BlankSystem, BlankSystem, BlankSystem>
 	where
 		Self: Sized,
-		<B as PredBranch>::Input: Default + Send + Sync,
+		<B as PredBranch>::Input: Default,
 	{
 		ChimeEventBuilder::new(
 			PredRun::<Self, M>(self, std::marker::PhantomData),
@@ -295,11 +295,11 @@ where
 }
 
 /// Begin/end-type system for a chime event (object-safe).
-pub trait ChimeEventSystem: System<In=(), Out=()> + Send + Sync {}
+pub trait ChimeEventSystem: System<In=(), Out=()> {}
 
 impl<T> ChimeEventSystem for T
 where
-	T: System<In=(), Out=()> + Send + Sync + Clone,
+	T: System<In=(), Out=()> + Clone,
 {}
 
 /// ...
@@ -597,7 +597,7 @@ impl ChimeEventMap {
 	fn setup_id<I, T>(&mut self) -> usize
 	where
 		I: PredId,
-		T: time::TimeRanges + Send + Sync + 'static,
+		T: time::TimeRanges + 'static,
 	{
 		self.table.push(Box::<EventMap<I, T>>::default());
 		self.table.len() - 1
