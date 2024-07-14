@@ -24,7 +24,7 @@ use bevy_app::{App, MainScheduleOrder, Plugin, PreUpdate};
 use bevy_ecs::schedule::{Schedule, Schedules, ScheduleLabel};
 use bevy_ecs::system;
 use bevy_ecs::system::{IntoSystem, ReadOnlySystemParam, System, SystemParamItem};
-use bevy_ecs::world::{Mut, World};
+use bevy_ecs::world::World;
 use bevy_time::Time;
 
 use chime::Chime;
@@ -88,7 +88,7 @@ impl AddChimeEvent for App {
 		
 		assert!(begin_sys.is_some() || end_sys.is_some() || outlier_sys.is_some());
 		
-		let id = self.world_mut().resource_mut::<ChimeEventMap>()
+		let id = self.world_mut().non_send_resource_mut::<ChimeEventMap>()
 			.setup_id::<B::Id, P::TimeRanges>();
 		
 		let mut state = system::SystemState::<(
@@ -127,7 +127,7 @@ impl AddChimeEvent for App {
 				}
 			}
 			let time = world.resource::<Time<Chime>>().elapsed();
-			world.resource_scope::<ChimeEventMap, ()>(|world, mut event_map| {
+			if let Some(mut event_map) = world.remove_non_send_resource::<ChimeEventMap>() {
 				event_map.sched(
 					PredNode2::<B, P> { inner: node },
 					time,
@@ -137,7 +137,10 @@ impl AddChimeEvent for App {
 					outlier_sys.as_ref(),
 					world,
 				);
-			});
+				world.insert_non_send_resource(event_map);
+			} else {
+				panic!("ChimeEventMap resource should exist");
+			}
 		};
 		
 		self.world_mut().resource_mut::<Schedules>()
@@ -432,7 +435,7 @@ impl Plugin for ChimePlugin {
 		schedule_order.insert_after(PreUpdate, ChimeUpdate);
 		app.add_systems(ChimeUpdate, update);
 		app.world_mut().insert_resource(Time::<Chime>::default());
-		app.world_mut().insert_resource(ChimeEventMap::default());
+		app.world_mut().insert_non_send_resource(ChimeEventMap::default());
 		app.world_mut().add_schedule(Schedule::new(ChimeSchedule));
 	}
 }
@@ -467,7 +470,7 @@ fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule)
 	
 	pred_schedule.run(world);
 	
-	while let Some(duration) = world.resource::<ChimeEventMap>().first_time() {
+	while let Some(duration) = world.non_send_resource::<ChimeEventMap>().first_time() {
 		if time >= duration {
 			world.resource_mut::<Time<Chime>>()
 				.advance_to(duration);
@@ -478,9 +481,12 @@ fn chime_update(world: &mut World, time: Duration, pred_schedule: &mut Schedule)
 			}
 			
 			let a_time = Instant::now();
-			world.resource_scope(|world, mut event_maps: Mut<ChimeEventMap>| {
-				event_maps.run_first(world)
-			});
+			if let Some(mut event_maps) = world.remove_non_send_resource::<ChimeEventMap>() {
+				event_maps.run_first(world);
+				world.insert_non_send_resource(event_maps);
+			} else {
+				panic!("ChimeEventMap resource should exist")
+			}
 			tot_a += Instant::now().duration_since(a_time);
 			
 			 // Reschedule Events:
@@ -565,9 +571,9 @@ where
 }
 
 /// A set of independent `EventMap` values.
-#[derive(system::Resource, Default)]
+#[derive(Default)]
 struct ChimeEventMap {
-	table: Vec<Box<dyn AnyEventMap + Send + Sync>>
+	table: Vec<Box<dyn AnyEventMap>>
 }
 
 impl ChimeEventMap {
