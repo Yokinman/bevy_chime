@@ -8,7 +8,6 @@ use chime::*;
 use chime::pred::{Prediction, WhenDisEq, /*WhenDis, WhenEq, When*/};
 
 use std::time::{Duration, /*Instant*/};
-use chime::time::TimeRanges;
 
 #[flux(
 	kind = sum::Sum<f64, 2>,
@@ -184,7 +183,7 @@ fn add_many_dogs(world: &mut World) {
 	println!("COUNT: {n}");
 }
 
-fn when_func_a(pos: Fetch<&Pos>) -> impl Prediction<TimeRanges = impl TimeRanges + Send + Sync + 'static> {
+fn when_func_a(pos: Fetch<&Pos>) -> impl Prediction {
 	let pred = pos.when_index_eq_constant(0, RIGHT - pos.radius)
 		| pos.when_index_eq_constant(0, LEFT + pos.radius);
 	pred.pre()
@@ -195,7 +194,7 @@ fn do_func_a(PredFetch((pos,)): PredFetch<(&mut Pos,)>, time: Res<Time<Chime>>) 
 	pos_x[0].spd.val *= -1.;
 }
 
-fn when_func_b(pos: Fetch<&Pos>) -> impl Prediction<TimeRanges = impl TimeRanges + Send + Sync + 'static> {
+fn when_func_b(pos: Fetch<&Pos>) -> impl Prediction {
 	let pred = pos.when_index_eq_constant(1, TOP - pos.radius)
 		| pos.when_index_eq_constant(1, BOTTOM + pos.radius);
 	pred.pre()
@@ -240,7 +239,7 @@ fn outlier_func_b(PredFetch((pos,)): PredFetch<(&mut Pos,)>, time: Res<Time<Chim
 	// 	pos[1].poly(pos[1].base_time())));
 }
 
-fn when_func_c([pos, b_pos]: [Fetch<&Pos>; 2]) -> impl Prediction<TimeRanges = impl TimeRanges + Send + Sync + 'static> {
+fn when_func_c([pos, b_pos]: [Fetch<&Pos>; 2]) -> impl Prediction {
 	// let mut n = 0;
 	// let a_time = Instant::now();
 	// for (state, [pos]) in state.into_iter() {
