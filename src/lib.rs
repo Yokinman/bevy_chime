@@ -35,7 +35,7 @@ use chime::time::InclusiveTimeRanges;
 type BlankSystem = fn();
 
 /// Builder entry point for adding chime events to a [`World`].
-pub trait AddChimeEvent {
+pub trait AddChimeEvents {
 	fn add_chime_events<P, B, A, I, F, BgnSys, EndSys, OutSys, BgnMarker, EndMarker, OutMarker>(
 		&mut self,
 		events: ChimeEventBuilder<P, B, A, I, F, BgnSys, EndSys, OutSys>,
@@ -56,7 +56,7 @@ pub trait AddChimeEvent {
 	;
 }
 
-impl AddChimeEvent for App {
+impl AddChimeEvents for App {
 	fn add_chime_events<P, B, A, I, F, BgnSys, EndSys, OutSys, BgnMarker, EndMarker, OutMarker>(
 		&mut self,
 		events: ChimeEventBuilder<P, B, A, I, F, BgnSys, EndSys, OutSys>,

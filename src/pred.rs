@@ -1140,7 +1140,7 @@ mod _pred_fetch_data_impls {
 	}
 }
 
-/// For input to [`crate::AddChimeEvent::add_chime_events`].
+/// For input to [`crate::AddChimeEvents::add_chime_events`].
 #[derive(Copy, Clone, Default)]
 pub struct In<T>(pub T);
 
