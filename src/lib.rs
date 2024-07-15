@@ -47,9 +47,9 @@ pub trait AddChimeEvents {
 		A: ReadOnlySystemParam + 'static,
 		I: IntoInput<B::Input> + Clone + Send + Sync + 'static,
 		F: PredSystem<P, B, A> + Send + Sync + 'static,
-		BgnSys: IntoChimeEventSystem<B::Id, BgnMarker> + Clone + Send + Sync + 'static,
-		EndSys: IntoChimeEventSystem<B::Id, EndMarker> + Clone + Send + Sync + 'static,
-		OutSys: IntoChimeEventSystem<B::Id, OutMarker> + Clone + Send + Sync + 'static,
+		BgnSys: IntoChimeSystem<B::Id, BgnMarker> + Clone + Send + Sync + 'static,
+		EndSys: IntoChimeSystem<B::Id, EndMarker> + Clone + Send + Sync + 'static,
+		OutSys: IntoChimeSystem<B::Id, OutMarker> + Clone + Send + Sync + 'static,
 		BgnMarker: ChimeSystemParamGroup<B::Id>,
 		EndMarker: ChimeSystemParamGroup<B::Id>,
 		OutMarker: ChimeSystemParamGroup<B::Id>,
@@ -68,9 +68,9 @@ impl AddChimeEvents for App {
 		A: ReadOnlySystemParam + 'static,
 		I: IntoInput<B::Input> + Clone + Send + Sync + 'static,
 		F: PredSystem<P, B, A> + Send + Sync + 'static,
-		BgnSys: IntoChimeEventSystem<B::Id, BgnMarker> + Clone + Send + Sync + 'static,
-		EndSys: IntoChimeEventSystem<B::Id, EndMarker> + Clone + Send + Sync + 'static,
-		OutSys: IntoChimeEventSystem<B::Id, OutMarker> + Clone + Send + Sync + 'static,
+		BgnSys: IntoChimeSystem<B::Id, BgnMarker> + Clone + Send + Sync + 'static,
+		EndSys: IntoChimeSystem<B::Id, EndMarker> + Clone + Send + Sync + 'static,
+		OutSys: IntoChimeSystem<B::Id, OutMarker> + Clone + Send + Sync + 'static,
 		BgnMarker: ChimeSystemParamGroup<B::Id>,
 		EndMarker: ChimeSystemParamGroup<B::Id>,
 		OutMarker: ChimeSystemParamGroup<B::Id>,
@@ -265,7 +265,7 @@ where
 }
 
 /// Conversion into a begin/end-type system for a chime event.
-pub trait IntoChimeEventSystem<I: PredId, P: ChimeSystemParamGroup<I>> {
+pub trait IntoChimeSystem<I: PredId, P: ChimeSystemParamGroup<I>> {
 	fn into_chime_event_system(self, id: I) -> impl System<In=(), Out=()>;
 }
 
@@ -275,7 +275,7 @@ macro_rules! impl_into_chime_event_system {
 		$(impl_into_chime_event_system!($($rest),*);)?
 	};
 	(@impl $($param:ident),*) => {
-		impl<F, I, $($param,)*> IntoChimeEventSystem<I, ($($param,)*)> for F
+		impl<F, I, $($param,)*> IntoChimeSystem<I, ($($param,)*)> for F
 		where
 			I: PredId,
 			$($param: ChimeSystemParam<I>, $param::Param: 'static,)*
@@ -324,7 +324,7 @@ where
 	/// The system that runs when the event's prediction becomes active.
 	pub fn on_begin<T, Marker>(self, sys: T) -> ChimeEventBuilder<U, P, A, I, F, T, EndSys, OutSys>
 	where
-		T: IntoChimeEventSystem<P::Id, Marker>,
+		T: IntoChimeSystem<P::Id, Marker>,
 		Marker: ChimeSystemParamGroup<P::Id>,
 	{
 		assert!(self.begin_sys.is_none(), "can't have >1 begin systems");
@@ -341,7 +341,7 @@ where
 	/// The system that runs when the event's prediction becomes inactive.
 	pub fn on_end<T, Marker>(self, sys: T) -> ChimeEventBuilder<U, P, A, I, F, BgnSys, T, OutSys>
 	where
-		T: IntoChimeEventSystem<P::Id, Marker>,
+		T: IntoChimeSystem<P::Id, Marker>,
 		Marker: ChimeSystemParamGroup<P::Id>,
 	{
 		assert!(self.end_sys.is_none(), "can't have >1 end systems");
@@ -358,7 +358,7 @@ where
 	/// The system that runs when the event's prediction repeats excessively.
 	pub fn on_repeat<T, Marker>(self, sys: T) -> ChimeEventBuilder<U, P, A, I, F, BgnSys, EndSys, T>
 	where
-		T: IntoChimeEventSystem<P::Id, Marker>,
+		T: IntoChimeSystem<P::Id, Marker>,
 		Marker: ChimeSystemParamGroup<P::Id>,
 	{
 		assert!(self.outlier_sys.is_none(), "can't have >1 outlier systems");
@@ -621,9 +621,9 @@ impl ChimeEventMap {
 		I: PredId,
 		T: Prediction,
 		T::TimeRanges: 'static,
-		BgnSys: IntoChimeEventSystem<I, BgnMarker> + Clone,
-		EndSys: IntoChimeEventSystem<I, EndMarker> + Clone,
-		OutSys: IntoChimeEventSystem<I, OutMarker> + Clone,
+		BgnSys: IntoChimeSystem<I, BgnMarker> + Clone,
+		EndSys: IntoChimeSystem<I, EndMarker> + Clone,
+		OutSys: IntoChimeSystem<I, OutMarker> + Clone,
 		BgnMarker: ChimeSystemParamGroup<I>,
 		EndMarker: ChimeSystemParamGroup<I>,
 		OutMarker: ChimeSystemParamGroup<I>,
