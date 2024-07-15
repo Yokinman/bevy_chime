@@ -1342,7 +1342,7 @@ mod testing {
 		let update_vec = update_list.to_vec();
 		let b_update_vec = b_update_list.to_vec();
 		struct TestRunA<const A: usize, const B: usize>([Vec<usize>; 2]);
-		impl<const A: usize, const B: usize> PredFn<
+		impl<const A: usize, const B: usize> PredSystem<
 			DynPred,
 			Single<PredPairComb<FetchComb<'_, &'static Test>, FetchComb<'_, &'static TestB>>>,
 			(
@@ -1417,7 +1417,7 @@ mod testing {
 		let update_vec = update_list.to_vec();
 		let b_update_vec = b_update_list.to_vec();
 		struct TestRunB<const A: usize, const B: usize>([Vec<usize>; 2]);
-		impl<const A: usize, const B: usize> PredFn<
+		impl<const A: usize, const B: usize> PredSystem<
 			DynPred,
 			Nested<FetchComb<'_, &'static Test>, Single<FetchComb<'_, &'static TestB>>>,
 			(
@@ -1563,7 +1563,7 @@ mod testing {
 		 // Setup [`PredArrayComb`] Testing:
 		let update_vec = update_list.to_vec();
 		struct TestRunA<const N: usize, const R: usize, const S: usize>(Vec<usize>);
-		impl<const N: usize, const R: usize, const S: usize> PredFn<
+		impl<const N: usize, const R: usize, const S: usize> PredSystem<
 			DynPred,
 			Single<PredArrayComb<FetchComb<'_, &'static Test>, R>>,
 			(
@@ -1634,7 +1634,7 @@ mod testing {
 		let update_vec = update_list.to_vec();
 		struct TestRunB<const N: usize, const R: usize, const S: usize>(Vec<usize>);
 		type Param<'w, const S: usize> = NestedPerm<PredArrayComb<FetchComb<'w, &'static Test>, 1>, Single<PredArrayComb<FetchComb<'w, &'static Test>, S>>>;
-		impl<const N: usize, const R: usize, const S: usize> PredFn<
+		impl<const N: usize, const R: usize, const S: usize> PredSystem<
 			DynPred,
 			Param<'_, S>,
 			(

@@ -46,7 +46,7 @@ pub trait AddChimeEvent {
 		B: PredBranch,
 		A: ReadOnlySystemParam + 'static,
 		I: IntoInput<B::Input> + Clone + Send + Sync + 'static,
-		F: PredFn<P, B, A> + Send + Sync + 'static,
+		F: PredSystem<P, B, A> + Send + Sync + 'static,
 		BgnSys: IntoChimeEventSystem<B::Id, BgnMarker> + Clone + Send + Sync + 'static,
 		EndSys: IntoChimeEventSystem<B::Id, EndMarker> + Clone + Send + Sync + 'static,
 		OutSys: IntoChimeEventSystem<B::Id, OutMarker> + Clone + Send + Sync + 'static,
@@ -67,7 +67,7 @@ impl AddChimeEvent for App {
 		B: PredBranch,
 		A: ReadOnlySystemParam + 'static,
 		I: IntoInput<B::Input> + Clone + Send + Sync + 'static,
-		F: PredFn<P, B, A> + Send + Sync + 'static,
+		F: PredSystem<P, B, A> + Send + Sync + 'static,
 		BgnSys: IntoChimeEventSystem<B::Id, BgnMarker> + Clone + Send + Sync + 'static,
 		EndSys: IntoChimeEventSystem<B::Id, EndMarker> + Clone + Send + Sync + 'static,
 		OutSys: IntoChimeEventSystem<B::Id, OutMarker> + Clone + Send + Sync + 'static,
@@ -151,11 +151,11 @@ impl AddChimeEvent for App {
 	}
 }
 
-/// [`PredFn`] type that just packs extra argument info with a [`PredCaseFn`].
+/// [`PredSystem`] type that just packs extra argument info with a [`PredCaseFn`].
 pub struct PredRun<T, M>(T, std::marker::PhantomData<M>);
 
 /// This is pretty much a no-op except for testing purposes.
-pub trait PredFn<P, B, A>
+pub trait PredSystem<P, B, A>
 where
 	B: PredBranch,
 	A: ReadOnlySystemParam,
@@ -163,7 +163,7 @@ where
 	fn run<K: CombKind>(&self, state: PredSubState2<P, B, K>, param: SystemParamItem<A>);
 }
 
-impl<T, M, P, B> PredFn<P, B, ()> for PredRun<T, M>
+impl<T, M, P, B> PredSystem<P, B, ()> for PredRun<T, M>
 where
 	B: PredBranch,
 	T: PredCaseFn<P, B, M>,
@@ -305,7 +305,7 @@ pub struct ChimeEventBuilder<T, P, A, I, F, BgnSys, EndSys, OutSys>
 where
 	P: PredBranch,
 	A: ReadOnlySystemParam,
-	F: PredFn<T, P, A>,
+	F: PredSystem<T, P, A>,
 {
 	pred_sys: F,
 	begin_sys: Option<BgnSys>,
@@ -319,7 +319,7 @@ impl<U, P, A, I, F, BgnSys, EndSys, OutSys> ChimeEventBuilder<U, P, A, I, F, Bgn
 where
 	P: PredBranch,
 	A: ReadOnlySystemParam,
-	F: PredFn<U, P, A>,
+	F: PredSystem<U, P, A>,
 {
 	/// The system that runs when the event's prediction becomes active.
 	pub fn on_begin<T, Marker>(self, sys: T) -> ChimeEventBuilder<U, P, A, I, F, T, EndSys, OutSys>
@@ -412,7 +412,7 @@ impl<P, B, A, F> ChimeEventBuilder<P, B, A, B::Input, F, BlankSystem, BlankSyste
 where
 	B: PredBranch<Input: Default>,
 	A: ReadOnlySystemParam,
-	F: PredFn<P, B, A>,
+	F: PredSystem<P, B, A>,
 {
 	pub(crate) fn new(pred_sys: F) -> Self {
 		Self {
