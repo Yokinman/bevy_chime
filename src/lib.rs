@@ -151,8 +151,8 @@ impl AddChimeEvent for App {
 	}
 }
 
-/// ...
-struct PredRun<T, M>(T, std::marker::PhantomData<M>);
+/// [`PredFn`] type that just packs extra argument info with a [`PredCaseFn`].
+pub struct PredRun<T, M>(T, std::marker::PhantomData<M>);
 
 /// This is pretty much a no-op except for testing purposes.
 pub trait PredFn<P, B, A>
@@ -161,14 +161,6 @@ where
 	A: ReadOnlySystemParam,
 {
 	fn run<K: CombKind>(&self, state: PredSubState2<P, B, K>, param: SystemParamItem<A>);
-	
-	fn into_events(self) -> ChimeEventBuilder<P, B, A, B::Input, Self, BlankSystem, BlankSystem, BlankSystem>
-	where
-		Self: Sized,
-		B::Input: Default + 'static,
-	{
-		ChimeEventBuilder::new(self, B::Input::default())
-	}
 }
 
 impl<T, M, P, B> PredFn<P, B, ()> for PredRun<T, M>
@@ -185,28 +177,6 @@ where
 /// similar to a read-only [`bevy_ecs::system::SystemParamFunction`].
 pub trait PredCaseFn<P, B: PredBranch, M> {
 	fn run<K: CombKind>(&self, input: PredSubState2<P, B, K>);
-	
-	fn into_events(self) -> ChimeEventBuilder<P, B, (), B::Input, impl PredFn<P, B, ()>, BlankSystem, BlankSystem, BlankSystem>
-	where
-		Self: Sized,
-		<B as PredBranch>::Input: Default,
-	{
-		ChimeEventBuilder::new(
-			PredRun::<Self, M>(self, std::marker::PhantomData),
-			B::Input::default(),
-		)
-	}
-	
-	fn into_events_with_input<I>(self, input: I)
-		-> ChimeEventBuilder<P, B, (), I, impl PredFn<P, B, ()>, BlankSystem, BlankSystem, BlankSystem>
-	where
-		Self: Sized,
-	{
-		ChimeEventBuilder::new(
-			PredRun::<Self, M>(self, std::marker::PhantomData),
-			input,
-		)
-	}
 }
 
 impl<F, P> PredCaseFn<P, Single<EmptyComb>, ()> for F
@@ -351,17 +321,6 @@ where
 	A: ReadOnlySystemParam,
 	F: PredFn<U, P, A>,
 {
-	fn new(pred_sys: F, input: I) -> Self {
-		ChimeEventBuilder {
-			pred_sys,
-			begin_sys: None,
-			end_sys: None,
-			outlier_sys: None,
-			input,
-			_param: std::marker::PhantomData,
-		}
-	}
-	
 	/// The system that runs when the event's prediction becomes active.
 	pub fn on_begin<T, Marker>(self, sys: T) -> ChimeEventBuilder<U, P, A, I, F, T, EndSys, OutSys>
 	where
@@ -409,6 +368,59 @@ where
 			end_sys: self.end_sys,
 			outlier_sys: Some(sys),
 			input: self.input,
+			_param: std::marker::PhantomData,
+		}
+	}
+}
+
+impl<P, B, F, M> ChimeEventBuilder<P, B, (), B::Input, PredRun<F, M>, BlankSystem, BlankSystem, BlankSystem>
+where
+	B: PredBranch<Input: Default>,
+	F: PredCaseFn<P, B, M>,
+{
+	pub fn from_fn(pred_sys: F) -> Self {
+		Self {
+			pred_sys: PredRun(pred_sys, std::marker::PhantomData),
+			begin_sys: None,
+			end_sys: None,
+			outlier_sys: None,
+			input: B::Input::default(),
+			_param: std::marker::PhantomData,
+		}
+	}
+}
+
+impl<P, B, I, F, M> ChimeEventBuilder<P, B, (), I, PredRun<F, M>, BlankSystem, BlankSystem, BlankSystem>
+where
+	B: PredBranch,
+	F: PredCaseFn<P, B, M>,
+{
+	pub fn from_fn_with_input(input: I, pred_sys: F) -> Self {
+		Self {
+			pred_sys: PredRun(pred_sys, std::marker::PhantomData),
+			begin_sys: None,
+			end_sys: None,
+			outlier_sys: None,
+			input,
+			_param: std::marker::PhantomData,
+		}
+	}
+}
+
+#[cfg(test)]
+impl<P, B, A, F> ChimeEventBuilder<P, B, A, B::Input, F, BlankSystem, BlankSystem, BlankSystem>
+where
+	B: PredBranch<Input: Default>,
+	A: ReadOnlySystemParam,
+	F: PredFn<P, B, A>,
+{
+	pub(crate) fn new(pred_sys: F) -> Self {
+		Self {
+			pred_sys,
+			begin_sys: None,
+			end_sys: None,
+			outlier_sys: None,
+			input: B::Input::default(),
 			_param: std::marker::PhantomData,
 		}
 	}

@@ -1410,7 +1410,7 @@ mod testing {
 				*index += 1;
 			}
 		}
-		app.add_chime_events(TestRunA::<A, B>([update_vec, b_update_vec]).into_events().on_begin(|| {}));
+		app.add_chime_events(ChimeEventBuilder::new(TestRunA::<A, B>([update_vec, b_update_vec])).on_begin(|| {}));
 		
 		
 		 // Setup [`PredSubState::outer_iter`] Testing:
@@ -1508,7 +1508,7 @@ mod testing {
 				*index += 1;
 			}
 		}
-		app.add_chime_events(TestRunB::<A, B>([update_vec, b_update_vec]).into_events().on_begin(|| {}));
+		app.add_chime_events(ChimeEventBuilder::new(TestRunB::<A, B>([update_vec, b_update_vec])).on_begin(|| {}));
 		
 		 // Run Tests:
 		app.world_mut().run_schedule(ChimeSchedule);
@@ -1628,7 +1628,7 @@ mod testing {
 				*index += 1;
 			}
 		}
-		app.add_chime_events(TestRunA::<N, R, S>(update_vec).into_events().on_begin(|| {}));
+		app.add_chime_events(ChimeEventBuilder::new(TestRunA::<N, R, S>(update_vec)).on_begin(|| {}));
 		
 		 // Setup [`PredSubState::outer_iter`] Testing:
 		let update_vec = update_list.to_vec();
@@ -1715,7 +1715,7 @@ mod testing {
 				*index += 1;
 			}
 		}
-		app.add_chime_events(TestRunB::<N, R, S>(update_vec).into_events().on_begin(|| {}));
+		app.add_chime_events(ChimeEventBuilder::new(TestRunB::<N, R, S>(update_vec)).on_begin(|| {}));
 		
 		 // Run Tests:
 		app.world_mut().run_schedule(ChimeSchedule);
