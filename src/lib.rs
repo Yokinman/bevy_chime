@@ -152,7 +152,7 @@ impl AddChimeEvent for App {
 }
 
 /// [`PredSystem`] type that just packs extra argument info with a [`PredCaseFn`].
-pub struct PredRun<T, M>(T, std::marker::PhantomData<M>);
+pub struct PredFnSys<T, M>(T, std::marker::PhantomData<M>);
 
 /// This is pretty much a no-op except for testing purposes.
 pub trait PredSystem<P, B, A>
@@ -163,7 +163,7 @@ where
 	fn run<K: CombKind>(&self, state: PredSubState2<P, B, K>, param: SystemParamItem<A>);
 }
 
-impl<T, M, P, B> PredSystem<P, B, ()> for PredRun<T, M>
+impl<T, M, P, B> PredSystem<P, B, ()> for PredFnSys<T, M>
 where
 	B: PredBranch,
 	T: PredCaseFn<P, B, M>,
@@ -373,14 +373,14 @@ where
 	}
 }
 
-impl<P, B, F, M> ChimeEventBuilder<P, B, (), B::Input, PredRun<F, M>, BlankSystem, BlankSystem, BlankSystem>
+impl<P, B, F, M> ChimeEventBuilder<P, B, (), B::Input, PredFnSys<F, M>, BlankSystem, BlankSystem, BlankSystem>
 where
 	B: PredBranch<Input: Default>,
 	F: PredCaseFn<P, B, M>,
 {
 	pub fn from_fn(pred_sys: F) -> Self {
 		Self {
-			pred_sys: PredRun(pred_sys, std::marker::PhantomData),
+			pred_sys: PredFnSys(pred_sys, std::marker::PhantomData),
 			begin_sys: None,
 			end_sys: None,
 			outlier_sys: None,
@@ -390,14 +390,14 @@ where
 	}
 }
 
-impl<P, B, I, F, M> ChimeEventBuilder<P, B, (), I, PredRun<F, M>, BlankSystem, BlankSystem, BlankSystem>
+impl<P, B, I, F, M> ChimeEventBuilder<P, B, (), I, PredFnSys<F, M>, BlankSystem, BlankSystem, BlankSystem>
 where
 	B: PredBranch,
 	F: PredCaseFn<P, B, M>,
 {
 	pub fn from_fn_with_input(input: I, pred_sys: F) -> Self {
 		Self {
-			pred_sys: PredRun(pred_sys, std::marker::PhantomData),
+			pred_sys: PredFnSys(pred_sys, std::marker::PhantomData),
 			begin_sys: None,
 			end_sys: None,
 			outlier_sys: None,
