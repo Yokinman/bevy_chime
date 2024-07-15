@@ -7,7 +7,7 @@ use crate::node::{Node, NodeWriter};
 use crate::pred::*;
 
 mod kind {
-	/// Unit types that filter what `PredParam::comb` iterates over.
+	/// Unit types that filter what `PredCombinator::comb` iterates over.
 	/// 
 	/// ```text
 	///           | ::Pal    | ::Inv    | ::Inv::Pal::Inv
@@ -140,7 +140,7 @@ mod kind {
 }
 pub use kind::*;
 
-/// Combinator for `PredParam` `()` implementation.
+/// Combinator for `PredCombinator` `()` implementation.
 #[derive(Clone)]
 pub struct EmptyComb<K = CombNone> {
 	kind: K,
@@ -194,7 +194,7 @@ where
 	}
 }
 
-/// Combinator for `PredParam` `Query` implementation.
+/// Combinator for `PredCombinator` `Query` implementation.
 pub enum FetchComb<'w, T, F = (), K = CombNone>
 where
 	T: FetchData,
@@ -302,7 +302,7 @@ where
 	}
 }
 
-/// `PredParam` wrapper for stripping the updated state.
+/// `PredCombinator` wrapper for stripping the updated state.
 #[derive(Clone)]
 pub struct Misc<T>(pub T);
 
@@ -363,7 +363,7 @@ where
 	}
 }
 
-/// Combinator for `PredParam` tuple implementation.
+/// Combinator for `PredCombinator` tuple implementation.
 pub struct PredPairComb<A, B, K = CombNone>
 where
 	A: PredCombinator,
@@ -435,7 +435,7 @@ where
 	}
 }
 
-/// Combinator for `PredParam` array implementation.
+/// Combinator for `PredCombinator` array implementation.
 pub struct PredArrayComb<C, const N: usize, K = CombNone>
 where
 	C: PredCombinator,
@@ -983,8 +983,8 @@ where
 	}
 }
 
-/// Shortcut for accessing `PredParam::Comb::Case::Item`.
-pub type PredParamItem<P> = <P as PredCombinator>::Item_;
+/// Shortcut for accessing `PredCombinator::Comb::Case::Item`.
+pub type PredCombinatorItem<P> = <P as PredCombinator>::Item_;
 
 /// A set of [`PredItem`] values used to predict & schedule events.
 pub trait PredCombinator: Clone + IntoIterator<Item=Self::Case> {
@@ -1217,7 +1217,7 @@ mod _pred_combinator_impls {
 	}
 }
 
-/// An item & ID pair of a `PredParam`, with their updated state.
+/// An item & ID pair of a `PredCombinator`, with their updated state.
 pub enum PredCombCase<P, I> {
 	Diff(P, I),
 	Same(P, I),
@@ -1387,7 +1387,7 @@ where
 {
 	type Item = (
 		&'p mut PredStateCase<P::Id, T>,
-		PredParamItem<P>,
+		PredCombinatorItem<P>,
 	);
 	fn next(&mut self) -> Option<Self::Item> {
 		self.iter.next().map(|case| {
@@ -1441,7 +1441,7 @@ where
 {
 	type Item = (
 		PredSubState2<'p, T, B, CombBranch<K::Pal, K>>,
-		PredParamItem<A>,
+		PredCombinatorItem<A>,
 	);
 	fn next(&mut self) -> Option<Self::Item> {
 		self.iter.next().map(|case| {
@@ -1513,7 +1513,7 @@ where
 {
 	type Item = (
 		PredSubState2<'p, T, B, CombBranch<K::Pal, K>>,
-		PredParamItem<PredArrayComb<A, N>>,
+		PredCombinatorItem<PredArrayComb<A, N>>,
 	);
 	fn next(&mut self) -> Option<Self::Item> {
 		if let Some(iters) = &self.iter.iters {
