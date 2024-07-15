@@ -151,7 +151,7 @@ impl AddChimeEvent for App {
 	}
 }
 
-/// [`PredSystem`] type that just packs extra argument info with a [`PredCaseFn`].
+/// [`PredSystem`] type that just packs extra argument info with a [`PredFn`].
 pub struct PredFnSys<T, M>(T, std::marker::PhantomData<M>);
 
 /// This is pretty much a no-op except for testing purposes.
@@ -166,7 +166,7 @@ where
 impl<T, M, P, B> PredSystem<P, B, ()> for PredFnSys<T, M>
 where
 	B: PredBranch,
-	T: PredCaseFn<P, B, M>,
+	T: PredFn<P, B, M>,
 {
 	fn run<K: CombKind>(&self, state: PredSubState2<P, B, K>, _param: ()) {
 		self.0.run(state);
@@ -175,11 +175,11 @@ where
 
 /// Specialized function used for predicting and scheduling events, functionally
 /// similar to a read-only [`bevy_ecs::system::SystemParamFunction`].
-pub trait PredCaseFn<P, B: PredBranch, M> {
+pub trait PredFn<P, B: PredBranch, M> {
 	fn run<K: CombKind>(&self, input: PredSubState2<P, B, K>);
 }
 
-impl<F, P> PredCaseFn<P, Single<EmptyComb>, ()> for F
+impl<F, P> PredFn<P, Single<EmptyComb>, ()> for F
 where
 	P: Prediction,
 	F: Fn() -> P,
@@ -192,7 +192,7 @@ where
 	}
 }
 
-impl<F, P, A, T> PredCaseFn<P, Single<PredSingleComb<A>>, ()> for F
+impl<F, P, A, T> PredFn<P, Single<PredSingleComb<A>>, ()> for F
 where
 	// Specifying `A::Item` as a separate parameter permits type elision.
 	P: Prediction,
@@ -208,7 +208,7 @@ where
 	}
 }
 
-impl<F, P, A, B, T, U,> PredCaseFn<P, Single<PredPairComb<A, B>>, ()> for F
+impl<F, P, A, B, T, U,> PredFn<P, Single<PredPairComb<A, B>>, ()> for F
 where
 	// Specifying `A::Item` et al. as separate parameters permits type elision.
 	P: Prediction,
@@ -226,14 +226,14 @@ where
 	}
 }
 
-impl<F, P, A, T, M, SubF, SubA> PredCaseFn<P, Nested<PredSingleComb<A>, SubA>, (SubF, M)> for F
+impl<F, P, A, T, M, SubF, SubA> PredFn<P, Nested<PredSingleComb<A>, SubA>, (SubF, M)> for F
 where
 	// Specifying `A::Item` as a separate parameter permits type elision.
 	P: Prediction,
 	A: PredCombinator<Item_= T>,
 	T: PredItem2<A>,
 	SubA: PredBranch,
-	SubF: PredCaseFn<P, SubA, M>,
+	SubF: PredFn<P, SubA, M>,
 	F: Fn(T,) -> SubF,
 {
 	fn run<K: CombKind>(&self, input: PredSubState2<P, Nested<PredSingleComb<A>, SubA>, K>) {
@@ -244,7 +244,7 @@ where
 	}
 }
 
-impl<F, P, A, B, T, U, M, SubF, SubA> PredCaseFn<P, Nested<PredPairComb<A, B>, SubA>, (SubF, M)> for F
+impl<F, P, A, B, T, U, M, SubF, SubA> PredFn<P, Nested<PredPairComb<A, B>, SubA>, (SubF, M)> for F
 where
 	// Specifying `A::Item` et al. as separate parameters permits type elision.
 	P: Prediction,
@@ -253,7 +253,7 @@ where
 	T: PredItem2<A>,
 	U: PredItem2<B>,
 	SubA: PredBranch,
-	SubF: PredCaseFn<P, SubA, M>,
+	SubF: PredFn<P, SubA, M>,
 	F: Fn(T, U,) -> SubF,
 {
 	fn run<K: CombKind>(&self, input: PredSubState2<P, Nested<PredPairComb<A, B>, SubA>, K>) {
@@ -376,7 +376,7 @@ where
 impl<P, B, F, M> ChimeEventBuilder<P, B, (), B::Input, PredFnSys<F, M>, BlankSystem, BlankSystem, BlankSystem>
 where
 	B: PredBranch<Input: Default>,
-	F: PredCaseFn<P, B, M>,
+	F: PredFn<P, B, M>,
 {
 	pub fn from_fn(pred_sys: F) -> Self {
 		Self {
@@ -393,7 +393,7 @@ where
 impl<P, B, I, F, M> ChimeEventBuilder<P, B, (), I, PredFnSys<F, M>, BlankSystem, BlankSystem, BlankSystem>
 where
 	B: PredBranch,
-	F: PredCaseFn<P, B, M>,
+	F: PredFn<P, B, M>,
 {
 	pub fn from_fn_with_input(input: I, pred_sys: F) -> Self {
 		Self {
