@@ -7,8 +7,8 @@ edition = "2021"
 bevy_app = { version = "0.14.0" }
 bevy_ecs = { version = "0.14.0" }
 bevy_time = { version = "0.14.0" }
-chime = "0.6"
-#chime = { path = "../chime" }
+#chime = { version = "0.6", features = ["bevy"] }
+chime = { path = "../chime", features = ["bevy"] }
 
 [dev-dependencies]
 accurate = "0.3.1"

@@ -926,7 +926,7 @@ mod _pred_fetch_data_impls {
 	use bevy_ecs::query::QueryData;
 	use bevy_ecs::system::{Query, Res, ResMut, Resource, SystemParamItem};
 	use bevy_ecs::world::Mut;
-	use chime::{Flux, Moment, MomentMut, MomentRef};
+	use chime::{Flux, Moment, ResMoment, ResMomentMut};
 	use crate::{Each, EachIn};
 	
 	impl<I: PredId> PredFetchData<I> for () {
@@ -1083,41 +1083,35 @@ mod _pred_fetch_data_impls {
 		}
 	}
 	
-	impl<'a, I, T> PredFetchData<I> for MomentRef<'a, T>
+	impl<T> PredFetchData<()> for ResMoment<'_, T>
 	where
-		I: PredId,
 		T: Moment,
-		T::Flux: Clone + 'static, // !!! Static bound should be unnecessary.
-		for<'w, 's> &'a T::Flux: PredFetchData<I, Item<'w, 's> = &'w T::Flux>,
+		T::Flux: Resource + Clone + 'static, // !!! Static bound should be unnecessary.
 	{
-		type Param = <&'a T::Flux as PredFetchData<I>>::Param;
-		type Item<'w, 's> = MomentRef<'w, T>;
+		type Param = ResMoment<'static, T>;
+		type Item<'w, 's> = ResMoment<'w, T>;
 		fn fetch_item<'w, 's>(
 			param: SystemParamItem<'w, 's, Self::Param>,
-			id: I,
-			time: std::time::Duration,
+			_id: (),
+			_time: std::time::Duration,
 		) -> Self::Item<'w, 's> {
-			<&'a T::Flux>::fetch_item(param, id, time)
-				.at(time)
+			param
 		}
 	}
 	
-	impl<'a, I, T> PredFetchData<I> for MomentMut<'a, T>
+	impl<T> PredFetchData<()> for ResMomentMut<'_, T>
 	where
-		I: PredId,
 		T: Moment,
-		T::Flux: Clone + 'static, // !!! Static bound should be unnecessary.
-		for<'w, 's> &'a mut T::Flux: PredFetchData<I, Item<'w, 's> = &'w mut T::Flux>,
+		T::Flux: Resource + Clone + 'static, // !!! Static bound should be unnecessary.
 	{
-		type Param = <&'a mut T::Flux as PredFetchData<I>>::Param;
-		type Item<'w, 's> = MomentMut<'w, T>;
+		type Param = ResMomentMut<'static, T>;
+		type Item<'w, 's> = ResMomentMut<'w, T>;
 		fn fetch_item<'w, 's>(
 			param: SystemParamItem<'w, 's, Self::Param>,
-			id: I,
-			time: std::time::Duration,
+			_id: (),
+			_time: std::time::Duration,
 		) -> Self::Item<'w, 's> {
-			<&'a mut T::Flux>::fetch_item(param, id, time)
-				.at_mut(time)
+			param
 		}
 	}
 	
