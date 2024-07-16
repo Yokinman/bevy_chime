@@ -810,7 +810,7 @@ impl<P: PredBranch, T> Iterator for PredNodeIter2<P, T> {
 }
 
 /// ...
-pub struct PredFetch<T>(pub T);
+pub struct Fetch<T>(pub T);
 
 /// ...
 pub trait ChimeSystemParamGroup<I: PredId> {
@@ -865,7 +865,7 @@ pub trait ChimeSystemParam<I: PredId> {
 }
 
 mod _pred_param_impls {
-	use super::{ChimeSystemParam, PredFetch, PredFetchData, PredId};
+	use super::{ChimeSystemParam, Fetch, PredFetchData, PredId};
 	use bevy_ecs::system::{SystemParam, SystemParamItem};
 	
 	impl<I, T> ChimeSystemParam<I> for T
@@ -884,19 +884,19 @@ mod _pred_param_impls {
 		}
 	}
 	
-	impl<I, T> ChimeSystemParam<I> for PredFetch<T>
+	impl<I, T> ChimeSystemParam<I> for Fetch<T>
 	where
 		I: PredId,
 		T: PredFetchData<I>,
 	{
 		type Param = T::Param;
-		type Item<'w, 's> = PredFetch<T::Item<'w, 's>>;
+		type Item<'w, 's> = Fetch<T::Item<'w, 's>>;
 		fn fetch_param<'w, 's>(
 			param: SystemParamItem<'w, 's, Self::Param>,
 			id: I,
 			time: std::time::Duration,
 		) -> Self::Item<'w, 's> {
-			PredFetch(T::fetch_item(param, id, time))
+			Fetch(T::fetch_item(param, id, time))
 		}
 	}
 }
