@@ -1086,7 +1086,7 @@ mod _pred_fetch_data_impls {
 	impl<T> PredFetchData<()> for ResMoment<'_, T>
 	where
 		T: Moment,
-		T::Flux: Resource + Clone + 'static, // !!! Static bound should be unnecessary.
+		T::Flux: Resource + Clone,
 	{
 		type Param = ResMoment<'static, T>;
 		type Item<'w, 's> = ResMoment<'w, T>;
@@ -1102,7 +1102,7 @@ mod _pred_fetch_data_impls {
 	impl<T> PredFetchData<()> for ResMomentMut<'_, T>
 	where
 		T: Moment,
-		T::Flux: Resource + Clone + 'static, // !!! Static bound should be unnecessary.
+		T::Flux: Resource + Clone,
 	{
 		type Param = ResMomentMut<'static, T>;
 		type Item<'w, 's> = ResMomentMut<'w, T>;
