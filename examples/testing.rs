@@ -189,7 +189,7 @@ fn when_func_a(pos: Each<&Pos>) -> impl Prediction {
 	pred.pre()
 }
 
-fn do_func_a(Fetch((pos,)): Fetch<(&mut Pos,)>, time: Res<Time<Chime>>) {
+fn do_func_a(Fetch((mut pos,)): Fetch<(Each<&'static mut Pos>,)>, time: Res<Time<Chime>>) {
 	let mut pos_x = pos.at_mut(time.elapsed());
 	pos_x[0].spd.val *= -1.;
 }
@@ -208,7 +208,7 @@ fn when_func_b(pos: Each<&Pos>) -> impl Prediction {
 	// }
 }
 
-fn do_func_b(Fetch((pos,)): Fetch<(&mut Pos,)>, time: Res<Time<Chime>>) {
+fn do_func_b(Fetch((mut pos,)): Fetch<(Each<&mut Pos>,)>, time: Res<Time<Chime>>) {
 	let mut poss = pos.at_mut(time.elapsed());
 	let pos_y = &mut poss[1];
 	pos_y.spd.val *= -1.;
@@ -229,7 +229,7 @@ fn do_func_b(Fetch((pos,)): Fetch<(&mut Pos,)>, time: Res<Time<Chime>>) {
 	// ));
 }
 
-fn outlier_func_b(Fetch((pos,)): Fetch<(&mut Pos,)>, time: Res<Time<Chime>>) {
+fn outlier_func_b(Fetch((mut pos,)): Fetch<(Each<&mut Pos>,)>, time: Res<Time<Chime>>) {
 	let mut pos = pos.at_mut(time.elapsed());
 	pos[0].spd.val = 0.;
 	pos[1].spd.val = 0.;

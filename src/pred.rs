@@ -1,5 +1,5 @@
 use std::hash::Hash;
-use std::ops::{Deref, RangeTo, RangeFrom};
+use std::ops::{Deref, RangeTo, RangeFrom, DerefMut};
 use bevy_ecs::change_detection::{DetectChanges, Ref, Res};
 use bevy_ecs::component::Component;
 use bevy_ecs::prelude::Resource;
@@ -69,6 +69,12 @@ impl<'w, D: QueryData, F> Deref for Each<'w, D, F> {
 	type Target = D::Item<'w>;
 	fn deref(&self) -> &Self::Target {
 		&self.inner
+	}
+}
+
+impl<'w, D: QueryData, F> DerefMut for Each<'w, D, F> {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.inner
 	}
 }
 
@@ -917,10 +923,11 @@ mod _pred_fetch_data_impls {
 	use super::{Etc, Nested, PredFetchData, PredId};
 	use bevy_ecs::entity::Entity;
 	use bevy_ecs::component::Component;
+	use bevy_ecs::query::QueryData;
 	use bevy_ecs::system::{Query, Res, ResMut, Resource, SystemParamItem};
 	use bevy_ecs::world::Mut;
 	use chime::{Flux, Moment, MomentMut, MomentRef};
-	use crate::EachIn;
+	use crate::{Each, EachIn};
 	
 	impl<I: PredId> PredFetchData<I> for () {
 		type Param = ();
@@ -944,33 +951,26 @@ mod _pred_fetch_data_impls {
 		}
 	}
 	
-	impl<T: Component> PredFetchData<Entity> for &T {
-		type Param = Query<'static, 'static, &'static T>;
-		type Item<'w, 's> = &'w T;
-		fn fetch_item<'w, 's>(
-			param: SystemParamItem<'w, 's, Self::Param>,
-			id: Entity,
-			_time: std::time::Duration,
-		) -> Self::Item<'w, 's> {
-			param.get_inner(id)
-				.expect("should exist")
-		}
-	}
-	
-	impl<T: Component> PredFetchData<Entity> for &mut T {
-		type Param = Query<'static, 'static, &'static mut T>;
-		type Item<'w, 's> = &'w mut T;
+	impl<T> PredFetchData<Entity> for Each<'_, T>
+	where
+		T: QueryData + 'static,
+	{
+		type Param = Query<'static, 'static, T>;
+		type Item<'w, 's> = Each<'w, T>;
 		fn fetch_item<'w, 's>(
 			mut param: SystemParamItem<'w, 's, Self::Param>,
 			id: Entity,
-			_time: std::time::Duration,
+			_time: Duration,
 		) -> Self::Item<'w, 's> {
 			let m = param.get_mut(id)
-				.expect("should exist")
-				.into_inner();
-			unsafe {
+				.expect("should exist");
+			Each::new(unsafe {
+				// SAFETY: Upcasting this lifetime should be fine because the
+				// query is being consumed by this `fetch_item`. My
+				// understanding is that `Query::get_inner_mut` doesn't exist
+				// only because it could create overlapping mutable refs.
 				std::mem::transmute(m)
-			}
+			})
 		}
 	}
 	
