@@ -974,27 +974,27 @@ mod _pred_fetch_data_impls {
 		}
 	}
 	
-	impl<T: Resource> PredFetchData<()> for &T {
+	impl<T: Resource> PredFetchData<()> for Res<'_, T> {
 		type Param = Res<'static, T>;
-		type Item<'w, 's> = &'w T;
+		type Item<'w, 's> = Res<'w, T>;
 		fn fetch_item<'w, 's>(
 			param: SystemParamItem<'w, 's, Self::Param>,
 			_id: (),
-			_time: std::time::Duration,
+			_time: Duration,
 		) -> Self::Item<'w, 's> {
-			param.into_inner()
+			param
 		}
 	}
 	
-	impl<T: Resource> PredFetchData<()> for &mut T {
+	impl<T: Resource> PredFetchData<()> for ResMut<'_, T> {
 		type Param = ResMut<'static, T>;
-		type Item<'w, 's> = &'w mut T;
+		type Item<'w, 's> = ResMut<'w, T>;
 		fn fetch_item<'w, 's>(
 			param: SystemParamItem<'w, 's, Self::Param>,
 			_id: (),
-			_time: std::time::Duration,
+			_time: Duration,
 		) -> Self::Item<'w, 's> {
-			param.into_inner()
+			param
 		}
 	}
 	
