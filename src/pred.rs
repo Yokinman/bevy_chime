@@ -74,7 +74,7 @@ impl<'w, D: QueryData, F> Deref for Fetch<'w, D, F> {
 
 /// A [`PredId`], used as a [`PredItem`] or [`PredFetchData`].
 #[derive(Copy, Clone)]
-pub struct WithId<I>(pub I);
+pub struct EachIn<I>(pub I);
 
 /// Parameter of a [`PredCaseFn`]. An item fetched from the
 /// [`bevy_ecs::system::World`] for making predictions against other items.
@@ -167,7 +167,7 @@ mod _pred_item_impls {
 		}
 	}
 	
-	impl<I> PredItem for WithId<I>
+	impl<I> PredItem for EachIn<I>
 	where
 		I: PredId
 	{
@@ -225,7 +225,7 @@ mod _pred_item2_impls {
 		P::Id: Ord,
 	{}
 	
-	impl<T> PredItem2<PredIdComb<T>> for WithId<T::Item>
+	impl<T> PredItem2<PredIdComb<T>> for EachIn<T::Item>
 	where
 		T: IntoIterator + Clone,
 		T::Item : PredId,
@@ -920,7 +920,7 @@ mod _pred_fetch_data_impls {
 	use bevy_ecs::system::{Query, Res, ResMut, Resource, SystemParamItem};
 	use bevy_ecs::world::Mut;
 	use chime::{Flux, Moment, MomentMut, MomentRef};
-	use crate::WithId;
+	use crate::EachIn;
 	
 	impl<I: PredId> PredFetchData<I> for () {
 		type Param = ();
@@ -1071,7 +1071,7 @@ mod _pred_fetch_data_impls {
 		}
 	}
 	
-	impl<I: PredId> PredFetchData<I> for WithId<I> {
+	impl<I: PredId> PredFetchData<I> for EachIn<I> {
 		type Param = ();
 		type Item<'w, 's> = Self;
 		fn fetch_item<'w, 's>(
@@ -1079,7 +1079,7 @@ mod _pred_fetch_data_impls {
 			id: I,
 			_time: std::time::Duration,
 		) -> Self::Item<'w, 's> {
-			WithId(id)
+			EachIn(id)
 		}
 	}
 	

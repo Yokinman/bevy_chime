@@ -669,10 +669,10 @@ where
 	I: Iterator,
 	I::Item: PredId,
 {
-	type Item = PredCombCase<WithId<I::Item>, I::Item>;
+	type Item = PredCombCase<EachIn<I::Item>, I::Item>;
 	fn next(&mut self) -> Option<Self::Item> {
 		self.iter.next()
-			.map(|id| PredCombCase::Same(WithId(id), id))
+			.map(|id| PredCombCase::Same(EachIn(id), id))
 	}
 	fn size_hint(&self) -> (usize, Option<usize>) {
 		self.iter.size_hint()
@@ -1185,7 +1185,7 @@ mod _pred_combinator_impls {
 		type Param = ();
 		type Input = I;
 		type Id = I::Item;
-		type Item_ = WithId<I::Item>;
+		type Item_ = EachIn<I::Item>;
 		type Case = PredCombCase<Self::Item_, Self::Id>;
 		type Comb<K: CombKind> = PredIdComb<I>;
 		fn comb<K: CombKind>(
