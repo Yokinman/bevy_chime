@@ -9,7 +9,7 @@ use chime::pred::Prediction;
 use crate::node::*;
 use crate::comb::*;
 
-/// "Etcetera" aka "And the rest". Used for [`IntoInput`] and [`PredFetchData`].
+/// "Etcetera" aka "And the rest". Used for [`IntoInput`] and [`FetchData`].
 pub type Etc = std::ops::RangeFull;
 
 /// A hashable unique identifier for a case of prediction.
@@ -78,7 +78,7 @@ impl<'w, D: QueryData, F> DerefMut for Each<'w, D, F> {
 	}
 }
 
-/// A [`PredId`], used as a [`PredItem`] or [`PredFetchData`].
+/// A [`PredId`], used as a [`PredItem`] or [`FetchData`].
 #[derive(Copy, Clone)]
 pub struct EachIn<I>(pub I);
 
@@ -871,7 +871,7 @@ pub trait ChimeSystemParam<I: PredId> {
 }
 
 mod _pred_param_impls {
-	use super::{ChimeSystemParam, Fetch, PredFetchData, PredId};
+	use super::{ChimeSystemParam, Fetch, FetchData, PredId};
 	use bevy_ecs::system::{SystemParam, SystemParamItem};
 	
 	impl<I, T> ChimeSystemParam<I> for T
@@ -893,7 +893,7 @@ mod _pred_param_impls {
 	impl<I, T> ChimeSystemParam<I> for Fetch<T>
 	where
 		I: PredId,
-		T: PredFetchData<I>,
+		T: FetchData<I>,
 	{
 		type Param = T::Param;
 		type Item<'w, 's> = Fetch<T::Item<'w, 's>>;
@@ -908,7 +908,7 @@ mod _pred_param_impls {
 }
 
 /// ...
-pub trait PredFetchData<I: PredId> {
+pub trait FetchData<I: PredId> {
 	type Param: SystemParam;
 	type Item<'w, 's>;
 	fn fetch_item<'w, 's>(
@@ -920,13 +920,13 @@ pub trait PredFetchData<I: PredId> {
 
 mod _pred_fetch_data_impls {
 	use std::time::Duration;
-	use super::{Each, EachIn, Etc, Nested, PredFetchData, PredId};
+	use super::{Each, EachIn, Etc, Nested, FetchData, PredId};
 	use bevy_ecs::entity::Entity;
 	use bevy_ecs::query::QueryData;
 	use bevy_ecs::system::{Query, Res, ResMut, Resource, SystemParamItem};
 	use chime::{Moment, ResMoment, ResMomentMut};
 	
-	impl<I: PredId> PredFetchData<I> for () {
+	impl<I: PredId> FetchData<I> for () {
 		type Param = ();
 		type Item<'w, 's> = ();
 		fn fetch_item<'w, 's>(
@@ -936,7 +936,7 @@ mod _pred_fetch_data_impls {
 		) -> Self::Item<'w, 's> {}
 	}
 	
-	impl<I: PredId> PredFetchData<I> for Etc {
+	impl<I: PredId> FetchData<I> for Etc {
 		type Param = ();
 		type Item<'w, 's> = Etc;
 		fn fetch_item<'w, 's>(
@@ -948,7 +948,7 @@ mod _pred_fetch_data_impls {
 		}
 	}
 	
-	impl<T> PredFetchData<Entity> for Each<'_, T>
+	impl<T> FetchData<Entity> for Each<'_, T>
 	where
 		T: QueryData + 'static,
 	{
@@ -971,7 +971,7 @@ mod _pred_fetch_data_impls {
 		}
 	}
 	
-	impl<T: Resource> PredFetchData<()> for Res<'_, T> {
+	impl<T: Resource> FetchData<()> for Res<'_, T> {
 		type Param = Res<'static, T>;
 		type Item<'w, 's> = Res<'w, T>;
 		fn fetch_item<'w, 's>(
@@ -983,7 +983,7 @@ mod _pred_fetch_data_impls {
 		}
 	}
 	
-	impl<T: Resource> PredFetchData<()> for ResMut<'_, T> {
+	impl<T: Resource> FetchData<()> for ResMut<'_, T> {
 		type Param = ResMut<'static, T>;
 		type Item<'w, 's> = ResMut<'w, T>;
 		fn fetch_item<'w, 's>(
@@ -995,7 +995,7 @@ mod _pred_fetch_data_impls {
 		}
 	}
 	
-	impl<T, const N: usize> PredFetchData<[Entity; N]> for [Each<'_, T>; N]
+	impl<T, const N: usize> FetchData<[Entity; N]> for [Each<'_, T>; N]
 	where
 		T: QueryData + 'static,
 	{
@@ -1015,10 +1015,10 @@ mod _pred_fetch_data_impls {
 		}
 	}
 	
-	impl<I, A,> PredFetchData<(I,)> for (A,)
+	impl<I, A,> FetchData<(I,)> for (A,)
 	where
 		I: PredId,
-		A: PredFetchData<I>,
+		A: FetchData<I>,
 	{
 		type Param = (A::Param,);
 		type Item<'w, 's> = (A::Item<'w, 's>,);
@@ -1031,12 +1031,12 @@ mod _pred_fetch_data_impls {
 		}
 	}
 	
-	impl<I, J, A, B,> PredFetchData<(I, J,)> for (A, B,)
+	impl<I, J, A, B,> FetchData<(I, J,)> for (A, B,)
 	where
 		I: PredId,
 		J: PredId,
-		A: PredFetchData<I>,
-		B: PredFetchData<J>,
+		A: FetchData<I>,
+		B: FetchData<J>,
 	{
 		type Param = (A::Param, B::Param,);
 		type Item<'w, 's> = (A::Item<'w, 's>, B::Item<'w, 's>,);
@@ -1049,7 +1049,7 @@ mod _pred_fetch_data_impls {
 		}
 	}
 	
-	impl<I: PredId> PredFetchData<I> for EachIn<I> {
+	impl<I: PredId> FetchData<I> for EachIn<I> {
 		type Param = ();
 		type Item<'w, 's> = Self;
 		fn fetch_item<'w, 's>(
@@ -1061,7 +1061,7 @@ mod _pred_fetch_data_impls {
 		}
 	}
 	
-	impl<T> PredFetchData<()> for ResMoment<'_, T>
+	impl<T> FetchData<()> for ResMoment<'_, T>
 	where
 		T: Moment,
 		T::Flux: Resource + Clone,
@@ -1077,7 +1077,7 @@ mod _pred_fetch_data_impls {
 		}
 	}
 	
-	impl<T> PredFetchData<()> for ResMomentMut<'_, T>
+	impl<T> FetchData<()> for ResMomentMut<'_, T>
 	where
 		T: Moment,
 		T::Flux: Resource + Clone,
@@ -1093,12 +1093,12 @@ mod _pred_fetch_data_impls {
 		}
 	}
 	
-	impl<I, J, A, B> PredFetchData<Nested<I, J>> for Nested<A, B>
+	impl<I, J, A, B> FetchData<Nested<I, J>> for Nested<A, B>
 	where
 		I: PredId,
 		J: PredId,
-		A: PredFetchData<I>,
-		B: PredFetchData<J>,
+		A: FetchData<I>,
+		B: FetchData<J>,
 	{
 		type Param = (A::Param, B::Param);
 		type Item<'w, 's> = Nested<A::Item<'w, 's>, B::Item<'w, 's>>;
