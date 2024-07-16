@@ -26,21 +26,21 @@ where
 
 /// Maps the [`QueryData`] parameter of [`Each`] to a [`PredItemRef`] type.
 /// Otherwise equivalent to [`ReadOnlyQueryData`].
-pub trait FetchData: ReadOnlyQueryData {
+pub trait EachData: ReadOnlyQueryData {
 	type ItemRef: ReadOnlyQueryData + 'static;
 }
 
-impl<'a, T> FetchData for &'a T
+impl<'a, T> EachData for &'a T
 where
 	T: Component,
 {
 	type ItemRef = Ref<'static, T>;
 }
 
-impl<A, B> FetchData for (A, B)
+impl<A, B> EachData for (A, B)
 where
-	A: FetchData,
-	B: FetchData,
+	A: EachData,
+	B: EachData,
 {
 	type ItemRef = (A::ItemRef, B::ItemRef);
 }
@@ -193,7 +193,7 @@ mod _pred_item2_impls {
 	
 	impl<'w, D, F> PredItem2<FetchComb<'w, D, F>> for Each<'w, D, F>
 	where
-		D: FetchData,
+		D: EachData,
 		F: ArchetypeFilter + 'static,
 		D::Item<'w>: PredItem,
 		<D::ItemRef as WorldQuery>::Item<'w>: PredItemRef<Item = D::Item<'w>>,
@@ -202,7 +202,7 @@ mod _pred_item2_impls {
 	impl<'w, 's, D, F> PredItem2<SystemParamComb<Self>>
 		for bevy_ecs::system::Query<'w, 's, D, F>
 	where
-		D: FetchData + 'static,
+		D: EachData + 'static,
 		F: ArchetypeFilter + 'static,
 		D::Item<'w>: PredItem,
 		<D::ItemRef as WorldQuery>::Item<'w>: PredItemRef<Item = D::Item<'w>>,
@@ -268,7 +268,7 @@ mod _pred_item_ref_impls {
 	
 	impl<'w, 's, D, F> PredItemRef for bevy_ecs::system::Query<'w, 's, D, F>
 	where
-		D: FetchData + 'static,
+		D: EachData + 'static,
 		F: ArchetypeFilter + 'static,
 		D::Item<'w>: PredItem,
 		<D::ItemRef as WorldQuery>::Item<'w>: PredItemRef<Item = D::Item<'w>>,

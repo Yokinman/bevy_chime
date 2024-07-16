@@ -197,7 +197,7 @@ where
 /// Combinator for `PredCombinator` `Query` implementation.
 pub enum FetchComb<'w, T, F = (), K = CombNone>
 where
-	T: FetchData,
+	T: EachData,
 	F: QueryFilter + 'static,
 {
 	Normal {
@@ -212,7 +212,7 @@ where
 
 impl<'w, T, F, K> FetchComb<'w, T, F, K>
 where
-	T: FetchData,
+	T: EachData,
 	F: ArchetypeFilter + 'static,
 	K: CombKind,
 	T::Item<'w>: PredItem,
@@ -235,7 +235,7 @@ where
 
 impl<'w, T, F, K> Clone for FetchComb<'w, T, F, K>
 where
-	T: FetchData,
+	T: EachData,
 	F: ArchetypeFilter + 'static,
 	K: Clone,
 {
@@ -256,7 +256,7 @@ where
 impl<'w, T, F, K> IntoIterator for FetchComb<'w, T, F, K>
 where
 	K: CombKind,
-	T: FetchData,
+	T: EachData,
 	F: ArchetypeFilter + 'static,
 	T::Item<'w>: PredItem,
 	<T::ItemRef as WorldQuery>::Item<'w>: PredItemRef<Item = T::Item<'w>>,
@@ -593,7 +593,7 @@ where
 /// ...
 pub enum QueryCombIter<'w, T, F, K>
 where
-	T: FetchData,
+	T: EachData,
 	F: ArchetypeFilter,
 {
 	Normal { 
@@ -607,7 +607,7 @@ where
 
 impl<'w, T, F, K> Iterator for QueryCombIter<'w, T, F, K>
 where
-	T: FetchData,
+	T: EachData,
 	F: ArchetypeFilter,
 	K: CombKind,
 	T::Item<'w>: PredItem,
@@ -1016,7 +1016,7 @@ mod _pred_combinator_impls {
 	
 	impl<'w, T, F, Kind> PredCombinator for FetchComb<'w, T, F, Kind>
 	where
-		T: FetchData,
+		T: EachData,
 		F: ArchetypeFilter + 'static,
 		T::Item<'w>: PredItem,
 		<T::ItemRef as WorldQuery>::Item<'w>: PredItemRef<Item = T::Item<'w>>,
@@ -1039,7 +1039,7 @@ mod _pred_combinator_impls {
 	
 	impl<'w, 's, D, F, Kind> PredCombinator for SystemParamComb<Query<'w, 's, D, F>, Kind>
 	where
-		D: FetchData + 'static,
+		D: EachData + 'static,
 		F: ArchetypeFilter + 'static,
 		D::Item<'w>: PredItem,
 		<D::ItemRef as WorldQuery>::Item<'w>: PredItemRef<Item = D::Item<'w>>,
