@@ -467,7 +467,7 @@ mod _pred_branch_impls {
 		type Case<T> = PredStateCase<A::Id, T>;
 		type AllParams = A;
 		type Id = A::Id;
-		type Input = Single<A::Input>;
+		type Input = A::Input;
 		type CombSplit<K: CombKind> = A::Comb<K>;
 		
 		type Item<'p, T, K> = &'p mut Self::Case<T>
@@ -486,7 +486,7 @@ mod _pred_branch_impls {
 		
 		fn comb_split<K: CombKind>(
 			params: &'static SystemParamItem<<Self::AllParams as PredCombinator>::Param>,
-			Single(input): Self::Input,
+			input: Self::Input,
 			kind: K,
 		) -> Self::CombSplit<K> {
 			A::comb(params, kind, input)
