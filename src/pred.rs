@@ -24,7 +24,7 @@ where
 	+ std::fmt::Debug
 {}
 
-/// Maps the [`QueryData`] parameter of [`Fetch`] to a [`PredItemRef`] type.
+/// Maps the [`QueryData`] parameter of [`Each`] to a [`PredItemRef`] type.
 /// Otherwise equivalent to [`ReadOnlyQueryData`].
 pub trait FetchData: ReadOnlyQueryData {
 	type ItemRef: ReadOnlyQueryData + 'static;
@@ -47,12 +47,12 @@ where
 
 /// Single-item equivalent of [`bevy_ecs::system::Query`]. A [`PredItem`].
 #[derive(Debug)]
-pub struct Fetch<'w, D: QueryData, F = ()> {
+pub struct Each<'w, D: QueryData, F = ()> {
 	inner: D::Item<'w>,
 	_filter: std::marker::PhantomData<F>,
 }
 
-impl<'w, D: QueryData, F> Fetch<'w, D, F> {
+impl<'w, D: QueryData, F> Each<'w, D, F> {
 	pub(crate) fn new(inner: D::Item<'w>) -> Self {
 		Self {
 			inner,
@@ -65,7 +65,7 @@ impl<'w, D: QueryData, F> Fetch<'w, D, F> {
 	}
 }
 
-impl<'w, D: QueryData, F> Deref for Fetch<'w, D, F> {
+impl<'w, D: QueryData, F> Deref for Each<'w, D, F> {
 	type Target = D::Item<'w>;
 	fn deref(&self) -> &Self::Target {
 		&self.inner
@@ -95,13 +95,13 @@ mod _pred_item_impls {
 		}
 	}
 	
-	impl<'w, D, F> PredItem for Fetch<'w, D, F>
+	impl<'w, D, F> PredItem for Each<'w, D, F>
 	where
 		D: QueryData,
 		D::Item<'w>: PredItem,
 	{
 		fn clone(&self) -> Self {
-			Fetch::new(self.inner.clone())
+			Each::new(self.inner.clone())
 		}
 	}
 	
@@ -185,7 +185,7 @@ mod _pred_item2_impls {
 	
 	impl PredItem2<EmptyComb> for () {}
 	
-	impl<'w, D, F> PredItem2<FetchComb<'w, D, F>> for Fetch<'w, D, F>
+	impl<'w, D, F> PredItem2<FetchComb<'w, D, F>> for Each<'w, D, F>
 	where
 		D: FetchData,
 		F: ArchetypeFilter + 'static,
@@ -1592,7 +1592,7 @@ mod testing {
 							// This assumes `iter` and `Query::iter_combinations`
 							// will always return in the same order.
 							let mut a = a.into_iter()
-								.map(Fetch::into_inner)
+								.map(Each::into_inner)
 								.collect::<Vec<_>>();
 							a.sort_unstable();
 							b.sort_unstable();
@@ -1615,7 +1615,7 @@ mod testing {
 						let mut n = 0;
 						for (_, a) in iter {
 							let a = a.into_iter()
-								.map(Fetch::into_inner)
+								.map(Each::into_inner)
 								.collect::<Vec<_>>();
 							assert!(update_vec.iter()
 								.any(|i| a.contains(&&Test(*i))));

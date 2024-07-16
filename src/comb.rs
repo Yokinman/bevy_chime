@@ -205,7 +205,7 @@ where
 		kind: K,
 	},
 	Cached {
-		slice: Rc<[PredCombCase<Fetch<'w, T, F>, Entity>]>,
+		slice: Rc<[PredCombCase<Each<'w, T, F>, Entity>]>,
 		kind: K,
 	},
 }
@@ -600,7 +600,7 @@ where
 		iter: CombIter<QueryIter<'w, 'w, (T::ItemRef, Entity), F>, K>,
 	},
 	Cached {
-		slice: Rc<[PredCombCase<Fetch<'w, T, F>, Entity>]>,
+		slice: Rc<[PredCombCase<Each<'w, T, F>, Entity>]>,
 		index: usize,
 	},
 }
@@ -613,12 +613,12 @@ where
 	T::Item<'w>: PredItem,
 	<T::ItemRef as WorldQuery>::Item<'w>: PredItemRef<Item = T::Item<'w>>,
 {
-	type Item = PredCombCase<Fetch<'w, T, F>, Entity>;
+	type Item = PredCombCase<Each<'w, T, F>, Entity>;
 	fn next(&mut self) -> Option<Self::Item> {
 		match self {
 			Self::Normal { iter } => iter.next().map(|x| match x {
-				PredCombCase::Diff(item, id) => PredCombCase::Diff(Fetch::new(item), id),
-				PredCombCase::Same(item, id) => PredCombCase::Same(Fetch::new(item), id),
+				PredCombCase::Diff(item, id) => PredCombCase::Diff(Each::new(item), id),
+				PredCombCase::Same(item, id) => PredCombCase::Same(Each::new(item), id),
 			}),
 			Self::Cached { slice, index } => {
 				if let Some(case) = slice.get(*index) {
@@ -642,8 +642,8 @@ where
 	fn nth(&mut self, n: usize) -> Option<Self::Item> {
 		match self {
 			Self::Normal { iter } => iter.nth(n).map(|x| match x {
-				PredCombCase::Diff(item, id) => PredCombCase::Diff(Fetch::new(item), id),
-				PredCombCase::Same(item, id) => PredCombCase::Same(Fetch::new(item), id),
+				PredCombCase::Diff(item, id) => PredCombCase::Diff(Each::new(item), id),
+				PredCombCase::Same(item, id) => PredCombCase::Same(Each::new(item), id),
 			}),
 			Self::Cached { index, .. } => {
 				*index += n;
@@ -1024,7 +1024,7 @@ mod _pred_combinator_impls {
 	{
 		type Param = Query<'static, 'static, (T::ItemRef, Entity), F>;
 		type Id = Entity;
-		type Item_ = Fetch<'w, T, F>;
+		type Item_ = Each<'w, T, F>;
 		type Case = PredCombCase<Self::Item_, Self::Id>;
 		type Input = ();
 		type Comb<K: CombKind> = FetchComb<'w, T, F, K>;
