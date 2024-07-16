@@ -932,7 +932,7 @@ mod _pred_fetch_data_impls {
 		fn fetch_item<'w, 's>(
 			_param: SystemParamItem<'w, 's, Self::Param>,
 			_id: I,
-			_time: std::time::Duration,
+			_time: Duration,
 		) -> Self::Item<'w, 's> {}
 	}
 	
@@ -1025,7 +1025,7 @@ mod _pred_fetch_data_impls {
 		fn fetch_item<'w, 's>(
 			(a,): SystemParamItem<'w, 's, Self::Param>,
 			(i,): (I,),
-			time: std::time::Duration,
+			time: Duration,
 		) -> Self::Item<'w, 's> {
 			(A::fetch_item(a, i, time),)
 		}
@@ -1043,7 +1043,7 @@ mod _pred_fetch_data_impls {
 		fn fetch_item<'w, 's>(
 			(a, b,): SystemParamItem<'w, 's, Self::Param>,
 			(i, j,): (I, J,),
-			time: std::time::Duration,
+			time: Duration,
 		) -> Self::Item<'w, 's> {
 			(A::fetch_item(a, i, time), B::fetch_item(b, j, time),)
 		}
@@ -1055,7 +1055,7 @@ mod _pred_fetch_data_impls {
 		fn fetch_item<'w, 's>(
 			_param: SystemParamItem<'w, 's, Self::Param>,
 			id: I,
-			_time: std::time::Duration,
+			_time: Duration,
 		) -> Self::Item<'w, 's> {
 			EachIn(id)
 		}
@@ -1071,7 +1071,7 @@ mod _pred_fetch_data_impls {
 		fn fetch_item<'w, 's>(
 			param: SystemParamItem<'w, 's, Self::Param>,
 			_id: (),
-			_time: std::time::Duration,
+			_time: Duration,
 		) -> Self::Item<'w, 's> {
 			param
 		}
@@ -1087,7 +1087,7 @@ mod _pred_fetch_data_impls {
 		fn fetch_item<'w, 's>(
 			param: SystemParamItem<'w, 's, Self::Param>,
 			_id: (),
-			_time: std::time::Duration,
+			_time: Duration,
 		) -> Self::Item<'w, 's> {
 			param
 		}
@@ -1105,7 +1105,7 @@ mod _pred_fetch_data_impls {
 		fn fetch_item<'w, 's>(
 			(a, b): SystemParamItem<'w, 's, Self::Param>,
 			Nested(i, j): Nested<I, J>,
-			time: std::time::Duration,
+			time: Duration,
 		) -> Self::Item<'w, 's> {
 			Nested(A::fetch_item(a, i, time), B::fetch_item(b, j, time))
 		}
