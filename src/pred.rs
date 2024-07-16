@@ -920,14 +920,11 @@ pub trait PredFetchData<I: PredId> {
 
 mod _pred_fetch_data_impls {
 	use std::time::Duration;
-	use super::{Etc, Nested, PredFetchData, PredId};
+	use super::{Each, EachIn, Etc, Nested, PredFetchData, PredId};
 	use bevy_ecs::entity::Entity;
-	use bevy_ecs::component::Component;
 	use bevy_ecs::query::QueryData;
 	use bevy_ecs::system::{Query, Res, ResMut, Resource, SystemParamItem};
-	use bevy_ecs::world::Mut;
-	use chime::{Flux, Moment, ResMoment, ResMomentMut};
-	use crate::{Each, EachIn};
+	use chime::{Moment, ResMoment, ResMomentMut};
 	
 	impl<I: PredId> PredFetchData<I> for () {
 		type Param = ();
@@ -998,42 +995,23 @@ mod _pred_fetch_data_impls {
 		}
 	}
 	
-	impl<T, const N: usize> PredFetchData<[Entity; N]> for [&T; N]
+	impl<T, const N: usize> PredFetchData<[Entity; N]> for [Each<'_, T>; N]
 	where
-		T: Component,
+		T: QueryData + 'static,
 	{
-		type Param = Query<'static, 'static, &'static T>;
-		type Item<'w, 's> = [&'w T; N];
-		fn fetch_item<'w, 's>(
-			param: SystemParamItem<'w, 's, Self::Param>,
-			id: [Entity; N],
-			_time: std::time::Duration,
-		) -> Self::Item<'w, 's> {
-			let m = param.get_many(id)
-				.expect("should exist");
-			unsafe {
-				std::mem::transmute(m)
-			}
-		}
-	}
-	
-	impl<T, const N: usize> PredFetchData<[Entity; N]> for [&mut T; N]
-	where
-		T: Component,
-	{
-		type Param = Query<'static, 'static, &'static mut T>;
-		type Item<'w, 's> = [&'w mut T; N];
+		type Param = Query<'static, 'static, T>;
+		type Item<'w, 's> = [Each<'w, T>; N];
 		fn fetch_item<'w, 's>(
 			mut param: SystemParamItem<'w, 's, Self::Param>,
 			id: [Entity; N],
-			_time: std::time::Duration,
+			_time: Duration,
 		) -> Self::Item<'w, 's> {
 			let m = param.get_many_mut(id)
-				.expect("should exist")
-				.map(Mut::into_inner);
-			unsafe {
+				.expect("should exist");
+			let m: [T::Item<'w>; N] = unsafe {
 				std::mem::transmute(m)
-			}
+			};
+			m.map(Each::new)
 		}
 	}
 	

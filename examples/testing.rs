@@ -327,7 +327,7 @@ fn when_func_c([pos, b_pos]: [Each<&Pos>; 2]) -> impl Prediction {
 	// println!("  when_func_c ({n}): {:?}", Instant::now().duration_since(a_time));
 }
 
-fn do_func_c(Fetch(([poss, b_poss],)): Fetch<([&mut Pos; 2],)>, time: Res<Time<Chime>>) {
+fn do_func_c(Fetch(([mut poss, mut b_poss],)): Fetch<([Each<&mut Pos>; 2],)>, time: Res<Time<Chime>>) {
 	let poly = (poss.index_poly(0, poss.base_time()) - b_poss.index_poly(0, b_poss.base_time())).sqr()
 		+ (poss.index_poly(1, poss.base_time()) - b_poss.index_poly(1, b_poss.base_time())).sqr();
 	assert!(poly.rate_at(time.elapsed()) <= 0., "{:?}", poly);
@@ -406,7 +406,7 @@ fn do_func_c(Fetch(([poss, b_poss],)): Fetch<([&mut Pos; 2],)>, time: Res<Time<C
 	// assert!(poly.rate_at(time.elapsed()) >= 0., "{:?}", poly);
 }
 
-fn outlier_func_c(Fetch(([poss, b_poss],)): Fetch<([&mut Pos; 2],)>, time: Res<Time<Chime>>) {
+fn outlier_func_c(Fetch(([mut poss, mut b_poss],)): Fetch<([Each<&mut Pos>; 2],)>, time: Res<Time<Chime>>) {
 	let mut pos = poss.at_mut(time.elapsed());
 	let mut b_pos = b_poss.at_mut(time.elapsed());
 	pos[0].spd.val = 0.; pos[0].spd.acc.val = 0.;
