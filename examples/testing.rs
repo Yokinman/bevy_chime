@@ -239,7 +239,7 @@ fn outlier_func_b(Fetch((mut pos,)): Fetch<(Each<&mut Pos>,)>, time: Res<Time<Ch
 	// 	pos[1].poly(pos[1].base_time())));
 }
 
-fn when_func_c([pos, b_pos]: [Each<&Pos>; 2]) -> impl Prediction {
+fn when_func_c(Unique([pos, b_pos]): Unique<[Each<&Pos>; 2]>) -> impl Prediction {
 	// let mut n = 0;
 	// let a_time = Instant::now();
 	// for (state, [pos]) in state.into_iter() {

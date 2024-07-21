@@ -932,7 +932,7 @@ where
 		if let Some(iters) = &self.iters {
 			let case = std::array::from_fn(|i| iters[i].1.clone());
 			self.step(N-1);
-			Some(case)
+			Some(Unique(case))
 		} else {
 			None
 		}
@@ -1160,8 +1160,8 @@ mod _pred_combinator_impls {
 	{
 		type Param = P::Param;
 		type Id = [P::Id; N];
-		type Item_ = [P::Item_; N];
-		type Case = [P::Case; N];
+		type Item_ = Unique<[P::Item_; N]>;
+		type Case = Unique<[P::Case; N]>;
 		type Input = [P::Input; N];
 		type Comb<K: CombKind> = PredArrayComb<P, N, K>;
 		fn comb<K: CombKind>(
@@ -1293,19 +1293,21 @@ mod _pred_combinator_case_impls {
 		}
 	}
 	
-	impl<C, const N: usize> PredCombinatorCase for [C; N]
+	impl<C, const N: usize> PredCombinatorCase for Unique<[C; N]>
 	where
 		C: PredCombinatorCase,
 		C::Id: Ord
 	{
-		type Item = [C::Item; N];
+		type Item = Unique<[C::Item; N]>;
 		type Id = [C::Id; N];
 		fn is_diff(&self) -> bool {
-			self.iter().any(C::is_diff)
+			let Unique(inner) = self;
+			inner.iter().any(C::is_diff)
 		}
 		fn into_parts(self) -> (Self::Item, Self::Id) {
+			let Unique(inner) = self;
 			let mut ids = [None; N];
-			let mut iter = self.into_iter();
+			let mut iter = inner.into_iter();
 			let items = std::array::from_fn(|i| {
 				let (item, id) = iter.next()
 					.expect("should exist")
@@ -1315,7 +1317,7 @@ mod _pred_combinator_case_impls {
 			});
 			let mut ids = ids.map(Option::unwrap);
 			ids.sort_unstable();
-			(items, ids)
+			(Unique(items), ids)
 		}
 	}
 	

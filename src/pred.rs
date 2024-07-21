@@ -82,6 +82,10 @@ impl<'w, D: QueryData, F> DerefMut for Each<'w, D, F> {
 #[derive(Copy, Clone)]
 pub struct EachIn<I>(pub I);
 
+/// Modifier for a combinator to avoid repeated combinations ([A,B] == [B,A]).
+#[derive(Copy, Clone)]
+pub struct Unique<T>(pub T);
+
 /// Parameter of a [`PredCaseFn`]. An item fetched from the
 /// [`bevy_ecs::system::World`] for making predictions against other items.
 pub trait PredItem {
@@ -163,13 +167,14 @@ mod _pred_item_impls {
 		}
 	}
 	
-	impl<T, const N: usize> PredItem for [T; N]
+	impl<T, const N: usize> PredItem for Unique<[T; N]>
 	where
 		T: PredItem
 	{
 		fn clone(&self) -> Self {
-			self.each_ref()
-				.map(T::clone)
+			let Unique(inner) = self;
+			Unique(inner.each_ref()
+				.map(T::clone))
 		}
 	}
 	
@@ -224,7 +229,7 @@ mod _pred_item2_impls {
 		Q: PredCombinator<Item_= B>,
 	{}
 	
-	impl<T, P, const N: usize> PredItem2<PredArrayComb<P, N>> for [T; N]
+	impl<T, P, const N: usize> PredItem2<PredArrayComb<P, N>> for Unique<[T; N]>
 	where
 		T: PredItem2<P>,
 		P: PredCombinator<Item_= T>,
